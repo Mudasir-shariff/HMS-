@@ -6,7 +6,7 @@ export function createClient() {
 
   if (!url || !key || url === 'your-supabase-url') {
     // Return a stub that doesn't throw during SSR/build
-    // In dev without Supabase, AuthProvider uses demo mode
+    // In offline mode without Supabase, AuthProvider uses local storage
     return createBrowserClient(
       'https://placeholder.supabase.co',
       'placeholder-key'

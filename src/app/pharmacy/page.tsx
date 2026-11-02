@@ -536,61 +536,80 @@ export default function PharmacyPage() {
             }
           />
 
-          <div className="flex flex-col gap-2.5">
-            {filteredInventory.map((drug) => {
-              const isLowStock = drug.stock_quantity <= drug.low_stock_limit;
-              const isExpiring = new Date(drug.expiry_date) <= ninetyDaysFromNow;
+          {filteredInventory.length === 0 ? (
+            <EmptyState
+              icon={<Pill size={28} />}
+              title="No medicines found"
+              description={
+                invSearch
+                  ? "No medicines match your search criteria."
+                  : "Pharmacy inventory is currently empty. Add your medicines to start stocking."
+              }
+              action={
+                <Link href="/pharmacy/inventory/add">
+                  <Button size="sm" icon={<Plus size={14} />}>
+                    + Add New Medicine
+                  </Button>
+                </Link>
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredInventory.map((drug) => {
+                const isLowStock = drug.stock_quantity <= drug.low_stock_limit;
+                const isExpiring = new Date(drug.expiry_date) <= ninetyDaysFromNow;
 
-              return (
-                <div
-                  key={drug.id}
-                  className="flex items-center gap-4 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px]"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
-                      <span className="text-[10px] uppercase font-semibold bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] text-[var(--text-muted)]">
-                        {drug.drug_type}
-                      </span>
-                      {drug.schedule_h && (
-                        <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
-                          SCH H
+                return (
+                  <div
+                    key={drug.id}
+                    className="flex items-center gap-4 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px]"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
+                        <span className="text-[10px] uppercase font-semibold bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] text-[var(--text-muted)]">
+                          {drug.drug_type}
                         </span>
+                        {drug.schedule_h && (
+                          <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
+                            SCH H
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                        <span>
+                          Stock:{' '}
+                          <strong className={isLowStock ? 'text-[var(--danger)] font-bold' : 'text-[var(--text-strong)]'}>
+                            {drug.stock_quantity} {drug.drug_type === 'syrup' ? 'bottles' : drug.drug_type === 'injection' ? 'vials' : 'tablets/units'}
+                          </strong>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Expiry: {new Date(drug.expiry_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                        </span>
+                        <span>·</span>
+                        <span>
+                          MRP: ₹{drug.selling_price.toFixed(2)}/unit
+                          {drug.selling_price_per_sheet ? ` (₹${drug.selling_price_per_sheet.toFixed(2)}/sheet)` : ''}
+                        </span>
+                        {drug.batch_number && <span>· Batch: {drug.batch_number}</span>}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      {isLowStock ? (
+                        <StatusPill variant="danger" label="Low Stock" />
+                      ) : isExpiring ? (
+                        <StatusPill variant="warning" label="Near Expiry" />
+                      ) : (
+                        <StatusPill variant="success" label="In Stock" />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                      <span>
-                        Stock:{' '}
-                        <strong className={isLowStock ? 'text-[var(--danger)] font-bold' : 'text-[var(--text-strong)]'}>
-                          {drug.stock_quantity} {drug.drug_type === 'syrup' ? 'bottles' : drug.drug_type === 'injection' ? 'vials' : 'tablets/units'}
-                        </strong>
-                      </span>
-                      <span>·</span>
-                      <span>
-                        Expiry: {new Date(drug.expiry_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                      </span>
-                      <span>·</span>
-                      <span>
-                        MRP: ₹{drug.selling_price.toFixed(2)}/unit
-                        {drug.selling_price_per_sheet ? ` (₹${drug.selling_price_per_sheet.toFixed(2)}/sheet)` : ''}
-                      </span>
-                      {drug.batch_number && <span>· Batch: {drug.batch_number}</span>}
-                    </div>
                   </div>
-
-                  <div className="shrink-0 flex items-center gap-2">
-                    {isLowStock ? (
-                      <StatusPill variant="danger" label="Low Stock" />
-                    ) : isExpiring ? (
-                      <StatusPill variant="warning" label="Near Expiry" />
-                    ) : (
-                      <StatusPill variant="success" label="In Stock" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 

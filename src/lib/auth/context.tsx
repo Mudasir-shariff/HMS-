@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Continue to local fallback
     }
 
-    // Fallback to local demo store
+    // Fallback to local store
     const localRes = HMSStore.login(email, password);
     if (localRes.success && localRes.user) {
       syncLocalUser();

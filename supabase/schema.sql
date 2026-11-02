@@ -332,7 +332,8 @@ CREATE TABLE public.hospital_settings (
 );
 
 -- Seed one row of settings
-INSERT INTO public.hospital_settings (hospital_name) VALUES ('My Hospital')
+INSERT INTO public.hospital_settings (hospital_name, address, phone)
+  VALUES ('RADHAKRISHNA HOSPITAL', 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka', '+91 8154 252222')
   ON CONFLICT DO NOTHING;
 
 -- ════════════════════════════════════════════════════════════════

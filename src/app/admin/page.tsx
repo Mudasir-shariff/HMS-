@@ -142,14 +142,14 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                if (confirm('Reset all demo data to initial seed?')) {
+                if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
                   HMSStore.resetAllData();
                 }
               }}
-              className="flex items-center gap-1.5 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-tile)] transition-all"
+              className="flex items-center gap-1.5 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-all"
             >
-              <RotateCcw size={14} />
-              Reset Demo Data
+              <Trash2 size={14} />
+              Purge Records & Queues
             </button>
             <Link href="/register">
               <Button icon={<Plus size={16} />}>Create Staff Account</Button>
@@ -326,55 +326,64 @@ export default function AdminPage() {
             }
           />
 
-          <div className="flex flex-col gap-2.5">
-            {filteredPatients.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
-              >
-                <div className="h-10 w-10 rounded-full bg-[var(--sage-100)] flex items-center justify-center font-bold text-xs text-[var(--green-900)] shrink-0">
-                  {p.blood_group || '—'}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-[var(--text-strong)]">{p.name}</span>
-                    <span className="text-xs text-[var(--text-muted)]">{p.age} years</span>
-                    {p.has_bp && <StatusPill variant="warning" label="BP" />}
-                    {p.has_sugar && <StatusPill variant="info" label="Diabetes" />}
+          {filteredPatients.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
+              <p>No registered patients found in database.</p>
+              <Link href="/reception/register" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
+                + Register New Patient
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredPatients.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
+                >
+                  <div className="h-10 w-10 rounded-full bg-[var(--sage-100)] flex items-center justify-center font-bold text-xs text-[var(--green-900)] shrink-0">
+                    {p.blood_group || '—'}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                    <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
-                    <span>·</span>
-                    <span>Phone: {p.phone}</span>
-                    {p.other_conditions && (
-                      <>
-                        <span>·</span>
-                        <span className="italic">{p.other_conditions}</span>
-                      </>
-                    )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-[var(--text-strong)]">{p.name}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{p.age} years</span>
+                      {p.has_bp && <StatusPill variant="warning" label="BP" />}
+                      {p.has_sugar && <StatusPill variant="info" label="Diabetes" />}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                      <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
+                      <span>·</span>
+                      <span>Phone: {p.phone}</span>
+                      {p.other_conditions && (
+                        <>
+                          <span>·</span>
+                          <span className="italic">{p.other_conditions}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      title="Edit Patient"
+                      onClick={() => setEditingPatient({ ...p })}
+                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      title="Delete Patient"
+                      onClick={() => setDeletingPatient(p)}
+                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    title="Edit Patient"
-                    onClick={() => setEditingPatient({ ...p })}
-                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    title="Delete Patient"
-                    onClick={() => setDeletingPatient(p)}
-                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -394,58 +403,67 @@ export default function AdminPage() {
             }
           />
 
-          <div className="flex flex-col gap-2.5">
-            {filteredVisits.map((v) => {
-              const pat = patients.find((p) => p.id === v.patient_id);
-              const doc = doctors.find((d) => d.id === v.doctor_id);
-              return (
-                <div
-                  key={v.id}
-                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
-                >
-                  <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
-                    <p className="text-[18px] leading-none font-bold text-[var(--text-strong)]">
-                      #{String(v.token_number).padStart(2, '0')}
-                    </p>
-                    <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[var(--text-strong)]">
-                        {pat?.name || 'Patient'}
-                      </span>
-                      <span className="text-xs text-[var(--text-muted)] font-mono">{v.visit_number}</span>
-                      <StatusPill
-                        variant={v.status === 'dispensed' ? 'success' : v.status === 'prescribed' ? 'warning' : 'info'}
-                        label={v.status}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                      <span>
-                        Assigned to: <strong className="text-[var(--green-700)]">{doc?.full_name || 'Doctor'}</strong> ({doc?.specialization})
-                      </span>
-                      <span>·</span>
-                      <span>Time: {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                      {v.follow_up_date && <span>· Follow-up: {v.follow_up_date}</span>}
-                    </div>
-                  </div>
-
-                  <button
-                    title="Delete Visit"
-                    onClick={() => {
-                      if (confirm(`Delete visit ${v.visit_number}?`)) {
-                        HMSStore.deleteVisit(v.id);
-                      }
-                    }}
-                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
+          {filteredVisits.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
+              <p>No active patient visits or tokens in queue.</p>
+              <Link href="/reception/register" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
+                + Register Patient Visit
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredVisits.map((v) => {
+                const pat = patients.find((p) => p.id === v.patient_id);
+                const doc = doctors.find((d) => d.id === v.doctor_id);
+                return (
+                  <div
+                    key={v.id}
+                    className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
                   >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
+                      <p className="text-[18px] leading-none font-bold text-[var(--text-strong)]">
+                        #{String(v.token_number).padStart(2, '0')}
+                      </p>
+                      <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-[var(--text-strong)]">
+                          {pat?.name || 'Patient'}
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)] font-mono">{v.visit_number}</span>
+                        <StatusPill
+                          variant={v.status === 'dispensed' ? 'success' : v.status === 'prescribed' ? 'warning' : 'info'}
+                          label={v.status}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                        <span>
+                          Assigned to: <strong className="text-[var(--green-700)]">{doc?.full_name || 'Doctor'}</strong> ({doc?.specialization})
+                        </span>
+                        <span>·</span>
+                        <span>Time: {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        {v.follow_up_date && <span>· Follow-up: {v.follow_up_date}</span>}
+                      </div>
+                    </div>
+
+                    <button
+                      title="Delete Visit"
+                      onClick={() => {
+                        if (confirm(`Delete visit ${v.visit_number}?`)) {
+                          HMSStore.deleteVisit(v.id);
+                        }
+                      }}
+                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 
@@ -454,59 +472,65 @@ export default function AdminPage() {
         <Card>
           <CardHeader title="All Prescriptions Generated" count={prescriptions.length} />
 
-          <div className="flex flex-col gap-3">
-            {prescriptions.map((rx) => {
-              const pat = patients.find((p) => p.id === rx.patient_id);
-              const doc = doctors.find((d) => d.id === rx.doctor_id);
-              return (
-                <div
-                  key={rx.id}
-                  className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)]"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-strong)]">
-                        Patient: {pat?.name} (UHID: {pat?.uhid})
-                      </p>
-                      <p className="text-xs text-[var(--green-700)] font-medium">
-                        Consultant: {doc?.full_name} ({doc?.specialization})
-                      </p>
+          {prescriptions.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[var(--text-muted)]">
+              No prescriptions issued in the system yet.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {prescriptions.map((rx) => {
+                const pat = patients.find((p) => p.id === rx.patient_id);
+                const doc = doctors.find((d) => d.id === rx.doctor_id);
+                return (
+                  <div
+                    key={rx.id}
+                    className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)]"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text-strong)]">
+                          Patient: {pat?.name} (UHID: {pat?.uhid})
+                        </p>
+                        <p className="text-xs text-[var(--green-700)] font-medium">
+                          Consultant: {doc?.full_name} ({doc?.specialization})
+                        </p>
+                      </div>
+                      <button
+                        title="Delete Prescription"
+                        onClick={() => {
+                          if (confirm('Permanently delete this prescription?')) {
+                            HMSStore.deletePrescription(rx.id);
+                          }
+                        }}
+                        className="h-7 w-7 flex items-center justify-center rounded-full bg-[var(--danger-bg)] text-[var(--danger)]"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
-                    <button
-                      title="Delete Prescription"
-                      onClick={() => {
-                        if (confirm('Permanently delete this prescription?')) {
-                          HMSStore.deletePrescription(rx.id);
-                        }
-                      }}
-                      className="h-7 w-7 flex items-center justify-center rounded-full bg-[var(--danger-bg)] text-[var(--danger)]"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+
+                    {rx.items && rx.items.length > 0 && (
+                      <div className="bg-white rounded-[var(--r-control)] p-2.5 text-xs border border-[var(--line-soft)] mb-2">
+                        <p className="font-semibold text-[var(--text-muted)] mb-1">Prescribed Medicines:</p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {rx.items.map((i) => (
+                            <li key={i.id}>
+                              <strong>{i.drug_name}</strong> — {i.num_days} days (Qty: {i.quantity})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {rx.notes && (
+                      <p className="text-xs text-[var(--text-muted)] italic">
+                        Advice: &quot;{rx.notes}&quot;
+                      </p>
+                    )}
                   </div>
-
-                  {rx.items && rx.items.length > 0 && (
-                    <div className="bg-white rounded-[var(--r-control)] p-2.5 text-xs border border-[var(--line-soft)] mb-2">
-                      <p className="font-semibold text-[var(--text-muted)] mb-1">Prescribed Medicines:</p>
-                      <ul className="list-disc list-inside space-y-0.5">
-                        {rx.items.map((i) => (
-                          <li key={i.id}>
-                            <strong>{i.drug_name}</strong> — {i.num_days} days (Qty: {i.quantity})
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {rx.notes && (
-                    <p className="text-xs text-[var(--text-muted)] italic">
-                      Advice: &quot;{rx.notes}&quot;
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 
@@ -523,46 +547,55 @@ export default function AdminPage() {
             }
           />
 
-          <div className="flex flex-col gap-2.5">
-            {filteredDrugs.map((drug) => (
-              <div
-                key={drug.id}
-                className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
-                    <span className="text-[10px] bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] uppercase font-semibold">
-                      {drug.drug_type}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                    <span>
-                      Stock: <strong className="text-[var(--text-strong)]">{drug.stock_quantity} units</strong>
-                    </span>
-                    <span>·</span>
-                    <span>Cost: ₹{drug.purchase_price.toFixed(2)}</span>
-                    <span>·</span>
-                    <span>MRP: ₹{drug.selling_price.toFixed(2)}</span>
-                    <span>·</span>
-                    <span>Expiry: {drug.expiry_date}</span>
-                  </div>
-                </div>
-
-                <button
-                  title="Delete Drug"
-                  onClick={() => {
-                    if (confirm(`Delete drug ${drug.name} from inventory?`)) {
-                      HMSStore.deleteDrug(drug.id);
-                    }
-                  }}
-                  className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
+          {filteredDrugs.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
+              <p>No medicines currently registered in inventory.</p>
+              <Link href="/pharmacy/inventory/add" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
+                + Add Drug to Pharmacy Inventory
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredDrugs.map((drug) => (
+                <div
+                  key={drug.id}
+                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
                 >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
+                      <span className="text-[10px] bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] uppercase font-semibold">
+                        {drug.drug_type}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                      <span>
+                        Stock: <strong className="text-[var(--text-strong)]">{drug.stock_quantity} units</strong>
+                      </span>
+                      <span>·</span>
+                      <span>Cost: ₹{drug.purchase_price.toFixed(2)}</span>
+                      <span>·</span>
+                      <span>MRP: ₹{drug.selling_price.toFixed(2)}</span>
+                      <span>·</span>
+                      <span>Expiry: {drug.expiry_date}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    title="Delete Drug"
+                    onClick={() => {
+                      if (confirm(`Delete drug ${drug.name} from inventory?`)) {
+                        HMSStore.deleteDrug(drug.id);
+                      }
+                    }}
+                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 

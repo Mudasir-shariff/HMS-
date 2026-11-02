@@ -62,7 +62,10 @@ export default function AnalyticsPage() {
 
   // Follow-up metrics
   const visitsWithFollowUp = visits.filter((v) => v.follow_up_date);
-  const followUpReturnRate = visitsWithFollowUp.length > 0 ? '78%' : 'N/A';
+  const followUpReturnRate = visits.length > 0
+    ? `${Math.round((visitsWithFollowUp.length / visits.length) * 100)}%`
+    : '0%';
+  const totalConditions = Object.values(conditionCounts).reduce((a, b) => a + b, 0);
 
   // Export to CSV handler
   function handleExportCSV() {
@@ -133,10 +136,30 @@ export default function AnalyticsPage() {
       {/* KPI Tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Total OPD Patients', value: visits.length, change: '+14% month-over-month', icon: Users },
-          { label: 'Active In-Patients', value: admissions.filter((a) => a.status === 'admitted').length, change: '18h daily timer active', icon: Activity },
-          { label: 'Total Pharmacy Sales', value: `₹${(totalRxRevenue + totalWalkInRevenue).toFixed(0)}`, change: `${dispensings.length} total deliveries`, icon: DollarSign },
-          { label: 'Follow-Up Return Rate', value: followUpReturnRate, change: 'Automated WhatsApp triggers', icon: Calendar },
+          {
+            label: 'Total OPD Patients',
+            value: visits.length,
+            change: visits.length > 0 ? `${visits.length} registered visits` : 'No visits today',
+            icon: Users,
+          },
+          {
+            label: 'Active In-Patients',
+            value: admissions.filter((a) => a.status === 'admitted').length,
+            change: '18h daily timer active',
+            icon: Activity,
+          },
+          {
+            label: 'Total Pharmacy Sales',
+            value: `₹${(totalRxRevenue + totalWalkInRevenue).toFixed(0)}`,
+            change: `${dispensings.length} total deliveries`,
+            icon: DollarSign,
+          },
+          {
+            label: 'Follow-Up Return Rate',
+            value: followUpReturnRate,
+            change: `${visitsWithFollowUp.length} scheduled follow-ups`,
+            icon: Calendar,
+          },
         ].map((k) => {
           const Icon = k.icon;
           return (
@@ -240,28 +263,34 @@ export default function AnalyticsPage() {
         {/* Patients Per Doctor */}
         <Card className="lg:col-span-2">
           <CardHeader title="Patient Load by Consultant Doctor" />
-          <div className="space-y-3.5">
-            {doctorVolume.map((doc) => {
-              const max = Math.max(...doctorVolume.map((d) => d.count), 1);
-              const pct = Math.round((doc.count / max) * 100);
-              return (
-                <div key={doc.name}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-semibold text-[var(--text-strong)]">
-                      {doc.name} <span className="font-normal text-[var(--text-muted)]">({doc.spec})</span>
-                    </span>
-                    <span className="font-bold text-[var(--green-700)]">{doc.count} patients</span>
+          {doctorVolume.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)] py-6 text-center">
+              No doctor consultation data recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-3.5">
+              {doctorVolume.map((doc) => {
+                const max = Math.max(...doctorVolume.map((d) => d.count), 1);
+                const pct = Math.round((doc.count / max) * 100);
+                return (
+                  <div key={doc.name}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-semibold text-[var(--text-strong)]">
+                        {doc.name} <span className="font-normal text-[var(--text-muted)]">({doc.spec})</span>
+                      </span>
+                      <span className="font-bold text-[var(--green-700)]">{doc.count} patients</span>
+                    </div>
+                    <div className="h-3 w-full bg-[var(--bg-tile)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--green-700)] rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-3 w-full bg-[var(--bg-tile)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--green-700)] rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
 
         {/* Rush Hours Heatmap */}
@@ -292,42 +321,54 @@ export default function AnalyticsPage() {
         {/* Most Common Diagnoses */}
         <Card>
           <CardHeader title="Most Frequent Medical Diagnoses" />
-          <div className="space-y-3 text-xs">
-            {Object.entries(conditionCounts).map(([name, count]) => {
-              const max = Math.max(...Object.values(conditionCounts), 1);
-              const pct = Math.round((count / max) * 100);
-              return (
-                <div key={name}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium text-[var(--text-strong)]">{name}</span>
-                    <span className="font-semibold text-[var(--green-700)]">{count} patients ({pct}%)</span>
+          {totalConditions === 0 ? (
+            <p className="text-xs text-[var(--text-muted)] py-6 text-center">
+              No patient clinical diagnosis history recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-3 text-xs">
+              {Object.entries(conditionCounts).map(([name, count]) => {
+                const max = Math.max(...Object.values(conditionCounts), 1);
+                const pct = Math.round((count / max) * 100);
+                return (
+                  <div key={name}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-[var(--text-strong)]">{name}</span>
+                      <span className="font-semibold text-[var(--green-700)]">{count} patients ({pct}%)</span>
+                    </div>
+                    <div className="h-2 w-full bg-[var(--bg-tile)] rounded-full overflow-hidden">
+                      <div className="h-full bg-[var(--green-600)] rounded-full" style={{ width: `${Math.max(10, pct)}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 w-full bg-[var(--bg-tile)] rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--green-600)] rounded-full" style={{ width: `${Math.max(10, pct)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
 
         {/* Pharmacy Fast-Moving Drugs */}
         <Card>
           <CardHeader title="Fast-Moving Pharmacy Drugs" />
-          <div className="space-y-2 text-xs">
-            {drugs.slice(0, 6).map((d) => (
-              <div key={d.id} className="flex justify-between items-center p-2.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)]">
-                <div>
-                  <p className="font-semibold text-[var(--text-strong)]">{d.name}</p>
-                  <p className="text-[10px] text-[var(--text-muted)] capitalize">{d.drug_type} · MRP: ₹{d.selling_price}</p>
+          {drugs.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)] py-6 text-center">
+              No medicines currently stocked in inventory.
+            </p>
+          ) : (
+            <div className="space-y-2 text-xs">
+              {drugs.slice(0, 6).map((d) => (
+                <div key={d.id} className="flex justify-between items-center p-2.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)]">
+                  <div>
+                    <p className="font-semibold text-[var(--text-strong)]">{d.name}</p>
+                    <p className="text-[10px] text-[var(--text-muted)] capitalize">{d.drug_type} · MRP: ₹{d.selling_price}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-[var(--green-700)]">{d.stock_quantity} in stock</p>
+                    <p className="text-[10px] text-[var(--text-faint)]">Reorder at: {d.low_stock_limit}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-[var(--green-700)]">{d.stock_quantity} in stock</p>
-                  <p className="text-[10px] text-[var(--text-faint)]">Reorder at: {d.low_stock_limit}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </>

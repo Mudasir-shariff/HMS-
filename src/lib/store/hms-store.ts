@@ -41,145 +41,7 @@ const DEFAULT_VISITS: Visit[] = [];
 
 const DEFAULT_PRESCRIPTIONS: Prescription[] = [];
 
-const DEFAULT_DRUGS: Drug[] = [
-  {
-    id: 'drug-1',
-    name: 'Paracetamol 500mg',
-    drug_type: 'tablet',
-    expiry_date: '2027-06-30',
-    purchase_price: 1.2,
-    selling_price: 2.5,
-    stock_quantity: 340,
-    low_stock_limit: 50,
-    boxes: 20,
-    tablets_per_sheet: 15,
-    price_per_sheet: 37.5,
-    batch_number: 'BAT-2024-09A',
-    schedule_h: false,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-2',
-    name: 'Amoxicillin 250mg',
-    drug_type: 'capsule',
-    expiry_date: '2026-12-15',
-    purchase_price: 5.0,
-    selling_price: 8.5,
-    stock_quantity: 24,
-    low_stock_limit: 40,
-    batch_number: 'BAT-2024-11C',
-    schedule_h: true,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-3',
-    name: 'Ibuprofen 400mg',
-    drug_type: 'tablet',
-    expiry_date: '2026-11-28',
-    purchase_price: 2.5,
-    selling_price: 4.5,
-    stock_quantity: 110,
-    low_stock_limit: 40,
-    batch_number: 'BAT-2024-04F',
-    schedule_h: false,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-4',
-    name: 'Cetirizine 10mg',
-    drug_type: 'tablet',
-    expiry_date: '2027-04-15',
-    purchase_price: 1.8,
-    selling_price: 3.2,
-    stock_quantity: 215,
-    low_stock_limit: 50,
-    batch_number: 'BAT-2024-08K',
-    schedule_h: false,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-5',
-    name: 'Omeprazole 20mg',
-    drug_type: 'capsule',
-    expiry_date: '2027-02-10',
-    purchase_price: 3.5,
-    selling_price: 6.5,
-    stock_quantity: 18,
-    low_stock_limit: 35,
-    batch_number: 'BAT-2024-03M',
-    schedule_h: false,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-6',
-    name: 'Ambroxol Cough Syrup 100ml',
-    drug_type: 'syrup',
-    expiry_date: '2026-11-20',
-    purchase_price: 38.0,
-    selling_price: 58.0,
-    stock_quantity: 14,
-    low_stock_limit: 20,
-    batch_number: 'BAT-2024-01P',
-    supplier: 'Cipla Healthcare',
-    unit: 'bottle',
-    schedule_h: false,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-7',
-    name: 'Ceftriaxone 1g Injection',
-    drug_type: 'injection',
-    expiry_date: '2027-08-15',
-    purchase_price: 65.0,
-    selling_price: 110.0,
-    stock_quantity: 35,
-    low_stock_limit: 15,
-    batch_number: 'BAT-2024-11C',
-    supplier: 'Alkem Labs',
-    unit: 'vial',
-    schedule_h: true,
-    schedule_h1: true,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'drug-8',
-    name: 'Diclofenac 75mg/3ml Injection',
-    drug_type: 'injection',
-    expiry_date: '2027-01-30',
-    purchase_price: 12.0,
-    selling_price: 25.0,
-    stock_quantity: 42,
-    low_stock_limit: 20,
-    batch_number: 'BAT-2024-07D',
-    supplier: 'Novartis India',
-    unit: 'ampoule',
-    schedule_h: true,
-    schedule_h1: false,
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-];
+const DEFAULT_DRUGS: Drug[] = [];
 
 const DEFAULT_WARDS: Ward[] = [
   { id: 'w-1', name: 'General Ward Male', is_active: true, created_at: '2026-10-01T08:00:00Z' },
@@ -244,20 +106,20 @@ function setStorage<T>(key: string, data: T) {
   }
 }
 
-const PRODUCTION_CLEAN_KEY = 'hms_production_v4_clean';
+const PRODUCTION_CLEAN_KEY = 'hms_production_v5_clean';
 
 function checkAndInitializeProductionStorage() {
   if (typeof window === 'undefined') return;
   try {
     if (!localStorage.getItem(PRODUCTION_CLEAN_KEY)) {
-      // Purge all legacy dummy data
+      // Purge all legacy dummy records
       localStorage.removeItem(STORAGE_PREFIX + 'patients');
       localStorage.removeItem(STORAGE_PREFIX + 'visits');
       localStorage.removeItem(STORAGE_PREFIX + 'prescriptions');
       localStorage.removeItem(STORAGE_PREFIX + 'admissions');
       localStorage.removeItem(STORAGE_PREFIX + 'dispensings');
 
-      // Purge legacy dummy mock accounts (Dr. Rajesh Sharma, Sunita Verma, Dr. Meera, Dr. Arun, Dr. Kavita, Ramesh Pillai)
+      // Purge legacy dummy mock accounts
       const dummyIds = ['user-admin', 'user-rec-1', 'user-doc-1', 'user-doc-2', 'user-doc-3', 'user-pharm-1'];
       const rawUsers = localStorage.getItem(STORAGE_PREFIX + 'users');
       if (rawUsers) {
@@ -269,6 +131,21 @@ function checkAndInitializeProductionStorage() {
           }
         } catch {
           localStorage.removeItem(STORAGE_PREFIX + 'users');
+        }
+      }
+
+      // Purge legacy mock drugs with test batch numbers
+      const dummyDrugIds = ['drug-1', 'drug-2', 'drug-3', 'drug-4', 'drug-5', 'drug-6', 'drug-7', 'drug-8'];
+      const rawDrugs = localStorage.getItem(STORAGE_PREFIX + 'drugs');
+      if (rawDrugs) {
+        try {
+          const parsedDrugs = JSON.parse(rawDrugs);
+          if (Array.isArray(parsedDrugs)) {
+            const cleanedDrugs = parsedDrugs.filter((d: any) => !dummyDrugIds.includes(d.id));
+            localStorage.setItem(STORAGE_PREFIX + 'drugs', JSON.stringify(cleanedDrugs));
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_PREFIX + 'drugs');
         }
       }
 
@@ -508,87 +385,6 @@ export const HMSStore = {
       visit.updated_at = new Date().toISOString();
       this.saveVisit(visit);
     }
-  },
-
-  simulateNextPatientStep(): { action: string; visitNumber: string; patientName: string; from: string; to: string } | null {
-    const visits = this.getVisits();
-    const patients = this.getPatients();
-
-    // Step A: First priority - any patient waiting in queue -> move into doctor's consultation cabin
-    const waiting = visits.find((v) => v.status === 'waiting');
-    if (waiting) {
-      this.updateVisitStatus(waiting.id, 'in_consultation');
-      const pat = patients.find((p) => p.id === waiting.patient_id);
-      return {
-        action: `Token #${String(waiting.token_number).padStart(2, '0')} called into Doctor's Cabin`,
-        visitNumber: waiting.visit_number,
-        patientName: pat?.name || 'Patient',
-        from: 'In Queue',
-        to: 'In Consultation Cabin',
-      };
-    }
-
-    // Step B: Any patient currently in consultation cabin -> complete prescription and send to pharmacy
-    const consulting = visits.find((v) => v.status === 'in_consultation');
-    if (consulting) {
-      this.updateVisitStatus(consulting.id, 'prescribed');
-      const pat = patients.find((p) => p.id === consulting.patient_id);
-      return {
-        action: `Doctor finalized prescription for Token #${String(consulting.token_number).padStart(2, '0')}. Sent to Pharmacy!`,
-        visitNumber: consulting.visit_number,
-        patientName: pat?.name || 'Patient',
-        from: 'In Consultation',
-        to: 'Pending at Pharmacy',
-      };
-    }
-
-    // Step C: Any patient pending at pharmacy -> dispense medicines and mark completed
-    const prescribed = visits.find((v) => v.status === 'prescribed');
-    if (prescribed) {
-      this.quickDeliverVisit(prescribed.id);
-      const pat = patients.find((p) => p.id === prescribed.patient_id);
-      return {
-        action: `Pharmacy marked Token #${String(prescribed.token_number).padStart(2, '0')} as Delivered! Stock deducted.`,
-        visitNumber: prescribed.visit_number,
-        patientName: pat?.name || 'Patient',
-        from: 'Pending at Pharmacy',
-        to: 'Completed / Dispensed',
-      };
-    }
-
-    // Step D: All existing patients are finished -> auto-register a new walk-in patient so the flow can continue!
-    const newPat = this.quickRegisterDemoPatient();
-    return {
-      action: `New walk-in patient ${newPat.patient.name} registered with Token #${String(newPat.visit.token_number).padStart(2, '0')}!`,
-      visitNumber: newPat.visit.visit_number,
-      patientName: newPat.patient.name,
-      from: 'Registration',
-      to: 'With Doctor (In Queue)',
-    };
-  },
-
-  quickRegisterDemoPatient(): { patient: Patient; visit: Visit } {
-    const demoNames = [
-      { name: 'Kavita Sundaram', age: 34, phone: '9845012345', bp: false, sugar: false },
-      { name: 'Sanjay Deshmukh', age: 48, phone: '9820054321', bp: true, sugar: true },
-      { name: 'Ananya Raghavan', age: 29, phone: '9841098765', bp: false, sugar: false },
-      { name: 'Mohit Agarwal', age: 52, phone: '9811122334', bp: true, sugar: false },
-      { name: 'Deepa Hegde', age: 41, phone: '9988776655', bp: false, sugar: true },
-    ];
-    const visits = this.getVisits();
-    const pickIndex = visits.length % demoNames.length;
-    const chosen = demoNames[pickIndex];
-    const docs = this.getDoctors();
-    const assignedDoc = docs[visits.length % docs.length] || docs[0];
-
-    return this.registerPatientAndVisit({
-      name: chosen.name,
-      age: chosen.age,
-      phone: `${chosen.phone.slice(0, 8)}${Math.floor(10 + Math.random() * 89)}`,
-      has_bp: chosen.bp,
-      has_sugar: chosen.sugar,
-      doctorId: assignedDoc.id,
-    });
   },
 
   getNextDailyToken(): number {
