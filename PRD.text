@@ -1,0 +1,219 @@
+PRD: Hospital Management System (OPD, IP, Pharmacy)
+Status: Draft v1 | Date: 29 Oct 2026 | Source: Founder's handwritten notes
+1. Overview
+A web and mobile software for a small to mid-size hospital that manages the full patient journey: registration, doctor consultation, prescription, pharmacy dispensing, in-patient (IP) admission and billing, and follow-up. It gives the admin visibility into patient flow, rush hours and common diseases.
+1.1 Problem
+• Patient registration, doctor queue and pharmacy run on paper or disconnected tools, so queues are slow and errors are common.
+• Pharmacy stock, expiry and pricing are hard to track; stock is not reduced automatically when medicines are given.
+• IP bed and room charges are calculated manually.
+• Follow-ups are missed because nobody reminds the patient.
+• Admin has no data on which doctor, time slot or disease brings the most patients.
+1.2 Goals
+1. A patient moves from reception to doctor to pharmacy with no re-entry of data.
+2. Pharmacy stock is always accurate and updates automatically.
+3. IP admissions, beds and daily charges are tracked automatically.
+4. Doctors can write and print prescriptions from their phone.
+5. Follow-ups go out automatically on WhatsApp.
+6. Admin gets monthly analytics.
+1.3 Non-goals (v1)
+Full accounting or payroll, insurance claims, and lab result entry (only lab test ordering is in v1).
+2. Users and Roles
+Role
+What they do
+Receptionist
+Registers OPD patients, generates tokens, admits IP patients, manages wards and beds (if permitted)
+Doctor
+Sees own patient list, writes prescriptions, orders lab tests, adds instructions and follow-up, prints from phone or desktop
+Pharmacist
+Manages inventory, receives prescriptions, dispenses, edits dispensed items, handles walk-in sales
+Admin
+Everything above, plus settings, prices, user management and analytics
+Access is role-based: each user sees only their module.
+3. Functional Requirements
+3.1 OPD Registration (Receptionist)
+New registration form
+• Name, age, phone number (required)
+• Blood group (optional)
+• Check boxes: BP, Sugar, Other (with a free-text field)
+• Consultant: select which doctor
+Identifiers generated automatically
+• UHID: permanent unique hospital ID per patient, created once.
+• Visit ID: new for every visit.
+• Token number: starts at 01 and counts up for 24 hours, then resets to 01. The reset window should be configurable (see Open Questions).
+Behaviour
+• Existing patients are found by phone number or UHID so they are not registered twice; a returning patient only creates a new visit and token.
+• On saving, the patient appears immediately in the selected doctor's patient list (queue).
+• Receptionist can print a token slip.
+3.2 Doctor: Patient List and Consultation
+• Doctor sees a live queue of patients assigned to them, ordered by token.
+• Tapping a patient shows name, age, UHID, BP/sugar flags and past visits.
+• After the doctor completes and prints/saves the prescription, the patient disappears from the doctor's queue and moves to the pharmacy queue.
+• A "Today's patients" view still shows completed patients.
+3.3 Doctor Prescription
+Designed to be as quick as possible, especially on a phone.
+• Medicine search with auto-suggest from pharmacy inventory, then [+ Add].
+• For each medicine the doctor sets when to take using check boxes (morning / afternoon / night, before or after food) and the number of days.
+• Lab tests: doctor can prescribe lab tests from a searchable list.
+• Instructions: free-text advice field.
+• Follow-up date: set by the doctor (for example, after 5 days).
+• Favourites and past-prescription templates for repeat diagnoses (nice to have).
+• Print / share (see 3.4).
+3.4 Print Prescription from Phone (New Requirement)
+The doctor must be able to print the prescription directly from their phone.
+Requirements
+• The doctor interface is fully mobile responsive, installable as a PWA (Add to Home Screen), and usable one-handed.
+• Tapping Print opens a print preview showing the final A4/A5 prescription (hospital header, patient details, medicines, lab tests, instructions, follow-up date, doctor name and signature).
+• Supported print paths, in this order of preference:
+    1. Native phone print (Android print service or Mopria, iOS AirPrint) to any network or Wi-Fi printer on the hospital network.
+    2. Reception/pharmacy print queue: doctor taps Send to printer and the prescription prints on a designated hospital printer (works even if the phone has no printer set up). Recommended default.
+    3. PDF: download or share the prescription as PDF (for example, via WhatsApp to the patient).
+• Admin chooses the default printer per doctor or room in Settings.
+• Prescription layout is configurable (paper size A4/A5, logo, header and footer text, language).
+Technical note: a browser cannot print silently to a specific printer, so path 2 uses a small print service on the hospital network, or a cloud-print relay, that receives the generated PDF and sends it to the printer. Path 1 depends on the phone's print support.
+3.5 Pharmacy: Dispensing Flow
+The pharmacist receives each prescription in a pharmacy queue (OPD and IP). Three cases:
+1. Patient takes all medicines. Pharmacist clicks OK and stock is reduced automatically.
+2. Patient does not want some medicines. Pharmacist removes those items (simple edit option), clicks OK, and stock and inventory update only for the dispensed items.
+3. Patient comes without a prescription for a repeat medicine. Pharmacist can enter the medicines manually (walk-in sale) and stock is managed the same way.
+After OK
+• The patient disappears from the pharmacy queue.
+• The patient remains in Today's patient list, where the pharmacist can still edit the dispensed items; stock corrects itself.
+• Pharmacist can print a bill or receipt.
+3.6 Pharmacy: Inventory Management
+Pharmacist and admin can add, edit, delete and track inventory.
+Drug record
+• Name, expiry date, purchase price, selling price. The selling price can be hidden on the prescription view.
+• Drug type: Tablet, Capsule, Syrup, Other (custom type name).
+• Optional packaging fields:
+    ◦ Number of boxes
+    ◦ Number of tablets per sheet
+    ◦ Price per sheet
+    ◦ Price per tablet
+• The same pattern applies to syrup and other types (price per bottle or unit). The goal is to track stock and price correctly.
+Features
+• Stock count that auto-reduces on dispensing.
+• Low-stock limit per drug with alerts.
+• Expiry tracking with alerts (for example, 90/60/30 days).
+• Stock chart / dashboard: current stock, fast-moving drugs, near-expiry list.
+• Order list: auto-generated list of drugs below the limit that need reordering.
+• Patient orders history by patient.
+3.7 IP Admission
+Admission form
+• Name, age, phone number, disease/diagnosis
+• Check boxes: BP, Sugar, Other
+• UAID (Unique Admission ID) generated automatically. It identifies the patient every day during the stay.
+Ward and bed setup (Receptionist/Admin)
+• Create, rename, edit and delete wards.
+• Add beds/rooms to a ward.
+• Set price per day per bed/room, and change it later (price changes apply to future days only).
+Daily charge timer
+• On admission, a per-day timer starts.
+• Default billing day length is 18 hours, meaning a new day's charge is added every 18 hours of stay. Receptionist/admin can change the hours per day in the Settings page.
+• Bed occupancy view: which beds are free, occupied, and for how long.
+• Discharge stops the timer and produces a final bill (bed charges plus pharmacy charges plus lab tests).
+IP prescriptions
+• Whenever the doctor prescribes for an IP patient, the prescription goes to the pharmacy updated with date, day number and UAID.
+• The pharmacist dispenses and gives a printout, with the same OK/edit flow as OPD.
+3.8 Follow-up (Automated, WhatsApp)
+• Follow-up date set by the doctor is printed on the prescription.
+• The system automatically sends WhatsApp reminders to the patient before the follow-up date (for example, one day before and on the day).
+• Admin can edit the message template and timing.
+• Delivery status is logged so reception can call patients whose message failed.
+• Requires WhatsApp Business API with pre-approved message templates and patient opt-in at registration.
+3.9 Admin Analytics and Reports
+Monthly (with date filters) views:
+• Patients per doctor (which doctor gets more patients)
+• Rush hours (heat map by hour and weekday)
+• Most common diseases
+• OPD vs IP counts, average waiting time, bed occupancy rate
+• Pharmacy sales, fast-moving drugs, expiry losses
+• Follow-up return rate
+• Export to Excel/PDF
+3.10 Settings (Admin)
+Hospital profile and prescription layout; users and roles; doctors list; token reset window; IP hours per day; ward, bed and price management; drug types; low-stock and expiry thresholds; printer mapping; WhatsApp templates.
+4. Key User Flows
+OPD: Reception registers patient and selects doctor, token is generated, patient appears in the doctor's queue, doctor prescribes and prints, patient moves to the pharmacy queue, pharmacist dispenses and clicks OK, stock updates, follow-up reminder is sent later.
+IP: Reception admits patient and assigns a bed, UAID is generated and the timer starts, doctor prescribes daily (tagged with date, day and UAID), pharmacist dispenses, discharge produces the final bill.
+5. Non-Functional Requirements
+• Platform: responsive web app, PWA for phones, works on Chrome/Safari.
+• Performance: screens load under 2 seconds on 4G; search results appear within 300 ms.
+• Availability: reception and pharmacy must keep working during short internet drops (offline queue with sync) if feasible; at minimum, clear error handling and no duplicate tokens.
+• Security and privacy: role-based access, audit log of who edited what (especially dispensed items and prices), encrypted data in transit and at rest, daily backups. Patient data is sensitive health data and must follow India's Digital Personal Data Protection Act.
+• Regulatory: drug records should support batch numbers and Schedule H/H1 flags; align with ABDM (ABHA ID) as a later phase.
+• Languages: English first; Kannada and Hindi labels on the printed prescription and WhatsApp messages are recommended.
+• Data integrity: token, UHID, visit ID and UAID must never repeat; stock cannot go negative without an explicit override.
+5.1 Technology Stack
+The system is a TypeScript web app (PWA) built on Supabase, so one codebase serves reception PCs, the pharmacy and doctors' phones.
+Layer
+Choice
+Notes
+Frontend
+Next.js (React) + Tailwind CSS
+Responsive PWA; follows the separate DESIGN.md style guide
+Database
+Supabase (managed PostgreSQL)
+Relational data for patients, stock, beds and billing
+Authentication
+Supabase Auth
+Roles: receptionist, doctor, pharmacist, admin
+Access control
+Postgres Row Level Security (RLS)
+Every table has per-role policies; tested for each role before go-live
+Live queues
+Supabase Realtime
+Doctor and pharmacy queues update without refresh
+Business logic
+Postgres functions + Supabase Edge Functions
+Stock reduction, dispensing, token and ID generation, bed charges run on the server in one transaction
+Scheduled jobs
+pg_cron + Edge Functions
+IP daily charges, expiry and low-stock alerts, WhatsApp follow-up reminders
+File storage
+Supabase Storage
+Prescription PDFs, uploaded documents
+Prescription PDF and printing
+Server-side PDF generation
+Used for phone printing, the hospital print queue and WhatsApp sharing (see 3.4)
+Messaging
+WhatsApp Cloud API (Meta)
+Pre-approved templates for follow-up reminders
+Hosting
+Supabase region ap-south-1 (Mumbai) + Vercel or similar
+Keeps patient data in India
+Rules for the build
+• Use a paid Supabase plan with daily backups and point-in-time recovery; the free plan is for development only.
+• Billing, stock and bed-charge calculations must run in Postgres functions or Edge Functions, never only in the browser.
+• Token, UHID, visit ID and UAID are generated by the database (sequences or unique constraints) so they can never repeat.
+• Keep a write-once audit log table for edits to dispensed items, prices and admissions.
+• If hospital internet is unreliable, plan for a self-hosted Supabase on a local server with cloud backup as a later option.
+6. Success Metrics
+• Time from registration to doctor's queue under 1 minute
+• Prescription written and printed from phone in under 2 minutes
+• 95 percent or more pharmacy stock accuracy at monthly audit
+• Follow-up return rate improves by 20 percent within 3 months
+• Zero manual bed-charge calculations
+7. Release Plan
+Phase
+Scope
+MVP (v1)
+OPD registration and tokens, doctor queue and prescription, phone printing, pharmacy queue and dispensing, inventory with expiry and low-stock
+v1.1
+IP admission, wards and beds, daily timer and billing, IP prescriptions
+v1.2
+WhatsApp automated follow-up, admin analytics dashboard
+v2
+Lab results module, ABDM integration, multi-branch
+8. Open Questions
+1. Token reset: should it reset 24 hours after the first token, or at a fixed time such as midnight or the start of OPD hours?
+2. IP billing day: is the 18-hour day a fixed rule (charge every 18 hours) or a grace period before the next full day is charged?
+3. Payments and billing: do you need OPD consultation fee collection, receipts, UPI or card payment recording, GST invoices?
+4. Printers: what printers does the hospital have (network, USB, thermal)? This decides the print approach in 3.4.
+5. Hidden selling price: who may see the selling price: pharmacist and admin only, or doctors as well?
+6. WhatsApp: is a WhatsApp Business API account available, and are patients' consent forms in place?
+7. Multiple doctors and departments: is the hospital single-specialty or multi-specialty, and do doctors share a queue or have separate ones?
+8. Lab: is there an in-house lab that needs result entry, or only test ordering?
+9. Assumptions
+• One hospital location in v1.
+• Internet is available at reception, pharmacy and doctor phones.
+• Handwritten notes are the complete requirement source; items marked in Open Questions need confirmation before development.
+• Some parts are additions by the drafter, not from the founder's notes: the success metrics, the security and legal points (India's data protection law, ABDM), the release phases, and the alert timings such as 90/60/30 days before expiry. Change anything that does not fit the hospital.

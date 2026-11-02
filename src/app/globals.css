@@ -1,26 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
+/* ── Design Tokens (from Design.md "Soft Sage Clinical") ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* surfaces */
+  --bg-canvas: #EDEDEA;
+  --bg-card:   #F8F8F6;
+  --bg-tile:   #EFEFEC;
+  --bg-raised: #FFFFFF;
+  --line-soft: #E4E4DF;
+
+  /* text */
+  --text-strong: #10200F;
+  --text-body:   #3C463A;
+  --text-muted:  #6F776B;
+  --text-faint:  #9BA296;
+
+  /* brand greens */
+  --green-900: #12301A;
+  --green-700: #5F7F45;
+  --green-600: #7A9A5F;
+  --green-300: #B7C79A;
+  --sage-200:  #CDD6B5;
+  --sage-100:  #E3E9D3;
+
+  /* data / chart */
+  --gold-500:  #D9B93E;
+  --lilac-300: #D9AEE0;
+  --leaf-400:  #A9C46A;
+
+  /* status */
+  --info:       #4DB6E8;
+  --info-bg:    #E3F1FA;
+  --success:    #6BBF59;
+  --success-bg: #E5F2DF;
+  --danger:     #E5483D;
+  --danger-bg:  #FBE9E7;
+  --warning:    #E8A93A;
+  --warning-bg: #FBF1DC;
+
+  /* shape */
+  --r-card:    24px;
+  --r-tile:    16px;
+  --r-control: 12px;
+  --r-pill:    999px;
+
+  /* shadow */
+  --shadow-float: 0 4px 16px rgba(16, 32, 15, 0.08);
+
+  /* type */
+  --font-sans: 'Onest', 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* ── Tailwind v4 theme bridge ── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas:  var(--bg-canvas);
+  --color-card:    var(--bg-card);
+  --color-tile:    var(--bg-tile);
+  --color-raised:  var(--bg-raised);
+  --color-line:    var(--line-soft);
+
+  --color-ink:       var(--text-strong);
+  --color-ink-body:  var(--text-body);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-faint: var(--text-faint);
+
+  --color-forest:    var(--green-900);
+  --color-olive-700: var(--green-700);
+  --color-olive-600: var(--green-600);
+  --color-olive-300: var(--green-300);
+  --color-sage-200:  var(--sage-200);
+  --color-sage-100:  var(--sage-100);
+
+  --color-gold:   var(--gold-500);
+  --color-lilac:  var(--lilac-300);
+  --color-leaf:   var(--leaf-400);
+
+  --color-info:       var(--info);
+  --color-info-bg:    var(--info-bg);
+  --color-success:    var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-danger:     var(--danger);
+  --color-danger-bg:  var(--danger-bg);
+  --color-warning:    var(--warning);
+  --color-warning-bg: var(--warning-bg);
+
+  --shadow-float: 0 4px 16px rgba(16, 32, 15, 0.08);
+
+  --radius-card:    24px;
+  --radius-tile:    16px;
+  --radius-control: 12px;
+  --radius-pill:    999px;
+
+  --font-sans: 'Onest', 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ── Base styles ── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-canvas);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Focus ring ── */
+*:focus-visible {
+  outline: 2px solid var(--green-600);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-faint);
+  border-radius: var(--r-pill);
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--sage-100);
+  color: var(--text-strong);
+}
+
+/* ── Utility classes for the design system ── */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--r-card);
+  padding: 24px;
+}
+
+.tile {
+  background: var(--bg-tile);
+  border-radius: var(--r-tile);
+  padding: 16px;
+}
+
+.progress-remainder {
+  background: repeating-linear-gradient(
+    135deg, var(--line-soft) 0 2px, transparent 2px 6px
+  );
+}
+
+/* ── Print Media Optimization ── */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm 12mm;
+  }
+
+  body {
+    background: white !important;
+    color: #10200F !important;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  header,
+  aside,
+  nav,
+  .no-print,
+  button:not(.allow-print) {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #printable-prescription {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: white !important;
+  }
 }

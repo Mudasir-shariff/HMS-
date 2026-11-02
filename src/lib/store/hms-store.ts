@@ -1,0 +1,1104 @@
+import type {
+  UserRole,
+  VisitStatus,
+  Patient,
+  Visit,
+  Doctor,
+  Prescription,
+  PrescriptionItem,
+  LabTestOrder,
+  Drug,
+  Dispensing,
+  Ward,
+  Bed,
+  Admission,
+  HospitalSettings,
+} from '@/lib/types/database';
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  password?: string;
+  full_name: string;
+  role: UserRole;
+  phone?: string;
+  is_active: boolean;
+  specialization?: string;
+  consultation_room?: string;
+  consultation_fee?: number;
+  opd_timings?: string;
+  qualification?: string;
+  reg_number?: string;
+  created_at: string;
+}
+
+// ── Initial Seed Data ──
+const DEFAULT_USERS: UserAccount[] = [];
+
+const DEFAULT_PATIENTS: Patient[] = [];
+
+const DEFAULT_VISITS: Visit[] = [];
+
+const DEFAULT_PRESCRIPTIONS: Prescription[] = [];
+
+const DEFAULT_DRUGS: Drug[] = [
+  {
+    id: 'drug-1',
+    name: 'Paracetamol 500mg',
+    drug_type: 'tablet',
+    expiry_date: '2027-06-30',
+    purchase_price: 1.2,
+    selling_price: 2.5,
+    stock_quantity: 340,
+    low_stock_limit: 50,
+    boxes: 20,
+    tablets_per_sheet: 15,
+    price_per_sheet: 37.5,
+    batch_number: 'BAT-2024-09A',
+    schedule_h: false,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-2',
+    name: 'Amoxicillin 250mg',
+    drug_type: 'capsule',
+    expiry_date: '2026-12-15',
+    purchase_price: 5.0,
+    selling_price: 8.5,
+    stock_quantity: 24,
+    low_stock_limit: 40,
+    batch_number: 'BAT-2024-11C',
+    schedule_h: true,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-3',
+    name: 'Ibuprofen 400mg',
+    drug_type: 'tablet',
+    expiry_date: '2026-11-28',
+    purchase_price: 2.5,
+    selling_price: 4.5,
+    stock_quantity: 110,
+    low_stock_limit: 40,
+    batch_number: 'BAT-2024-04F',
+    schedule_h: false,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-4',
+    name: 'Cetirizine 10mg',
+    drug_type: 'tablet',
+    expiry_date: '2027-04-15',
+    purchase_price: 1.8,
+    selling_price: 3.2,
+    stock_quantity: 215,
+    low_stock_limit: 50,
+    batch_number: 'BAT-2024-08K',
+    schedule_h: false,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-5',
+    name: 'Omeprazole 20mg',
+    drug_type: 'capsule',
+    expiry_date: '2027-02-10',
+    purchase_price: 3.5,
+    selling_price: 6.5,
+    stock_quantity: 18,
+    low_stock_limit: 35,
+    batch_number: 'BAT-2024-03M',
+    schedule_h: false,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-6',
+    name: 'Ambroxol Cough Syrup 100ml',
+    drug_type: 'syrup',
+    expiry_date: '2026-11-20',
+    purchase_price: 38.0,
+    selling_price: 58.0,
+    stock_quantity: 14,
+    low_stock_limit: 20,
+    batch_number: 'BAT-2024-01P',
+    supplier: 'Cipla Healthcare',
+    unit: 'bottle',
+    schedule_h: false,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-7',
+    name: 'Ceftriaxone 1g Injection',
+    drug_type: 'injection',
+    expiry_date: '2027-08-15',
+    purchase_price: 65.0,
+    selling_price: 110.0,
+    stock_quantity: 35,
+    low_stock_limit: 15,
+    batch_number: 'BAT-2024-11C',
+    supplier: 'Alkem Labs',
+    unit: 'vial',
+    schedule_h: true,
+    schedule_h1: true,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'drug-8',
+    name: 'Diclofenac 75mg/3ml Injection',
+    drug_type: 'injection',
+    expiry_date: '2027-01-30',
+    purchase_price: 12.0,
+    selling_price: 25.0,
+    stock_quantity: 42,
+    low_stock_limit: 20,
+    batch_number: 'BAT-2024-07D',
+    supplier: 'Novartis India',
+    unit: 'ampoule',
+    schedule_h: true,
+    schedule_h1: false,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+];
+
+const DEFAULT_WARDS: Ward[] = [
+  { id: 'w-1', name: 'General Ward Male', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'w-2', name: 'General Ward Female', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'w-3', name: 'ICU & Critical Care', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'w-4', name: 'Private Deluxe Suite', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+];
+
+const DEFAULT_BEDS: Bed[] = [
+  { id: 'b-101', ward_id: 'w-1', bed_number: 'Bed 101', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-102', ward_id: 'w-1', bed_number: 'Bed 102', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-103', ward_id: 'w-1', bed_number: 'Bed 103', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-201', ward_id: 'w-2', bed_number: 'Bed 201', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-202', ward_id: 'w-2', bed_number: 'Bed 202', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-301', ward_id: 'w-3', bed_number: 'ICU Bed 1', price_per_day: 4500, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+  { id: 'b-401', ward_id: 'w-4', bed_number: 'Suite 401', price_per_day: 3500, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
+];
+
+const DEFAULT_ADMISSIONS: Admission[] = [];
+
+const DEFAULT_SETTINGS: HospitalSettings = {
+  id: 'settings-1',
+  hospital_name: 'RADHAKRISHNA HOSPITAL',
+  hospital_logo_url: '',
+  address: 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka',
+  phone: '+91 8154 252222',
+  token_reset_hour: 0,
+  ip_hours_per_day: 18,
+  prescription_paper_size: 'A4',
+  prescription_header: 'MULTISPECIALITY CARE',
+  prescription_footer: "Please follow the doctor's advice. Consult the hospital if symptoms worsen.",
+  default_printer: 'Pharmacy LaserJet Pro (Network)',
+  schedule_h_action: 'warn',
+  whatsapp_enabled: true,
+  whatsapp_template: 'Namaste {patient_name}, your token at {hospital_name} is #{token} for {doctor_name}. Follow-up scheduled on {follow_up_date}.',
+  low_stock_days_warning: 7,
+  expiry_days_warning: [90, 60, 30],
+  updated_at: '2026-10-31T00:00:00Z',
+};
+
+// ── Storage Keys ──
+const STORAGE_PREFIX = 'hms_data_';
+const SESSION_KEY = 'hms_active_user';
+
+function getStorage<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setStorage<T>(key: string, data: T) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
+    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key } }));
+  } catch (err) {
+    console.error('Storage write error', err);
+  }
+}
+
+const PRODUCTION_CLEAN_KEY = 'hms_production_v4_clean';
+
+function checkAndInitializeProductionStorage() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!localStorage.getItem(PRODUCTION_CLEAN_KEY)) {
+      // Purge all legacy dummy data
+      localStorage.removeItem(STORAGE_PREFIX + 'patients');
+      localStorage.removeItem(STORAGE_PREFIX + 'visits');
+      localStorage.removeItem(STORAGE_PREFIX + 'prescriptions');
+      localStorage.removeItem(STORAGE_PREFIX + 'admissions');
+      localStorage.removeItem(STORAGE_PREFIX + 'dispensings');
+
+      // Purge legacy dummy mock accounts (Dr. Rajesh Sharma, Sunita Verma, Dr. Meera, Dr. Arun, Dr. Kavita, Ramesh Pillai)
+      const dummyIds = ['user-admin', 'user-rec-1', 'user-doc-1', 'user-doc-2', 'user-doc-3', 'user-pharm-1'];
+      const rawUsers = localStorage.getItem(STORAGE_PREFIX + 'users');
+      if (rawUsers) {
+        try {
+          const parsed = JSON.parse(rawUsers);
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.filter((u: any) => !dummyIds.includes(u.id));
+            localStorage.setItem(STORAGE_PREFIX + 'users', JSON.stringify(cleaned));
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_PREFIX + 'users');
+        }
+      }
+
+      // Purge active user session if it was a legacy dummy account
+      const activeRaw = localStorage.getItem(SESSION_KEY);
+      if (activeRaw) {
+        try {
+          const active = JSON.parse(activeRaw);
+          if (dummyIds.includes(active?.id)) {
+            localStorage.removeItem(SESSION_KEY);
+            document.cookie = 'hms_role=; path=/; max-age=0';
+            document.cookie = 'hms_user_id=; path=/; max-age=0';
+          }
+        } catch {
+          localStorage.removeItem(SESSION_KEY);
+        }
+      }
+
+      // Reset all beds to vacant
+      const cleanBeds = DEFAULT_BEDS.map((b) => ({ ...b, is_occupied: false }));
+      localStorage.setItem(STORAGE_PREFIX + 'beds', JSON.stringify(cleanBeds));
+
+      localStorage.setItem(PRODUCTION_CLEAN_KEY, 'true');
+    }
+  } catch (e) {
+    console.error('Failed to initialize production storage', e);
+  }
+}
+
+// Auto-run cleanup on initial load
+checkAndInitializeProductionStorage();
+
+export const HMSStore = {
+  // ── Session ──
+  getCurrentUser(): UserAccount | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.role && !document.cookie.includes('hms_role=')) {
+          document.cookie = `hms_role=${parsed.role}; path=/; max-age=86400`;
+        }
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  setCurrentUser(user: UserAccount | null) {
+    if (typeof window === 'undefined') return;
+    if (user) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      document.cookie = `hms_role=${user.role}; path=/; max-age=86400`;
+      document.cookie = `hms_user_id=${user.id}; path=/; max-age=86400`;
+    } else {
+      localStorage.removeItem(SESSION_KEY);
+      document.cookie = 'hms_role=; path=/; max-age=0';
+      document.cookie = 'hms_user_id=; path=/; max-age=0';
+    }
+    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'session' } }));
+  },
+
+  login(email: string, password?: string): { success: boolean; user?: UserAccount; error?: string } {
+    const users = this.getUsers();
+    if (users.length === 0) {
+      return { success: false, error: 'No registered accounts found in the system. Please click Register below to create your account.' };
+    }
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      return { success: false, error: 'User with this email not found.' };
+    }
+    if (!user.is_active) {
+      return { success: false, error: 'This account has been deactivated by the administrator.' };
+    }
+    if (user.password && password && user.password !== password) {
+      return { success: false, error: 'Incorrect password. Please verify and try again.' };
+    }
+    this.setCurrentUser(user);
+    return { success: true, user };
+  },
+
+  // ── Users (Staff) ──
+  getUsers(): UserAccount[] {
+    return getStorage<UserAccount[]>('users', DEFAULT_USERS);
+  },
+
+  saveUser(user: UserAccount) {
+    const users = this.getUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      users[idx] = user;
+    } else {
+      users.push(user);
+    }
+    setStorage('users', users);
+  },
+
+  deleteUser(userId: string) {
+    const users = this.getUsers().filter((u) => u.id !== userId);
+    setStorage('users', users);
+  },
+
+  getDoctors(): UserAccount[] {
+    return this.getUsers().filter((u) => u.role === 'doctor' && u.is_active);
+  },
+
+  // ── Patients ──
+  getPatients(): Patient[] {
+    return getStorage<Patient[]>('patients', DEFAULT_PATIENTS);
+  },
+
+  getPatientById(id: string): Patient | undefined {
+    return this.getPatients().find((p) => p.id === id);
+  },
+
+  savePatient(patient: Patient) {
+    const patients = this.getPatients();
+    const idx = patients.findIndex((p) => p.id === patient.id);
+    if (idx >= 0) {
+      patients[idx] = patient;
+    } else {
+      patients.unshift(patient);
+    }
+    setStorage('patients', patients);
+  },
+
+  deletePatient(patientId: string) {
+    const patients = this.getPatients().filter((p) => p.id !== patientId);
+    setStorage('patients', patients);
+    // Also remove associated visits
+    const visits = this.getVisits().filter((v) => v.patient_id !== patientId);
+    setStorage('visits', visits);
+  },
+
+  // ── Visits (OPD) ──
+  getVisits(): Visit[] {
+    const raw = getStorage<Visit[]>('visits', DEFAULT_VISITS);
+    // Guarantee uniqueness of tokens and enforce strict ascending order everywhere
+    const seenTokens = new Set<number>();
+    let maxSeenToken = 0;
+    const sanitized = raw.map((v) => {
+      let token = Number(v.token_number) || 1;
+      if (seenTokens.has(token)) {
+        token = maxSeenToken + 1;
+      }
+      seenTokens.add(token);
+      if (token > maxSeenToken) maxSeenToken = token;
+      return {
+        ...v,
+        token_number: token,
+      };
+    });
+    return sanitized.sort((a, b) => a.token_number - b.token_number);
+  },
+
+  getVisitsForDoctor(doctorId: string): Visit[] {
+    return this.getVisits()
+      .filter((v) => v.doctor_id === doctorId)
+      .sort((a, b) => a.token_number - b.token_number);
+  },
+
+  saveVisit(visit: Visit) {
+    const visits = this.getVisits();
+    const idx = visits.findIndex((v) => v.id === visit.id);
+
+    // Enforce unique token number: no other visit can have this token
+    const isDuplicate = visits.some((v) => v.id !== visit.id && v.token_number === visit.token_number);
+    if (isDuplicate || !visit.token_number) {
+      const maxToken = visits.reduce((max, v) => (v.token_number > max ? v.token_number : max), 0);
+      visit.token_number = maxToken + 1;
+    }
+
+    if (idx >= 0) {
+      visits[idx] = visit;
+    } else {
+      visits.push(visit);
+    }
+    // Always persist sorted in ascending token order
+    visits.sort((a, b) => a.token_number - b.token_number);
+    setStorage('visits', visits);
+  },
+
+  deleteVisit(visitId: string) {
+    const visits = this.getVisits().filter((v) => v.id !== visitId);
+    setStorage('visits', visits);
+    // Also remove associated prescription if any
+    const rx = this.getPrescriptions().filter((p) => p.visit_id !== visitId);
+    setStorage('prescriptions', rx);
+  },
+
+  updateVisitStatus(visitId: string, status: VisitStatus) {
+    const visits = this.getVisits();
+    const visit = visits.find((v) => v.id === visitId);
+    if (!visit) return;
+    visit.status = status;
+    visit.updated_at = new Date().toISOString();
+    this.saveVisit(visit);
+  },
+
+  quickDeliverVisit(visitId: string, pharmacistName?: string) {
+    const visits = this.getVisits();
+    const visit = visits.find((v) => v.id === visitId);
+    if (!visit) return;
+
+    const rx = this.getPrescriptions().find((p) => p.visit_id === visitId);
+    const patient = this.getPatientById(visit.patient_id);
+    const drugs = this.getDrugs();
+
+    if (rx && rx.items && rx.items.length > 0) {
+      this.deliverPrescription({
+        visitId: visit.id,
+        prescriptionId: rx.id,
+        pharmacistId: 'pharm-1',
+        pharmacistName: pharmacistName || 'Pharmacist on Duty',
+        patientId: patient?.id,
+        patientName: patient?.name,
+        patientPhone: patient?.phone,
+        patientUhid: patient?.uhid,
+        items: rx.items.map((i) => {
+          const drug = drugs.find((d) => d.id === i.drug_id);
+          const price = drug?.selling_price || 5;
+          return {
+            drugId: i.drug_id,
+            drugName: i.drug_name,
+            quantity: i.quantity || 10,
+            unitPrice: price,
+            totalPrice: Number(((i.quantity || 10) * price).toFixed(2)),
+          };
+        }),
+        totalAmount: 75.0,
+      });
+    } else {
+      visit.status = 'dispensed';
+      visit.updated_at = new Date().toISOString();
+      this.saveVisit(visit);
+    }
+  },
+
+  simulateNextPatientStep(): { action: string; visitNumber: string; patientName: string; from: string; to: string } | null {
+    const visits = this.getVisits();
+    const patients = this.getPatients();
+
+    // Step A: First priority - any patient waiting in queue -> move into doctor's consultation cabin
+    const waiting = visits.find((v) => v.status === 'waiting');
+    if (waiting) {
+      this.updateVisitStatus(waiting.id, 'in_consultation');
+      const pat = patients.find((p) => p.id === waiting.patient_id);
+      return {
+        action: `Token #${String(waiting.token_number).padStart(2, '0')} called into Doctor's Cabin`,
+        visitNumber: waiting.visit_number,
+        patientName: pat?.name || 'Patient',
+        from: 'In Queue',
+        to: 'In Consultation Cabin',
+      };
+    }
+
+    // Step B: Any patient currently in consultation cabin -> complete prescription and send to pharmacy
+    const consulting = visits.find((v) => v.status === 'in_consultation');
+    if (consulting) {
+      this.updateVisitStatus(consulting.id, 'prescribed');
+      const pat = patients.find((p) => p.id === consulting.patient_id);
+      return {
+        action: `Doctor finalized prescription for Token #${String(consulting.token_number).padStart(2, '0')}. Sent to Pharmacy!`,
+        visitNumber: consulting.visit_number,
+        patientName: pat?.name || 'Patient',
+        from: 'In Consultation',
+        to: 'Pending at Pharmacy',
+      };
+    }
+
+    // Step C: Any patient pending at pharmacy -> dispense medicines and mark completed
+    const prescribed = visits.find((v) => v.status === 'prescribed');
+    if (prescribed) {
+      this.quickDeliverVisit(prescribed.id);
+      const pat = patients.find((p) => p.id === prescribed.patient_id);
+      return {
+        action: `Pharmacy marked Token #${String(prescribed.token_number).padStart(2, '0')} as Delivered! Stock deducted.`,
+        visitNumber: prescribed.visit_number,
+        patientName: pat?.name || 'Patient',
+        from: 'Pending at Pharmacy',
+        to: 'Completed / Dispensed',
+      };
+    }
+
+    // Step D: All existing patients are finished -> auto-register a new walk-in patient so the flow can continue!
+    const newPat = this.quickRegisterDemoPatient();
+    return {
+      action: `New walk-in patient ${newPat.patient.name} registered with Token #${String(newPat.visit.token_number).padStart(2, '0')}!`,
+      visitNumber: newPat.visit.visit_number,
+      patientName: newPat.patient.name,
+      from: 'Registration',
+      to: 'With Doctor (In Queue)',
+    };
+  },
+
+  quickRegisterDemoPatient(): { patient: Patient; visit: Visit } {
+    const demoNames = [
+      { name: 'Kavita Sundaram', age: 34, phone: '9845012345', bp: false, sugar: false },
+      { name: 'Sanjay Deshmukh', age: 48, phone: '9820054321', bp: true, sugar: true },
+      { name: 'Ananya Raghavan', age: 29, phone: '9841098765', bp: false, sugar: false },
+      { name: 'Mohit Agarwal', age: 52, phone: '9811122334', bp: true, sugar: false },
+      { name: 'Deepa Hegde', age: 41, phone: '9988776655', bp: false, sugar: true },
+    ];
+    const visits = this.getVisits();
+    const pickIndex = visits.length % demoNames.length;
+    const chosen = demoNames[pickIndex];
+    const docs = this.getDoctors();
+    const assignedDoc = docs[visits.length % docs.length] || docs[0];
+
+    return this.registerPatientAndVisit({
+      name: chosen.name,
+      age: chosen.age,
+      phone: `${chosen.phone.slice(0, 8)}${Math.floor(10 + Math.random() * 89)}`,
+      has_bp: chosen.bp,
+      has_sugar: chosen.sugar,
+      doctorId: assignedDoc.id,
+    });
+  },
+
+  getNextDailyToken(): number {
+    const visits = this.getVisits();
+    if (visits.length === 0) return 1;
+    const maxToken = visits.reduce((max, v) => (Number(v.token_number) > max ? Number(v.token_number) : max), 0);
+    return Math.max(maxToken, 0) + 1;
+  },
+
+  registerPatientAndVisit(data: {
+    name: string;
+    age: number;
+    phone: string;
+    blood_group?: string;
+    has_bp: boolean;
+    has_sugar: boolean;
+    other_conditions?: string;
+    doctorId: string;
+  }): { patient: Patient; visit: Visit } {
+    const patients = this.getPatients();
+    // Check if patient exists by phone
+    let patient = patients.find((p) => p.phone === data.phone);
+    if (!patient) {
+      const nextUhidNum = patients.length + 1;
+      const uhid = `H-${String(nextUhidNum).padStart(4, '0')}`;
+      patient = {
+        id: `pat-${Date.now()}`,
+        uhid,
+        name: data.name,
+        age: data.age,
+        phone: data.phone,
+        blood_group: data.blood_group,
+        has_bp: data.has_bp,
+        has_sugar: data.has_sugar,
+        other_conditions: data.other_conditions,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.savePatient(patient);
+    }
+
+    const token = this.getNextDailyToken();
+    const visitId = `vis-${Date.now()}`;
+    const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const visitNumber = `V-${todayFormatted}-${String(token).padStart(3, '0')}`;
+
+    const visit: Visit = {
+      id: visitId,
+      visit_number: visitNumber,
+      patient_id: patient.id,
+      doctor_id: data.doctorId,
+      token_number: token,
+      status: 'waiting',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.saveVisit(visit);
+
+    return { patient, visit };
+  },
+
+  // ── Prescriptions ──
+  getPrescriptions(): Prescription[] {
+    return getStorage<Prescription[]>('prescriptions', DEFAULT_PRESCRIPTIONS);
+  },
+
+  getPrescriptionByVisitId(visitId: string): Prescription | undefined {
+    return this.getPrescriptions().find((p) => p.visit_id === visitId);
+  },
+
+  savePrescription(rx: Prescription) {
+    const rxList = this.getPrescriptions();
+    const idx = rxList.findIndex((p) => p.id === rx.id);
+    if (idx >= 0) {
+      rxList[idx] = rx;
+    } else {
+      rxList.push(rx);
+    }
+    setStorage('prescriptions', rxList);
+
+    // Update visit status to 'prescribed' so it enters Pharmacy queue
+    const visit = this.getVisits().find((v) => v.id === rx.visit_id);
+    if (visit) {
+      visit.status = 'prescribed';
+      visit.updated_at = new Date().toISOString();
+      this.saveVisit(visit);
+    }
+  },
+
+  deletePrescription(rxId: string) {
+    const rxList = this.getPrescriptions().filter((p) => p.id !== rxId);
+    setStorage('prescriptions', rxList);
+  },
+
+  // ── Drugs & Pharmacy Inventory ──
+  getDrugs(): Drug[] {
+    return getStorage<Drug[]>('drugs', DEFAULT_DRUGS);
+  },
+
+  saveDrug(drug: Drug) {
+    const drugs = this.getDrugs();
+    const idx = drugs.findIndex((d) => d.id === drug.id);
+    if (idx >= 0) {
+      drugs[idx] = drug;
+    } else {
+      drugs.unshift(drug);
+    }
+    setStorage('drugs', drugs);
+  },
+
+  deleteDrug(drugId: string) {
+    const drugs = this.getDrugs().filter((d) => d.id !== drugId);
+    setStorage('drugs', drugs);
+  },
+
+  reduceStock(drugId: string, qty: number): boolean {
+    const drugs = this.getDrugs();
+    const drug = drugs.find((d) => d.id === drugId);
+    if (!drug) return false;
+    drug.stock_quantity = Math.max(0, drug.stock_quantity - qty);
+    drug.updated_at = new Date().toISOString();
+    setStorage('drugs', drugs);
+    return true;
+  },
+
+  // ── Smart Dispensing Quantity Rules (PRD v1.1 Section 3.5) ──
+  calculateSmartQuantity(
+    drugType: string,
+    morning: boolean,
+    afternoon: boolean,
+    night: boolean,
+    numDays: number,
+    doctorEnteredQty?: number
+  ): number {
+    const type = drugType?.toLowerCase() || 'tablet';
+    if (type === 'syrup') {
+      // PRD v1.1: Syrup is counted as a bottle, and dispensed as one bottle by default regardless of doses per day or number of days.
+      return 1;
+    }
+    if (type === 'tablet' || type === 'capsule') {
+      // PRD v1.1: suggested quantity = doses per day x number of days from the prescription.
+      const dosesPerDay = (morning ? 1 : 0) + (afternoon ? 1 : 0) + (night ? 1 : 0);
+      return Math.max(1, (dosesPerDay || 1) * (numDays || 1));
+    }
+    // Injections and other items: quantity follows what the doctor wrote (e.g. vials/doses)
+    return doctorEnteredQty && doctorEnteredQty > 0 ? doctorEnteredQty : 1;
+  },
+
+  // ── Dispensing (PRD v1.1 Delivered Flow) ──
+  getDispensings(): Dispensing[] {
+    return getStorage<Dispensing[]>('dispensings', []);
+  },
+
+  dispensePrescription(data: {
+    visitId?: string;
+    prescriptionId?: string;
+    pharmacistId: string;
+    pharmacistName?: string;
+    patientId?: string;
+    patientName?: string;
+    patientPhone?: string;
+    patientUhid?: string;
+    uaid?: string;
+    stayDayNumber?: number;
+    items: {
+      drugId: string;
+      drugName: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      isCustom?: boolean;
+    }[];
+    totalAmount: number;
+    overrideReason?: string;
+    hasScheduleHWarning?: boolean;
+  }) {
+    return this.deliverPrescription(data);
+  },
+
+  deliverPrescription(data: {
+    visitId?: string;
+    prescriptionId?: string;
+    pharmacistId: string;
+    pharmacistName?: string;
+    patientId?: string;
+    patientName?: string;
+    patientPhone?: string;
+    patientUhid?: string;
+    uaid?: string;
+    stayDayNumber?: number;
+    items: {
+      drugId: string;
+      drugName: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      isCustom?: boolean;
+    }[];
+    totalAmount: number;
+    overrideReason?: string;
+    hasScheduleHWarning?: boolean;
+  }) {
+    // 1. Reduce inventory stock for all actual catalog items
+    for (const item of data.items) {
+      if (!item.isCustom && item.drugId) {
+        this.reduceStock(item.drugId, item.quantity);
+      }
+    }
+
+    // 2. Mark OPD visit as dispensed
+    if (data.visitId) {
+      const visit = this.getVisits().find((v) => v.id === data.visitId);
+      if (visit) {
+        visit.status = 'dispensed';
+        visit.updated_at = new Date().toISOString();
+        this.saveVisit(visit);
+      }
+    }
+
+    // 2b. Sync/Update Prescription so any tablet added or modified by pharmacist appears on doctor's prescription!
+    const allPrescriptions = this.getPrescriptions();
+    const targetRx = allPrescriptions.find(
+      (p) => p.id === data.prescriptionId || (data.visitId && p.visit_id === data.visitId)
+    );
+    if (targetRx) {
+      const rxItemsMap = new Map((targetRx.items || []).map((it) => [it.drug_id || it.drug_name, it]));
+      const updatedRxItems: PrescriptionItem[] = data.items.map((it, idx) => {
+        const existing = rxItemsMap.get(it.drugId) || rxItemsMap.get(it.drugName);
+        if (existing) {
+          return {
+            ...existing,
+            quantity: it.quantity,
+          };
+        }
+        return {
+          id: `rxi-pharm-${idx}-${Date.now()}`,
+          prescription_id: targetRx!.id,
+          drug_id: it.drugId,
+          drug_name: it.drugName,
+          item_type: 'tablet',
+          dose_morning: true,
+          dose_afternoon: false,
+          dose_night: true,
+          dose_relation: 'after_food',
+          num_days: Math.ceil(it.quantity / 2) || 5,
+          quantity: it.quantity,
+          is_custom: it.isCustom,
+          added_by_pharmacist: true,
+          pharmacist_notes: 'Added by Pharmacist during dispensing',
+          created_at: new Date().toISOString(),
+        };
+      });
+      targetRx.items = updatedRxItems;
+      this.savePrescription(targetRx);
+    }
+
+    // 3. If IP admission, accrue charges
+    if (data.uaid) {
+      const admissions = this.getAdmissions();
+      const adm = admissions.find((a) => a.uaid === data.uaid || a.id === data.uaid);
+      if (adm) {
+        adm.total_pharmacy_charges = (adm.total_pharmacy_charges || 0) + data.totalAmount;
+        this.saveAdmission(adm);
+      }
+    }
+
+    // 4. Record dispensing history (Delivered confirmation with timestamp and pharmacist name)
+    const dispensings = this.getDispensings();
+    const newDispensing: Dispensing = {
+      id: `disp-${Date.now()}`,
+      prescription_id: data.prescriptionId,
+      patient_id: data.patientId,
+      pharmacist_id: data.pharmacistId,
+      pharmacist_name: data.pharmacistName || 'Pharmacist on Duty',
+      patient_name: data.patientName,
+      patient_phone: data.patientPhone,
+      patient_uhid: data.patientUhid,
+      is_walk_in: false,
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      override_reason: data.overrideReason,
+      has_schedule_h_warning: data.hasScheduleHWarning,
+      uaid: data.uaid,
+      stay_day_number: data.stayDayNumber,
+      total_amount: data.totalAmount,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: data.items.map((i, idx) => ({
+        id: `dispi-${idx}-${Date.now()}`,
+        dispensing_id: `disp-${Date.now()}`,
+        drug_id: i.drugId,
+        drug_name: i.drugName,
+        quantity: i.quantity,
+        unit_price: i.unitPrice,
+        total_price: i.totalPrice,
+        is_custom: i.isCustom,
+        created_at: new Date().toISOString(),
+      })),
+    };
+    dispensings.unshift(newDispensing);
+    setStorage('dispensings', dispensings);
+    return newDispensing;
+  },
+
+  // ── Walk-in Sale (No Prescription Flow - PRD v1.1 Section 3.5) ──
+  recordWalkInSale(data: {
+    pharmacistId: string;
+    pharmacistName?: string;
+    patientName?: string;
+    patientPhone?: string;
+    patientUhid?: string;
+    items: {
+      drugId: string;
+      drugName: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+    }[];
+    totalAmount: number;
+    hasScheduleHWarning?: boolean;
+    overrideReason?: string;
+  }): Dispensing {
+    // 1. Reduce stock
+    for (const item of data.items) {
+      if (item.drugId) {
+        this.reduceStock(item.drugId, item.quantity);
+      }
+    }
+
+    // 2. Save dispensing record clearly tagged "is_walk_in: true"
+    const dispensings = this.getDispensings();
+    const newDispensing: Dispensing = {
+      id: `disp-walkin-${Date.now()}`,
+      pharmacist_id: data.pharmacistId,
+      pharmacist_name: data.pharmacistName || 'Pharmacist on Duty',
+      patient_name: data.patientName?.trim() || 'Walk-in Customer (No Rx)',
+      patient_phone: data.patientPhone?.trim() || undefined,
+      patient_uhid: data.patientUhid?.trim() || undefined,
+      is_walk_in: true,
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      has_schedule_h_warning: data.hasScheduleHWarning,
+      override_reason: data.overrideReason,
+      total_amount: data.totalAmount,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: data.items.map((i, idx) => ({
+        id: `dispi-${idx}-${Date.now()}`,
+        dispensing_id: `disp-walkin-${Date.now()}`,
+        drug_id: i.drugId,
+        drug_name: i.drugName,
+        quantity: i.quantity,
+        unit_price: i.unitPrice,
+        total_price: i.totalPrice,
+        created_at: new Date().toISOString(),
+      })),
+    };
+    dispensings.unshift(newDispensing);
+    setStorage('dispensings', dispensings);
+    return newDispensing;
+  },
+
+  // ── Edit Dispensed Items (PRD v1.1: stock corrects itself) ──
+  editDispensedItem(dispensingId: string, itemId: string, newQuantity: number) {
+    const dispensings = this.getDispensings();
+    const disp = dispensings.find((d) => d.id === dispensingId);
+    if (!disp || !disp.items) return;
+
+    const item = disp.items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const oldQty = item.quantity;
+    const diff = newQuantity - oldQty;
+
+    // Correct inventory stock
+    if (diff > 0) {
+      // Dispensed more -> reduce stock further
+      this.reduceStock(item.drug_id, diff);
+    } else if (diff < 0) {
+      // Dispensed less -> return surplus to inventory
+      const drugs = this.getDrugs();
+      const drug = drugs.find((d) => d.id === item.drug_id);
+      if (drug) {
+        drug.stock_quantity += Math.abs(diff);
+        drug.updated_at = new Date().toISOString();
+        setStorage('drugs', drugs);
+      }
+    }
+
+    item.quantity = newQuantity;
+    item.total_price = Number((newQuantity * item.unit_price).toFixed(2));
+    disp.total_amount = disp.items.reduce((s, it) => s + it.total_price, 0);
+    disp.updated_at = new Date().toISOString();
+    setStorage('dispensings', dispensings);
+  },
+
+  removeDispensedItem(dispensingId: string, itemId: string) {
+    const dispensings = this.getDispensings();
+    const disp = dispensings.find((d) => d.id === dispensingId);
+    if (!disp || !disp.items) return;
+
+    const item = disp.items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    // Return stock completely to inventory
+    const drugs = this.getDrugs();
+    const drug = drugs.find((d) => d.id === item.drug_id);
+    if (drug) {
+      drug.stock_quantity += item.quantity;
+      drug.updated_at = new Date().toISOString();
+      setStorage('drugs', drugs);
+    }
+
+    disp.items = disp.items.filter((i) => i.id !== itemId);
+    disp.total_amount = disp.items.reduce((s, it) => s + it.total_price, 0);
+    disp.updated_at = new Date().toISOString();
+    setStorage('dispensings', dispensings);
+  },
+
+  // ── Hospital Print Queue (PRD v1.1 Section 3.4 Path 2) ──
+  getPrintQueue(): {
+    id: string;
+    rxId: string;
+    patientName: string;
+    token: string;
+    doctorName: string;
+    printerName: string;
+    createdAt: string;
+    status: 'queued' | 'printed';
+  }[] {
+    return getStorage('print_queue', []);
+  },
+
+  sendToPrintQueue(job: {
+    rxId: string;
+    patientName: string;
+    token: string;
+    doctorName: string;
+    printerName?: string;
+  }) {
+    const queue = this.getPrintQueue();
+    const newJob = {
+      id: `print-${Date.now()}`,
+      rxId: job.rxId,
+      patientName: job.patientName,
+      token: job.token,
+      doctorName: job.doctorName,
+      printerName: job.printerName || this.getSettings().default_printer || 'Hospital Reception LaserJet',
+      createdAt: new Date().toISOString(),
+      status: 'printed' as const,
+    };
+    queue.unshift(newJob);
+    setStorage('print_queue', queue);
+    return newJob;
+  },
+
+  // ── In-Patient (IP) ──
+  getWards(): Ward[] {
+    return getStorage<Ward[]>('wards', DEFAULT_WARDS);
+  },
+
+  getBeds(): Bed[] {
+    return getStorage<Bed[]>('beds', DEFAULT_BEDS);
+  },
+
+  getAdmissions(): Admission[] {
+    return getStorage<Admission[]>('admissions', DEFAULT_ADMISSIONS);
+  },
+
+  saveAdmission(adm: Admission) {
+    const list = this.getAdmissions();
+    const idx = list.findIndex((a) => a.id === adm.id);
+    if (idx >= 0) {
+      list[idx] = adm;
+    } else {
+      list.unshift(adm);
+    }
+    setStorage('admissions', list);
+
+    // mark bed occupied
+    const beds = this.getBeds();
+    const bed = beds.find((b) => b.id === adm.bed_id);
+    if (bed) {
+      bed.is_occupied = adm.status === 'admitted';
+      setStorage('beds', beds);
+    }
+  },
+
+  // ── Settings ──
+  getSettings(): HospitalSettings {
+    return getStorage<HospitalSettings>('settings', DEFAULT_SETTINGS);
+  },
+
+  saveSettings(settings: HospitalSettings) {
+    setStorage('settings', settings);
+  },
+
+  // ── Reset to Clean Production State ──
+  resetAllData() {
+    setStorage('users', []);
+    setStorage('patients', []);
+    setStorage('visits', []);
+    setStorage('prescriptions', []);
+    setStorage('drugs', DEFAULT_DRUGS);
+    setStorage('wards', DEFAULT_WARDS);
+    setStorage('beds', DEFAULT_BEDS.map((b) => ({ ...b, is_occupied: false })));
+    setStorage('admissions', []);
+    setStorage('settings', DEFAULT_SETTINGS);
+    setStorage('dispensings', []);
+    this.setCurrentUser(null);
+  },
+};
+

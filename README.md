@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HMS-
 
-## Getting Started
+# Radhakrishna Hospital Management System (HMS)
 
-First, run the development server:
+A modern, fast, paperless Hospital Management System built with **Next.js 16**, **React 19**, **TypeScript**, and **Tailwind CSS**. Designed for outpatient clinic workflows, doctor consultation desks, pharmacy inventory & dispensing, and inpatient (IP) bed management.
 
+---
+
+## 🏥 System Modules & Workflows
+
+1. **OPD Reception Desk (`/reception`)**
+   - New patient registration with auto-generated Unique Hospital ID (UHID).
+   - Daily sequential token generation (`#01`, `#02`, `#03`...) per doctor consultation cabin.
+   - Live waiting queue and doctor cabin load monitoring.
+   - Direct patient registration form at `/reception/register`.
+
+2. **Doctor Consultation Desk (`/doctor` & `/doctor/prescribe`)**
+   - Live patient queue filtered by consultant doctor.
+   - Comprehensive digital prescription pad:
+     - Chief complaints, clinical observations, and diagnosis.
+     - Formulary search with dosage, frequency, food timing, and duration.
+     - Doctor notes, follow-up scheduling, and injection orders.
+     - Clean, professional A4 / prescription slip printing.
+
+3. **Pharmacy & Inventory Module (`/pharmacy` & `/pharmacy/dispense`)**
+   - Prescriptions routed directly to the pharmacy dispensing queue.
+   - Real-time inventory deduction with batch number and expiry tracking.
+   - Packaging calculator for tablets, sheets, and boxes (`/pharmacy/inventory/add`).
+   - Compliance with Schedule H and Schedule H1 statutory drug registries.
+   - Retail sales, receipt generation, and print slips.
+
+4. **Inpatient (IP) Management (`/ip`)**
+   - Ward and bed occupancy tracker (General wards, ICU, Deluxe rooms).
+   - Admission records with standard 18-hour daily hospital stay calculation.
+   - Discharge summaries and integrated billing.
+
+5. **Administration & Security (`/admin`, `/login`, `/register`)**
+   - Role-Based Access Control (RBAC): **Super Admin**, **Doctor**, **Receptionist**, **Pharmacist**.
+   - Direct staff registration at `/register` with role-specific credentialing.
+   - Pure credentials login at `/login`.
+   - Comprehensive **Privacy Policy** (`/privacy-policy`) and **Terms & Conditions** (`/terms-and-conditions`).
+
+---
+
+## 🛠️ Technology Stack
+
+- **Framework**: [Next.js 16 (Turbopack)](https://nextjs.org/)
+- **UI Library**: [React 19](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Backend / Database**: Supabase SSR ready + LocalStorage offline-first resilience
+- **Package Manager**: [pnpm](https://pnpm.io/)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- **Node.js**: v18.18+ or v20+
+- **pnpm**: `npm install -g pnpm`
+
+### 2. Installation
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/Mudasir-shariff/HMS-.git
+cd HMS-
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Environment Setup (Optional)
+Copy the example environment configuration:
+```bash
+cp .env.local.example .env.local
+```
+Add your Supabase project URL and Anon key if connecting to a cloud database, or run completely offline with built-in resilient local storage.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Run Development Server
+```bash
+pnpm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Build for Production
+```bash
+pnpm run build
+pnpm run start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 📜 Compliance & Legal
+- **Privacy Policy**: Adheres to Patient Health Information (PHI) confidentiality and DISHA guidelines.
+- **Terms & Conditions**: Clinical accountability and Drugs & Cosmetics Act compliance.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 License
+Private & Proprietary — Radhakrishna Hospital.

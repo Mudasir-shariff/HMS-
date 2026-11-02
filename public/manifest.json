@@ -1,0 +1,38 @@
+{
+  "name": "Hospital Management System",
+  "short_name": "HMS",
+  "description": "OPD, Pharmacy and In-Patient management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EDEDEA",
+  "theme_color": "#12301A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Register patient",
+      "short_name": "Register",
+      "url": "/reception/register",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Doctor queue",
+      "short_name": "Queue",
+      "url": "/doctor",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

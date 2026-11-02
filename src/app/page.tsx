@@ -1,69 +1,218 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { ClipboardList, Stethoscope, Pill, BedDouble, BarChart3, Settings, Shield, Plus, ArrowRight } from 'lucide-react';
+import { Card, Button } from '@/components/ui';
+import { PageHeader } from '@/components/layout';
+import { useAuth } from '@/lib/auth/context';
+import { useHMSStore } from '@/lib/store/use-store';
+import Link from 'next/link';
+
+export default function HomePage() {
+  const { user } = useAuth();
+  const { visits, patients, doctors, drugs, admissions, dispensings, beds } = useHMSStore();
+
+  if (!user) return null;
+
+  // Role-specific customized view
+  const isDoctor = user.role === 'doctor';
+  const isReception = user.role === 'receptionist';
+  const isPharmacist = user.role === 'pharmacist';
+  const isAdmin = user.role === 'admin';
+
+  // Doctor specific metrics
+  const myVisits = visits.filter((v) => v.doctor_id === (user.doctorId || user.id));
+  const myWaiting = myVisits.filter((v) => v.status === 'waiting' || v.status === 'in_consultation');
+  const myCompleted = myVisits.filter((v) => v.status === 'prescribed' || v.status === 'dispensed');
+
+  // Pharmacy metrics
+  const pendingRx = visits.filter((v) => v.status === 'prescribed');
+  const lowStock = drugs.filter((d) => d.stock_quantity <= d.low_stock_limit);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <>
+      <PageHeader
+        title={`Welcome, ${user.fullName}`}
+        subtitle={`${user.role.toUpperCase()} PORTAL · ${
+          user.specialization ? `${user.specialization} · ` : ''
+        }Hospital Management System`}
+        action={
+          isAdmin ? (
+            <Link href="/register">
+              <Button icon={<Plus size={16} />}>Create Staff Login</Button>
+            </Link>
+          ) : isReception ? (
+            <Link href="/reception/register">
+              <Button icon={<Plus size={16} />}>Register New Patient</Button>
+            </Link>
+          ) : isDoctor ? (
+            <Link href="/doctor">
+              <Button icon={<ArrowRight size={16} />}>Open My Patient Queue</Button>
+            </Link>
+          ) : (
+            <Link href="/pharmacy">
+              <Button icon={<ArrowRight size={16} />}>Open Dispensing Queue</Button>
+            </Link>
+          )
+        }
+      />
+
+      {/* KPI Stats customized by role */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        {isAdmin && (
+          <>
+            <StatCard label="Total Staff Logins" value={doctors.length + 3} sub="Doctors, Reception, Pharmacy" />
+            <StatCard label="OPD Patients Today" value={visits.length} sub="Active registrations" />
+            <StatCard label="In-Patients (IP)" value={admissions.filter((a) => a.status === 'admitted').length} sub="Occupied beds" />
+            <StatCard label="Pharmacy Items" value={drugs.length} sub={`${lowStock.length} low stock`} />
+          </>
+        )}
+
+        {isDoctor && (
+          <>
+            <StatCard label="Waiting in Your Queue" value={myWaiting.length} sub="Assigned to you" highlight />
+            <StatCard label="Consulted Today" value={myCompleted.length} sub="Prescriptions generated" />
+            <StatCard label="Total Hospital Queue" value={visits.length} sub="All doctors" />
+            <StatCard label="Your Specialization" value={user.specialization || 'Consultant'} sub={user.consultationRoom || 'OPD'} />
+          </>
+        )}
+
+        {isReception && (
+          <>
+            <StatCard label="Registered Today" value={visits.length} sub="Tokens issued" />
+            <StatCard label="Waiting for Doctors" value={visits.filter((v) => v.status === 'waiting').length} sub="In waiting area" highlight />
+            <StatCard label="Active In-Patients (IP)" value={admissions.filter((a) => a.status === 'admitted').length} sub="Occupied beds" highlight />
+            <StatCard label="Available Free Beds" value={beds.filter((b) => !b.is_occupied).length} sub={`${beds.length} total hospital beds`} />
+          </>
+        )}
+
+        {isPharmacist && (
+          <>
+            <StatCard label="Prescriptions to Dispense" value={pendingRx.length} sub="Pending queue" highlight />
+            <StatCard label="Dispensed Today" value={dispensings.length} sub="Completed deliveries" />
+            <StatCard label="Total Drugs in Catalog" value={drugs.length} sub="Pharmacy inventory" />
+            <StatCard label="Low Stock Alerts" value={lowStock.length} sub="Below reorder threshold" />
+          </>
+        )}
+      </div>
+
+      {/* Authorized Modules Grid */}
+      <h3 className="text-base font-medium text-[var(--text-strong)] mb-3">Your Authorized Departments</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {isAdmin && (
+          <ModuleLink
+            title="Super Admin Master Control"
+            desc="View, edit, and delete all staff logins, patients, visits, and pharmacy data"
+            href="/admin"
+            icon={Shield}
+            color="bg-red-100 text-red-700"
+          />
+        )}
+
+        {(isAdmin || isReception) && (
+          <ModuleLink
+            title="OPD Reception Desk"
+            desc="Register incoming patients, issue daily tokens, and assign consultant doctors"
+            href="/reception"
+            icon={ClipboardList}
+            color="bg-[var(--info-bg)] text-[var(--info)]"
+          />
+        )}
+
+        {(isAdmin || isDoctor) && (
+          <ModuleLink
+            title="Doctor Consultation Queue"
+            desc={
+              isDoctor
+                ? `Exclusively for ${user.fullName} (${user.specialization || 'Doctor'})`
+                : 'Doctor queues, vitals, and prescription builders'
+            }
+            href="/doctor"
+            icon={Stethoscope}
+            color="bg-[var(--success-bg)] text-[var(--success)]"
+          />
+        )}
+
+        {(isAdmin || isPharmacist) && (
+          <ModuleLink
+            title="Pharmacy & Inventory"
+            desc="Dispense prescribed medications, print receipts, and manage drug stock"
+            href="/pharmacy"
+            icon={Pill}
+            color="bg-[var(--warning-bg)] text-[var(--warning)]"
+          />
+        )}
+
+        {(isAdmin || isReception) && (
+          <ModuleLink
+            title="In-Patient (IP) Department"
+            desc="Ward and bed occupancy, 18-hour daily billing timer & discharge"
+            href="/ip"
+            icon={BedDouble}
+            color="bg-purple-100 text-purple-700"
+          />
+        )}
+
+        {isAdmin && (
+          <>
+            <ModuleLink
+              title="Analytics & Reports"
+              desc="Patient volumes, rush hours heatmap, doctor load, and pharmacy revenue"
+              href="/analytics"
+              icon={BarChart3}
+              color="bg-[var(--sage-100)] text-[var(--green-700)]"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <ModuleLink
+              title="Hospital Settings"
+              desc="Hospital branding, prescription print layouts, and operational reset rules"
+              href="/settings"
+              icon={Settings}
+              color="bg-[var(--bg-tile)] text-[var(--text-muted)]"
+            />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function StatCard({ label, value, sub, highlight }: { label: string; value: string | number; sub: string; highlight?: boolean }) {
+  return (
+    <Card padding="sm" className={highlight ? 'border border-[var(--green-600)] bg-[var(--sage-100)]' : 'border border-[var(--line-soft)]'}>
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-[28px] font-light text-[var(--text-strong)] leading-tight mt-1">{value}</p>
+      <p className="text-[11px] text-[var(--text-faint)] mt-1">{sub}</p>
+    </Card>
+  );
+}
+
+function ModuleLink({
+  title,
+  desc,
+  href,
+  icon: Icon,
+  color,
+}: {
+  title: string;
+  desc: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  color: string;
+}) {
+  return (
+    <Link href={href}>
+      <Card className="group hover:shadow-[var(--shadow-float)] transition-all duration-150 cursor-pointer h-full border border-[var(--line-soft)] hover:border-[var(--green-600)]">
+        <div className="flex items-start gap-3.5">
+          <div className={`h-10 w-10 rounded-[var(--r-control)] flex items-center justify-center shrink-0 ${color}`}>
+            <Icon size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold text-[var(--text-strong)] group-hover:text-[var(--green-700)] transition-colors">
+              {title}
+            </h4>
+            <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">{desc}</p>
+          </div>
         </div>
-      </main>
-    </div>
+      </Card>
+    </Link>
   );
 }
