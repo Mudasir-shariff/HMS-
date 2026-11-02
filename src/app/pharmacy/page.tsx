@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus,
   ChevronRight,
@@ -113,9 +113,15 @@ export default function PharmacyPage() {
   );
 
   const lowStockDrugs = drugs.filter((d) => d.stock_quantity <= d.low_stock_limit);
-  const now = new Date();
-  const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
-  const expiringDrugs = drugs.filter((d) => new Date(d.expiry_date) <= ninetyDaysFromNow);
+  const [ninetyDaysFromNow, setNinetyDaysFromNow] = useState<number>(0);
+
+  useEffect(() => {
+    setNinetyDaysFromNow(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  }, []);
+
+  const expiringDrugs = ninetyDaysFromNow > 0
+    ? drugs.filter((d) => new Date(d.expiry_date).getTime() <= ninetyDaysFromNow)
+    : [];
 
   // Walk-in handlers
   const walkInDrugSuggestions = drugs.filter(
@@ -557,7 +563,8 @@ export default function PharmacyPage() {
             <div className="flex flex-col gap-2.5">
               {filteredInventory.map((drug) => {
                 const isLowStock = drug.stock_quantity <= drug.low_stock_limit;
-                const isExpiring = new Date(drug.expiry_date) <= ninetyDaysFromNow;
+                const isExpiring =
+                  ninetyDaysFromNow > 0 && new Date(drug.expiry_date).getTime() <= ninetyDaysFromNow;
 
                 return (
                   <div

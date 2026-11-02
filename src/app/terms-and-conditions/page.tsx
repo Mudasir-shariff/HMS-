@@ -139,7 +139,7 @@ export default function TermsAndConditionsPage() {
 
         {/* Footer */}
         <div className="text-center mt-8 text-xs text-[var(--text-muted)]">
-          <p>© {new Date().getFullYear()} Radhakrishna Hospital. All rights reserved.</p>
+          <p>© 2026 Radhakrishna Hospital. All rights reserved.</p>
         </div>
       </div>
     </div>

@@ -457,17 +457,25 @@ function PrescribeContent() {
     setTimeout(() => setQueuedPrinterSuccess(null), 5000);
   }
 
-  const currentDateFormatted = new Date().toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+  const [currentDateFormatted, setCurrentDateFormatted] = useState('');
+  const [currentTimeFormatted, setCurrentTimeFormatted] = useState('');
 
-  const currentTimeFormatted = new Date().toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  useEffect(() => {
+    setCurrentDateFormatted(
+      new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    );
+    setCurrentTimeFormatted(
+      new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    );
+  }, []);
 
   // ────────────────────────────────────────────────────────────────────────────
   // 1. PRINT PREVIEW VIEW (Supports Native Phone Print, Hospital Relay & WhatsApp)
