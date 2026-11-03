@@ -163,7 +163,7 @@ export async function syncFromSupabase(): Promise<boolean> {
           .map((it: any) => ({
             id: it.id,
             prescription_id: it.prescription_id,
-            drug_id: it.drug_id,
+            drug_id: it.drug_id || '',
             drug_name: it.drug_name,
             dose_morning: Boolean(it.dose_morning),
             dose_afternoon: Boolean(it.dose_afternoon),
@@ -206,7 +206,7 @@ export async function syncFromSupabase(): Promise<boolean> {
           .map((it: any) => ({
             id: it.id,
             dispensing_id: it.dispensing_id,
-            drug_id: it.drug_id,
+            drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
             drug_name: it.drug_name,
             quantity: Number(it.quantity) || 1,
             unit_price: Number(it.unit_price) || 0,
@@ -404,7 +404,7 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       const itemsPayload = rx.items.map((it) => ({
         id: it.id,
         prescription_id: rx.id,
-        drug_id: it.drug_id,
+        drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
         drug_name: it.drug_name,
         dose_morning: it.dose_morning,
         dose_afternoon: it.dose_afternoon,
@@ -438,7 +438,7 @@ export async function pushDispensingToSupabase(disp: Dispensing) {
       const itemsPayload = disp.items.map((it) => ({
         id: it.id,
         dispensing_id: disp.id,
-        drug_id: it.drug_id,
+        drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
         drug_name: it.drug_name,
         quantity: it.quantity,
         unit_price: it.unit_price,

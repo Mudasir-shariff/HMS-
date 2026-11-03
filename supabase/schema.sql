@@ -158,7 +158,7 @@ CREATE TYPE dose_relation AS ENUM ('before_food', 'after_food');
 CREATE TABLE IF NOT EXISTS public.prescription_items (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   prescription_id  UUID NOT NULL REFERENCES public.prescriptions ON DELETE CASCADE,
-  drug_id          UUID NOT NULL,  -- references drugs
+  drug_id          UUID,  -- references drugs (nullable for custom items/injections)
   drug_name        TEXT NOT NULL,  -- snapshot
   dose_morning     BOOLEAN NOT NULL DEFAULT FALSE,
   dose_afternoon   BOOLEAN NOT NULL DEFAULT FALSE,
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS public.lab_test_orders (
 --  PHARMACY / INVENTORY
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TYPE drug_type AS ENUM ('tablet', 'capsule', 'syrup', 'other');
+CREATE TYPE drug_type AS ENUM ('tablet', 'capsule', 'syrup', 'injection', 'other');
 
 CREATE TABLE IF NOT EXISTS public.drugs (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),

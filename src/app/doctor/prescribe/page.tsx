@@ -22,6 +22,8 @@ import {
   MessageSquare,
   AlertCircle,
   Syringe,
+  Pill,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -29,6 +31,7 @@ import { Card, CardHeader, Button, Textarea, Input, StatusPill } from '@/compone
 import { useHMSStore } from '@/lib/store/use-store';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
+import { syncFromSupabase } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -210,10 +213,18 @@ function PrescribeContent() {
   const [printLayout, setPrintLayout] = useState<'A4' | 'A5'>(settings.prescription_paper_size || 'A4');
   const [queuedPrinterSuccess, setQueuedPrinterSuccess] = useState<string | null>(null);
 
-  // Drug inventory search state
+  // Drug inventory search & catalog state
   const [drugSearch, setDrugSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'tablet' | 'injection' | 'syrup' | 'capsule' | 'other'>('all');
+  const [isSyncingDrugs, setIsSyncingDrugs] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Sync latest medicines from Supabase on mount
+  useEffect(() => {
+    setIsSyncingDrugs(true);
+    syncFromSupabase().finally(() => setIsSyncingDrugs(false));
+  }, []);
 
   // Custom Item Modal/Drawer State (PRD v1.1 Injections & Other Free-Text)
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -227,9 +238,20 @@ function PrescribeContent() {
   const [customDays, setCustomDays] = useState(1);
   const [customRelation, setCustomRelation] = useState<'before_food' | 'after_food'>('after_food');
 
+  const filteredCatalog = drugs.filter((d) => {
+    if (selectedCategory === 'all') return true;
+    if (selectedCategory === 'other') {
+      return !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type);
+    }
+    return d.drug_type === selectedCategory;
+  });
+
   const drugSuggestions = drugs.filter(
     (d) =>
-      (!drugSearch.trim() || d.name.toLowerCase().includes(drugSearch.toLowerCase())) &&
+      (!drugSearch.trim() ||
+        d.name.toLowerCase().includes(drugSearch.toLowerCase()) ||
+        d.drug_type.toLowerCase().includes(drugSearch.toLowerCase()) ||
+        (d.batch_number && d.batch_number.toLowerCase().includes(drugSearch.toLowerCase()))) &&
       !medicines.some((m) => m.drugId === d.id)
   );
 
@@ -897,19 +919,211 @@ function PrescribeContent() {
 
         {/* Card 1: Medicines & Dosage */}
         <Card>
-          <div className="flex items-center justify-between mb-3">
-            <CardHeader title="Rx: Prescribe Medications & Injections" count={medicines.length} />
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<Plus size={14} />}
-              onClick={() => setShowCustomItemModal(true)}
-            >
-              Add Injection / Other Item
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <CardHeader title="Rx: Prescribe Medications & Injections" count={medicines.length} />
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Select from medicines entered by the pharmacist, or add custom injections and clinical items.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setIsSyncingDrugs(true);
+                  syncFromSupabase().finally(() => setIsSyncingDrugs(false));
+                }}
+                icon={<RefreshCw size={13} className={isSyncingDrugs ? 'animate-spin' : ''} />}
+                title="Refresh latest stock from pharmacy"
+              >
+                Refresh Stock
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Plus size={14} />}
+                onClick={() => setShowCustomItemModal(true)}
+              >
+                + Add Injection / Item
+              </Button>
+            </div>
           </div>
 
-          {/* Search Inventory */}
+          {/* Alert if 0 medicines have been added by Pharmacist yet */}
+          {drugs.length === 0 && (
+            <div className="p-3.5 mb-4 rounded-[var(--r-tile)] bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} className="text-amber-700 shrink-0" />
+                <span>
+                  <strong>No medicines in pharmacy inventory yet.</strong> Medicines entered by the pharmacist will automatically show here.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/pharmacy/inventory/add"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[var(--r-control)] bg-amber-800 text-white font-medium hover:bg-amber-900 transition-colors"
+                >
+                  <Plus size={12} />
+                  <span>Add Medicine in Pharmacy</span>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsSyncingDrugs(true);
+                    syncFromSupabase().finally(() => setIsSyncingDrugs(false));
+                  }}
+                  icon={<RefreshCw size={12} className={isSyncingDrugs ? 'animate-spin' : ''} />}
+                >
+                  Sync Now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* 1. Quick Dropdown: Choose from medicines entered by Pharmacist */}
+          <div className="bg-[var(--bg-tile)] p-3.5 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4">
+            <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Pill size={14} className="text-[var(--green-700)]" />
+                <span>Select Medicine entered by Pharmacist ({drugs.length} total in inventory):</span>
+              </span>
+              {drugs.length > 0 && (
+                <span className="text-[11px] font-normal text-[var(--text-muted)]">
+                  Selecting a medicine automatically adds it to Rx
+                </span>
+              )}
+            </label>
+            <div className="relative">
+              <select
+                aria-label="Select Medicine entered by Pharmacist"
+                onChange={(e) => {
+                  const found = drugs.find((d) => d.id === e.target.value);
+                  if (found) {
+                    addMedicine(found);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="w-full h-11 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-sm text-[var(--text-body)] focus:outline-none focus:border-[var(--green-600)] font-medium shadow-xs"
+              >
+                <option value="" disabled>
+                  {drugs.length > 0
+                    ? `📋 Choose from Medicines entered by Pharmacist (${drugs.length} items available)...`
+                    : '⚠️ No medicines in pharmacy inventory yet — Add stock in Pharmacy portal'}
+                </option>
+                {drugs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} — [{d.drug_type.toUpperCase()}] · Stock: {d.stock_quantity} units {d.batch_number ? `· Batch: ${d.batch_number}` : ''} {d.schedule_h ? '· [SCH H]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 2. Category Filter & Pharmacist Stock Pills */}
+          {drugs.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none text-xs">
+                {[
+                  { id: 'all', label: 'All Stock', count: drugs.length },
+                  { id: 'tablet', label: 'Tablets', count: drugs.filter((d) => d.drug_type === 'tablet').length },
+                  { id: 'injection', label: 'Injections', count: drugs.filter((d) => d.drug_type === 'injection').length },
+                  { id: 'syrup', label: 'Syrups', count: drugs.filter((d) => d.drug_type === 'syrup').length },
+                  { id: 'capsule', label: 'Capsules', count: drugs.filter((d) => d.drug_type === 'capsule').length },
+                  { id: 'other', label: 'Other', count: drugs.filter((d) => !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type)).length },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id as any)}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-full font-medium transition-all shrink-0 flex items-center gap-1 border',
+                      selectedCategory === cat.id
+                        ? 'bg-[var(--green-900)] text-white border-[var(--green-900)] shadow-xs'
+                        : 'bg-white text-[var(--text-muted)] border-[var(--line-soft)] hover:bg-[var(--bg-tile)]'
+                    )}
+                  >
+                    <span>{cat.label}</span>
+                    <span
+                      className={clsx(
+                        'text-[10px] px-1.5 py-0.2 rounded-full font-semibold',
+                        selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-tile)] text-[var(--text-muted)]'
+                      )}
+                    >
+                      {cat.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-3 bg-white rounded-[var(--r-control)] border border-[var(--line-soft)] mt-1.5">
+                <p className="text-[11px] font-semibold text-[var(--text-strong)] mb-2 flex items-center justify-between">
+                  <span>Pharmacist Inventory Medicines (Click + to prescribe):</span>
+                  <span className="text-[10px] font-normal text-[var(--text-muted)]">
+                    Showing {filteredCatalog.length} of {drugs.length} medicines
+                  </span>
+                </p>
+                {filteredCatalog.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] italic py-2">
+                    No medicines in this category yet.
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap max-h-48 overflow-y-auto pr-1">
+                    {filteredCatalog.map((d) => {
+                      const isAlreadyAdded = medicines.some((m) => m.drugId === d.id);
+                      const isInj = d.drug_type === 'injection';
+                      const isSyr = d.drug_type === 'syrup';
+
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          disabled={isAlreadyAdded}
+                          onClick={() => addMedicine(d)}
+                          className={clsx(
+                            'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border font-medium transition-all text-left shadow-2xs',
+                            isAlreadyAdded
+                              ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                              : isInj
+                              ? 'bg-blue-50/70 border-blue-200 text-blue-900 hover:bg-blue-100 hover:border-blue-400'
+                              : isSyr
+                              ? 'bg-purple-50/70 border-purple-200 text-purple-900 hover:bg-purple-100 hover:border-purple-400'
+                              : 'bg-[var(--bg-tile)] border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--green-50)] hover:border-[var(--green-600)]'
+                          )}
+                        >
+                          <span className="font-semibold">{isAlreadyAdded ? '✓' : '+'} {d.name}</span>
+                          <span
+                            className={clsx(
+                              'text-[9px] uppercase px-1.5 py-0.5 rounded font-bold',
+                              isInj
+                                ? 'bg-blue-200 text-blue-800'
+                                : isSyr
+                                ? 'bg-purple-200 text-purple-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            )}
+                          >
+                            {d.drug_type}
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                            Stock: {d.stock_quantity}
+                          </span>
+                          {d.schedule_h && (
+                            <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.2 rounded font-bold">
+                              H
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Search Bar with Auto-Complete */}
           <div ref={searchRef} className="relative mb-4">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" />
@@ -921,25 +1135,9 @@ function PrescribeContent() {
                   setShowSuggestions(true);
                 }}
                 onFocus={() => setShowSuggestions(true)}
-                placeholder="Search and add drug from pharmacy inventory..."
+                placeholder="Or search medicines entered by pharmacist by name, type, or batch..."
                 className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-9 pr-3 text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)]"
               />
-            </div>
-
-            {/* Quick chips for available pharmacy stock */}
-            <div className="flex items-center gap-1.5 flex-wrap mt-2">
-              <span className="text-[11px] text-[var(--text-muted)] font-medium">Pharmacy Stock (Click to add):</span>
-              {drugs.slice(0, 8).map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => addMedicine(d)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full bg-[var(--bg-tile)] hover:bg-[var(--green-50)] border border-[var(--line-soft)] hover:border-[var(--green-600)] text-[var(--text-strong)] font-medium transition-all"
-                >
-                  <span>+ {d.name}</span>
-                  <span className="text-[9px] text-[var(--green-700)]">({d.stock_quantity})</span>
-                </button>
-              ))}
             </div>
 
             {showSuggestions && (
@@ -972,12 +1170,15 @@ function PrescribeContent() {
                     >
                       <div>
                         <span className="font-medium text-[var(--text-strong)]">{drug.name}</span>
-                        <span className="text-[var(--text-faint)] ml-2 capitalize">({drug.drug_type})</span>
+                        <span className="text-[var(--text-faint)] ml-2 capitalize font-semibold">({drug.drug_type})</span>
+                        {drug.batch_number && (
+                          <span className="text-[10px] text-gray-400 ml-2">Batch: {drug.batch_number}</span>
+                        )}
                         {drug.schedule_h && (
                           <span className="ml-2 text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded font-bold">SCH H</span>
                         )}
                       </div>
-                      <span className="text-[11px] text-[var(--green-700)] font-medium">
+                      <span className="text-[11px] text-[var(--green-700)] font-medium font-mono">
                         Stock: {drug.stock_quantity}
                       </span>
                     </button>
@@ -1074,7 +1275,12 @@ function PrescribeContent() {
                         </span>
                         {m.isCustom && (
                           <span className="text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold">
-                            Other Item
+                            Custom Item
+                          </span>
+                        )}
+                        {m.drugId && (
+                          <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
+                            ✓ In Pharmacy Stock ({drugs.find((d) => d.id === m.drugId)?.stock_quantity ?? 0} units)
                           </span>
                         )}
                         {m.addedByPharmacist && (
