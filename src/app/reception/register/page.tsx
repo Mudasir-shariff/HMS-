@@ -8,6 +8,7 @@ import { Card, Button, Input, Select, Checkbox, Textarea, StatusPill } from '@/c
 import { PageHeader } from '@/components/layout';
 import { useHMSStore } from '@/lib/store/use-store';
 import { HMSStore } from '@/lib/store/hms-store';
+import { pushPatientToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
 import type { Patient, Visit } from '@/lib/types/database';
 
 const BLOOD_GROUPS = [
@@ -91,6 +92,13 @@ export default function RegisterPatientPage() {
     }
   }, [form.phone, form.uhidLookup, patients]);
 
+  // Auto-select first available doctor when doctors list loads from Supabase
+  useEffect(() => {
+    if (!form.doctorId && doctors.length > 0) {
+      setForm((f) => ({ ...f, doctorId: doctors[0].id }));
+    }
+  }, [doctors, form.doctorId]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     if (errors[key]) {
@@ -132,6 +140,10 @@ export default function RegisterPatientPage() {
       other_conditions: form.hasOther ? form.otherCondition.trim() : undefined,
       doctorId: form.doctorId,
     });
+
+    // Push directly to Supabase
+    pushPatientToSupabase(res.patient);
+    pushVisitToSupabase(res.visit);
 
     setCreatedResult(res);
   }

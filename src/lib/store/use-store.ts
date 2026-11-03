@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { HMSStore, UserAccount } from './hms-store';
+import { syncFromSupabase, initSupabaseRealtime } from '@/lib/supabase/sync';
 import type {
   Patient,
   Visit,
@@ -18,6 +19,9 @@ export function useHMSStore() {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    syncFromSupabase();
+    initSupabaseRealtime();
+
     function handleChange() {
       setTick((t) => t + 1);
     }

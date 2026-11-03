@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Activity, Eye, EyeOff, CheckCircle, Stethoscope, ArrowLeft, ShieldCheck, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { HMSStore } from '@/lib/store/hms-store';
+import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { syncFromSupabase } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import type { UserRole } from '@/lib/types/database';
@@ -113,9 +114,55 @@ export default function RegisterPage() {
     if (!validate()) return;
     setLoading(true);
 
-    const newUserId = `user-${Date.now()}`;
+    let assignedId = generateUUID();
+
+    // 1. If Supabase is connected, register in Supabase Auth & DB tables
+    try {
+      const supabase = createClient();
+      const { data: authData } = await (supabase.auth as any).signUp({
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        options: {
+          data: {
+            full_name: form.fullName.trim(),
+            role: form.role,
+            phone: form.phone.trim() || undefined,
+            specialization: form.specialization || undefined,
+            consultation_room: form.consultationRoom || undefined,
+            consultation_fee: Number(form.consultationFee) || 500,
+            opd_timings: form.opdTimings || undefined,
+          },
+        },
+      });
+
+      if (authData?.user?.id) {
+        assignedId = authData.user.id;
+      }
+
+      // Upsert directly into public.user_profiles table
+      await supabase.from('user_profiles').upsert({
+        id: assignedId,
+        full_name: form.fullName.trim(),
+        role: form.role,
+        phone: form.phone.trim() || null,
+        is_active: true,
+      });
+
+      // If registering a Doctor, also upsert into public.doctors table
+      if (form.role === 'doctor') {
+        await supabase.from('doctors').upsert({
+          user_id: assignedId,
+          specialization: form.specialization || 'General Medicine',
+          consultation_room: form.consultationRoom || 'Room 1',
+          is_available: true,
+        });
+      }
+    } catch (err) {
+      console.warn('Supabase signup fallback:', err);
+    }
+
     const newAccount = {
-      id: newUserId,
+      id: assignedId,
       email: form.email.trim().toLowerCase(),
       password: form.password,
       full_name: form.fullName.trim(),
@@ -133,26 +180,9 @@ export default function RegisterPage() {
         : {}),
     };
 
-    // Save into HMSStore
+    // Save into HMSStore and trigger fresh sync
     HMSStore.saveUser(newAccount);
-
-    // Optional: Also sync with Supabase if connected
-    try {
-      const supabase = createClient();
-      await (supabase.auth as any).signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: {
-            full_name: form.fullName,
-            role: form.role,
-            specialization: form.specialization,
-          },
-        },
-      });
-    } catch {
-      // Offline/Local store mode continues seamlessly
-    }
+    await syncFromSupabase();
 
     setLoading(false);
     setRegisteredAccount(newAccount);

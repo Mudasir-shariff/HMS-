@@ -96,11 +96,22 @@ function getStorage<T>(key: string, fallback: T): T {
   }
 }
 
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function setStorage<T>(key: string, data: T) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
-    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key } }));
+    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key, data } }));
   } catch (err) {
     console.error('Storage write error', err);
   }
@@ -179,6 +190,16 @@ function checkAndInitializeProductionStorage() {
 checkAndInitializeProductionStorage();
 
 export const HMSStore = {
+  // ── Supabase Background Push Hooks ──
+  _onSaveUser: undefined as ((user: UserAccount) => void) | undefined,
+  _onSavePatient: undefined as ((patient: Patient) => void) | undefined,
+  _onSaveVisit: undefined as ((visit: Visit) => void) | undefined,
+  _onSaveDrug: undefined as ((drug: Drug) => void) | undefined,
+  _onSavePrescription: undefined as ((rx: Prescription) => void) | undefined,
+  _onSaveDispensing: undefined as ((disp: Dispensing) => void) | undefined,
+  _onSaveAdmission: undefined as ((adm: Admission) => void) | undefined,
+  _onSaveSettings: undefined as ((settings: HospitalSettings) => void) | undefined,
+
   // ── Session ──
   getCurrentUser(): UserAccount | null {
     if (typeof window === 'undefined') return null;
@@ -235,6 +256,10 @@ export const HMSStore = {
     return getStorage<UserAccount[]>('users', DEFAULT_USERS);
   },
 
+  setUsers(users: UserAccount[]) {
+    setStorage('users', users);
+  },
+
   saveUser(user: UserAccount) {
     const users = this.getUsers();
     const idx = users.findIndex((u) => u.id === user.id);
@@ -244,6 +269,7 @@ export const HMSStore = {
       users.push(user);
     }
     setStorage('users', users);
+    if (this._onSaveUser) this._onSaveUser(user);
   },
 
   deleteUser(userId: string) {
@@ -260,6 +286,10 @@ export const HMSStore = {
     return getStorage<Patient[]>('patients', DEFAULT_PATIENTS);
   },
 
+  setPatients(patients: Patient[]) {
+    setStorage('patients', patients);
+  },
+
   getPatientById(id: string): Patient | undefined {
     return this.getPatients().find((p) => p.id === id);
   },
@@ -273,6 +303,7 @@ export const HMSStore = {
       patients.unshift(patient);
     }
     setStorage('patients', patients);
+    if (this._onSavePatient) this._onSavePatient(patient);
   },
 
   deletePatient(patientId: string) {
@@ -304,6 +335,11 @@ export const HMSStore = {
     return sanitized.sort((a, b) => a.token_number - b.token_number);
   },
 
+  setVisits(visits: Visit[]) {
+    visits.sort((a, b) => a.token_number - b.token_number);
+    setStorage('visits', visits);
+  },
+
   getVisitsForDoctor(doctorId: string): Visit[] {
     return this.getVisits()
       .filter((v) => v.doctor_id === doctorId)
@@ -329,6 +365,7 @@ export const HMSStore = {
     // Always persist sorted in ascending token order
     visits.sort((a, b) => a.token_number - b.token_number);
     setStorage('visits', visits);
+    if (this._onSaveVisit) this._onSaveVisit(visit);
   },
 
   deleteVisit(visitId: string) {
@@ -411,7 +448,7 @@ export const HMSStore = {
       const nextUhidNum = patients.length + 1;
       const uhid = `H-${String(nextUhidNum).padStart(4, '0')}`;
       patient = {
-        id: `pat-${Date.now()}`,
+        id: generateUUID(),
         uhid,
         name: data.name,
         age: data.age,
@@ -427,7 +464,7 @@ export const HMSStore = {
     }
 
     const token = this.getNextDailyToken();
-    const visitId = `vis-${Date.now()}`;
+    const visitId = generateUUID();
     const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const visitNumber = `V-${todayFormatted}-${String(token).padStart(3, '0')}`;
 
@@ -451,6 +488,10 @@ export const HMSStore = {
     return getStorage<Prescription[]>('prescriptions', DEFAULT_PRESCRIPTIONS);
   },
 
+  setPrescriptions(prescriptions: Prescription[]) {
+    setStorage('prescriptions', prescriptions);
+  },
+
   getPrescriptionByVisitId(visitId: string): Prescription | undefined {
     return this.getPrescriptions().find((p) => p.visit_id === visitId);
   },
@@ -464,6 +505,7 @@ export const HMSStore = {
       rxList.push(rx);
     }
     setStorage('prescriptions', rxList);
+    if (this._onSavePrescription) this._onSavePrescription(rx);
 
     // Update visit status to 'prescribed' so it enters Pharmacy queue
     const visit = this.getVisits().find((v) => v.id === rx.visit_id);
@@ -484,6 +526,10 @@ export const HMSStore = {
     return getStorage<Drug[]>('drugs', DEFAULT_DRUGS);
   },
 
+  setDrugs(drugs: Drug[]) {
+    setStorage('drugs', drugs);
+  },
+
   saveDrug(drug: Drug) {
     const drugs = this.getDrugs();
     const idx = drugs.findIndex((d) => d.id === drug.id);
@@ -493,6 +539,7 @@ export const HMSStore = {
       drugs.unshift(drug);
     }
     setStorage('drugs', drugs);
+    if (this._onSaveDrug) this._onSaveDrug(drug);
   },
 
   deleteDrug(drugId: string) {
@@ -536,6 +583,10 @@ export const HMSStore = {
   // ── Dispensing (PRD v1.1 Delivered Flow) ──
   getDispensings(): Dispensing[] {
     return getStorage<Dispensing[]>('dispensings', []);
+  },
+
+  setDispensings(dispensings: Dispensing[]) {
+    setStorage('dispensings', dispensings);
   },
 
   dispensePrescription(data: {
@@ -620,7 +671,7 @@ export const HMSStore = {
           };
         }
         return {
-          id: `rxi-pharm-${idx}-${Date.now()}`,
+          id: generateUUID(),
           prescription_id: targetRx!.id,
           drug_id: it.drugId,
           drug_name: it.drugName,
@@ -653,8 +704,9 @@ export const HMSStore = {
 
     // 4. Record dispensing history (Delivered confirmation with timestamp and pharmacist name)
     const dispensings = this.getDispensings();
+    const dispId = generateUUID();
     const newDispensing: Dispensing = {
-      id: `disp-${Date.now()}`,
+      id: dispId,
       prescription_id: data.prescriptionId,
       patient_id: data.patientId,
       pharmacist_id: data.pharmacistId,
@@ -672,9 +724,9 @@ export const HMSStore = {
       total_amount: data.totalAmount,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      items: data.items.map((i, idx) => ({
-        id: `dispi-${idx}-${Date.now()}`,
-        dispensing_id: `disp-${Date.now()}`,
+      items: data.items.map((i) => ({
+        id: generateUUID(),
+        dispensing_id: dispId,
         drug_id: i.drugId,
         drug_name: i.drugName,
         quantity: i.quantity,
@@ -686,6 +738,7 @@ export const HMSStore = {
     };
     dispensings.unshift(newDispensing);
     setStorage('dispensings', dispensings);
+    if (this._onSaveDispensing) this._onSaveDispensing(newDispensing);
     return newDispensing;
   },
 
@@ -716,8 +769,9 @@ export const HMSStore = {
 
     // 2. Save dispensing record clearly tagged "is_walk_in: true"
     const dispensings = this.getDispensings();
+    const walkInDispId = generateUUID();
     const newDispensing: Dispensing = {
-      id: `disp-walkin-${Date.now()}`,
+      id: walkInDispId,
       pharmacist_id: data.pharmacistId,
       pharmacist_name: data.pharmacistName || 'Pharmacist on Duty',
       patient_name: data.patientName?.trim() || 'Walk-in Customer (No Rx)',
@@ -731,9 +785,9 @@ export const HMSStore = {
       total_amount: data.totalAmount,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      items: data.items.map((i, idx) => ({
-        id: `dispi-${idx}-${Date.now()}`,
-        dispensing_id: `disp-walkin-${Date.now()}`,
+      items: data.items.map((i) => ({
+        id: generateUUID(),
+        dispensing_id: walkInDispId,
         drug_id: i.drugId,
         drug_name: i.drugName,
         quantity: i.quantity,
@@ -744,6 +798,7 @@ export const HMSStore = {
     };
     dispensings.unshift(newDispensing);
     setStorage('dispensings', dispensings);
+    if (this._onSaveDispensing) this._onSaveDispensing(newDispensing);
     return newDispensing;
   },
 
@@ -854,6 +909,10 @@ export const HMSStore = {
     return getStorage<Admission[]>('admissions', DEFAULT_ADMISSIONS);
   },
 
+  setAdmissions(admissions: Admission[]) {
+    setStorage('admissions', admissions);
+  },
+
   saveAdmission(adm: Admission) {
     const list = this.getAdmissions();
     const idx = list.findIndex((a) => a.id === adm.id);
@@ -871,6 +930,7 @@ export const HMSStore = {
       bed.is_occupied = adm.status === 'admitted';
       setStorage('beds', beds);
     }
+    if (this._onSaveAdmission) this._onSaveAdmission(adm);
   },
 
   // ── Settings ──
@@ -880,6 +940,7 @@ export const HMSStore = {
 
   saveSettings(settings: HospitalSettings) {
     setStorage('settings', settings);
+    if (this._onSaveSettings) this._onSaveSettings(settings);
   },
 
   // ── Reset to Clean Production State ──

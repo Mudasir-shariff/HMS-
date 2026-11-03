@@ -18,7 +18,7 @@ CREATE SEQUENCE IF NOT EXISTS uaid_seq START 1;
 CREATE TYPE user_role AS ENUM ('admin', 'receptionist', 'doctor', 'pharmacist');
 
 -- Extends Supabase auth.users
-CREATE TABLE public.user_profiles (
+CREATE TABLE IF NOT EXISTS public.user_profiles (
   id            UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
   full_name     TEXT NOT NULL,
   role          user_role NOT NULL DEFAULT 'receptionist',
@@ -32,7 +32,7 @@ CREATE TABLE public.user_profiles (
 --  DOCTORS (extends user_profiles)
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.doctors (
+CREATE TABLE IF NOT EXISTS public.doctors (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id           UUID NOT NULL UNIQUE REFERENCES public.user_profiles ON DELETE CASCADE,
   specialization    TEXT,
@@ -45,7 +45,7 @@ CREATE TABLE public.doctors (
 --  PATIENTS
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.patients (
+CREATE TABLE IF NOT EXISTS public.patients (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   uhid             TEXT NOT NULL UNIQUE,   -- H-XXXXX
   name             TEXT NOT NULL,
@@ -76,6 +76,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_set_uhid ON public.patients;
 CREATE TRIGGER trg_set_uhid
   BEFORE INSERT ON public.patients
   FOR EACH ROW EXECUTE FUNCTION set_uhid();
@@ -88,7 +89,7 @@ CREATE TYPE visit_status AS ENUM (
   'waiting', 'in_consultation', 'prescribed', 'dispensed', 'completed'
 );
 
-CREATE TABLE public.visits (
+CREATE TABLE IF NOT EXISTS public.visits (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   visit_number   TEXT NOT NULL UNIQUE,   -- auto-generated
   patient_id     UUID NOT NULL REFERENCES public.patients,
@@ -123,13 +124,18 @@ $$;
 CREATE OR REPLACE FUNCTION set_visit_defaults()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-  NEW.token_number := next_daily_token();
-  NEW.visit_number := 'V-' || TO_CHAR(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD')
-                              || '-' || LPAD(NEW.token_number::TEXT, 3, '0');
+  IF NEW.token_number IS NULL OR NEW.token_number = 0 THEN
+    NEW.token_number := next_daily_token();
+  END IF;
+  IF NEW.visit_number IS NULL OR NEW.visit_number = '' THEN
+    NEW.visit_number := 'V-' || TO_CHAR(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD')
+                                || '-' || LPAD(NEW.token_number::TEXT, 3, '0');
+  END IF;
   RETURN NEW;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_set_visit_defaults ON public.visits;
 CREATE TRIGGER trg_set_visit_defaults
   BEFORE INSERT ON public.visits
   FOR EACH ROW EXECUTE FUNCTION set_visit_defaults();
@@ -138,7 +144,7 @@ CREATE TRIGGER trg_set_visit_defaults
 --  PRESCRIPTIONS
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.prescriptions (
+CREATE TABLE IF NOT EXISTS public.prescriptions (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   visit_id    UUID NOT NULL UNIQUE REFERENCES public.visits,
   doctor_id   UUID NOT NULL REFERENCES public.doctors,
@@ -149,7 +155,7 @@ CREATE TABLE public.prescriptions (
 
 CREATE TYPE dose_relation AS ENUM ('before_food', 'after_food');
 
-CREATE TABLE public.prescription_items (
+CREATE TABLE IF NOT EXISTS public.prescription_items (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   prescription_id  UUID NOT NULL REFERENCES public.prescriptions ON DELETE CASCADE,
   drug_id          UUID NOT NULL,  -- references drugs
@@ -163,7 +169,7 @@ CREATE TABLE public.prescription_items (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE public.lab_test_orders (
+CREATE TABLE IF NOT EXISTS public.lab_test_orders (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   prescription_id  UUID NOT NULL REFERENCES public.prescriptions ON DELETE CASCADE,
   test_name        TEXT NOT NULL,
@@ -177,7 +183,7 @@ CREATE TABLE public.lab_test_orders (
 
 CREATE TYPE drug_type AS ENUM ('tablet', 'capsule', 'syrup', 'other');
 
-CREATE TABLE public.drugs (
+CREATE TABLE IF NOT EXISTS public.drugs (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name              TEXT NOT NULL,
   drug_type         drug_type NOT NULL,
@@ -199,7 +205,7 @@ CREATE TABLE public.drugs (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE public.dispensings (
+CREATE TABLE IF NOT EXISTS public.dispensings (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   prescription_id  UUID REFERENCES public.prescriptions,  -- NULL for walk-in
   patient_id       UUID REFERENCES public.patients,
@@ -210,7 +216,7 @@ CREATE TABLE public.dispensings (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE public.dispensing_items (
+CREATE TABLE IF NOT EXISTS public.dispensing_items (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dispensing_id  UUID NOT NULL REFERENCES public.dispensings ON DELETE CASCADE,
   drug_id        UUID NOT NULL REFERENCES public.drugs,
@@ -245,14 +251,14 @@ $$;
 --  IP ADMISSION (v1.1)
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.wards (
+CREATE TABLE IF NOT EXISTS public.wards (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL,
   is_active  BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE public.beds (
+CREATE TABLE IF NOT EXISTS public.beds (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ward_id      UUID NOT NULL REFERENCES public.wards,
   bed_number   TEXT NOT NULL,
@@ -263,7 +269,7 @@ CREATE TABLE public.beds (
 
 CREATE TYPE ip_status AS ENUM ('admitted', 'discharged');
 
-CREATE TABLE public.admissions (
+CREATE TABLE IF NOT EXISTS public.admissions (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   uaid                  TEXT NOT NULL UNIQUE,
   patient_id            UUID NOT NULL REFERENCES public.patients,
@@ -292,6 +298,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_set_uaid ON public.admissions;
 CREATE TRIGGER trg_set_uaid
   BEFORE INSERT ON public.admissions
   FOR EACH ROW EXECUTE FUNCTION set_uaid();
@@ -300,7 +307,7 @@ CREATE TRIGGER trg_set_uaid
 --  AUDIT LOG
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES public.user_profiles,
   action      TEXT NOT NULL,
@@ -315,9 +322,9 @@ CREATE TABLE public.audit_logs (
 --  HOSPITAL SETTINGS
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.hospital_settings (
+CREATE TABLE IF NOT EXISTS public.hospital_settings (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  hospital_name           TEXT NOT NULL DEFAULT 'Hospital',
+  hospital_name           TEXT NOT NULL DEFAULT 'RADHAKRISHNA HOSPITAL',
   hospital_logo_url       TEXT,
   address                 TEXT,
   phone                   TEXT,
@@ -336,105 +343,222 @@ INSERT INTO public.hospital_settings (hospital_name, address, phone)
   VALUES ('RADHAKRISHNA HOSPITAL', 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka', '+91 8154 252222')
   ON CONFLICT DO NOTHING;
 
+-- Seed default hospital wards
+INSERT INTO public.wards (id, name, is_active) VALUES
+  ('w0000000-0000-0000-0000-000000000001', 'General Ward Male', true),
+  ('w0000000-0000-0000-0000-000000000002', 'General Ward Female', true),
+  ('w0000000-0000-0000-0000-000000000003', 'ICU & Critical Care', true),
+  ('w0000000-0000-0000-0000-000000000004', 'Private Deluxe Suite', true)
+  ON CONFLICT (id) DO NOTHING;
+
+-- Seed default beds
+INSERT INTO public.beds (id, ward_id, bed_number, price_per_day, is_occupied) VALUES
+  ('b0000000-0000-0000-0000-000000000101', 'w0000000-0000-0000-0000-000000000001', 'Bed 101', 1200, false),
+  ('b0000000-0000-0000-0000-000000000102', 'w0000000-0000-0000-0000-000000000001', 'Bed 102', 1200, false),
+  ('b0000000-0000-0000-0000-000000000103', 'w0000000-0000-0000-0000-000000000001', 'Bed 103', 1200, false),
+  ('b0000000-0000-0000-0000-000000000201', 'w0000000-0000-0000-0000-000000000002', 'Bed 201', 1200, false),
+  ('b0000000-0000-0000-0000-000000000202', 'w0000000-0000-0000-0000-000000000002', 'Bed 202', 1200, false),
+  ('b0000000-0000-0000-0000-000000000301', 'w0000000-0000-0000-0000-000000000003', 'ICU Bed 1', 4500, false),
+  ('b0000000-0000-0000-0000-000000000401', 'w0000000-0000-0000-0000-000000000004', 'Suite 401', 3500, false)
+  ON CONFLICT (id) DO NOTHING;
+
 -- ════════════════════════════════════════════════════════════════
---  ROW LEVEL SECURITY (RLS)
+--  AUTOMATIC USER PROVISIONING TRIGGER (Auth -> Profiles & Doctors)
 -- ════════════════════════════════════════════════════════════════
 
-ALTER TABLE public.user_profiles    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.doctors          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.patients         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.visits           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.prescriptions    ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_role user_role := 'receptionist';
+  v_full_name text;
+  v_phone text;
+  v_spec text;
+  v_room text;
+BEGIN
+  v_full_name := COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1));
+  v_phone := new.raw_user_meta_data->>'phone';
+  v_spec := new.raw_user_meta_data->>'specialization';
+  v_room := new.raw_user_meta_data->>'consultation_room';
+
+  IF (new.raw_user_meta_data->>'role') IS NOT NULL THEN
+    BEGIN
+      v_role := (new.raw_user_meta_data->>'role')::user_role;
+    EXCEPTION WHEN OTHERS THEN
+      v_role := 'receptionist';
+    END;
+  END IF;
+
+  -- Upsert into user_profiles
+  INSERT INTO public.user_profiles (id, full_name, role, phone, is_active)
+  VALUES (new.id, v_full_name, v_role, v_phone, true)
+  ON CONFLICT (id) DO UPDATE
+    SET full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        phone = COALESCE(EXCLUDED.phone, user_profiles.phone);
+
+  -- If doctor, also upsert doctor profile
+  IF v_role = 'doctor' THEN
+    INSERT INTO public.doctors (user_id, specialization, consultation_room, is_available)
+    VALUES (new.id, COALESCE(v_spec, 'General Medicine'), COALESCE(v_room, 'Room 1'), true)
+    ON CONFLICT (user_id) DO UPDATE
+      SET specialization = EXCLUDED.specialization,
+          consultation_room = EXCLUDED.consultation_room;
+  END IF;
+
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger whenever user registers or updates in Supabase Auth
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Automatic backfill of existing registered auth users
+INSERT INTO public.user_profiles (id, full_name, role, phone, is_active)
+SELECT
+  id,
+  COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
+  COALESCE(NULLIF(raw_user_meta_data->>'role', '')::user_role, 'receptionist'),
+  raw_user_meta_data->>'phone',
+  true
+FROM auth.users
+ON CONFLICT (id) DO UPDATE
+  SET full_name = EXCLUDED.full_name,
+      role = EXCLUDED.role,
+      phone = COALESCE(EXCLUDED.phone, user_profiles.phone);
+
+INSERT INTO public.doctors (user_id, specialization, consultation_room, is_available)
+SELECT
+  id,
+  COALESCE(raw_user_meta_data->>'specialization', 'General Medicine'),
+  COALESCE(raw_user_meta_data->>'consultation_room', 'Room 1'),
+  true
+FROM auth.users
+WHERE (raw_user_meta_data->>'role') = 'doctor'
+ON CONFLICT (user_id) DO NOTHING;
+
+-- ════════════════════════════════════════════════════════════════
+--  ROW LEVEL SECURITY (RLS) POLICIES
+-- ════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.user_profiles      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.doctors            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.patients           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.visits             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.prescriptions      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prescription_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lab_test_orders  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.drugs            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dispensings      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dispensing_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.wards            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.beds             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admissions       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_logs       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hospital_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lab_test_orders    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.drugs              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dispensings        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dispensing_items   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wards              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.beds               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admissions         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hospital_settings  ENABLE ROW LEVEL SECURITY;
 
--- Helper function to get current user role
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS user_role LANGUAGE SQL STABLE AS $$
-  SELECT role FROM public.user_profiles WHERE id = auth.uid();
-$$;
+-- ── 1. User Profiles & Staff ──
+DROP POLICY IF EXISTS "profiles_read_all" ON public.user_profiles;
+DROP POLICY IF EXISTS "profiles_write_all" ON public.user_profiles;
+DROP POLICY IF EXISTS "profiles_read_own" ON public.user_profiles;
+DROP POLICY IF EXISTS "profiles_update_own" ON public.user_profiles;
+DROP POLICY IF EXISTS "profiles_insert" ON public.user_profiles;
+CREATE POLICY "profiles_read_all"  ON public.user_profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_write_all" ON public.user_profiles FOR ALL USING (true) WITH CHECK (true);
 
--- ── Patients: all roles can read, receptionist/admin can write ──
-CREATE POLICY "patients_read_all"  ON public.patients FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "patients_write"     ON public.patients FOR INSERT WITH CHECK (get_my_role() IN ('admin','receptionist'));
-CREATE POLICY "patients_update"    ON public.patients FOR UPDATE USING (get_my_role() IN ('admin','receptionist'));
+-- ── 2. Doctors ──
+DROP POLICY IF EXISTS "doctors_read_all" ON public.doctors;
+DROP POLICY IF EXISTS "doctors_write_all" ON public.doctors;
+DROP POLICY IF EXISTS "doctors_read" ON public.doctors;
+DROP POLICY IF EXISTS "doctors_write" ON public.doctors;
+CREATE POLICY "doctors_read_all"  ON public.doctors FOR SELECT USING (true);
+CREATE POLICY "doctors_write_all" ON public.doctors FOR ALL USING (true) WITH CHECK (true);
 
--- ── Visits: all roles can read, receptionist/admin create, doctor updates ──
-CREATE POLICY "visits_read"   ON public.visits FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "visits_insert" ON public.visits FOR INSERT WITH CHECK (get_my_role() IN ('admin','receptionist'));
-CREATE POLICY "visits_update" ON public.visits FOR UPDATE USING (get_my_role() IN ('admin','receptionist','doctor'));
+-- ── 3. Hospital Settings ──
+DROP POLICY IF EXISTS "settings_read_all" ON public.hospital_settings;
+DROP POLICY IF EXISTS "settings_write_all" ON public.hospital_settings;
+DROP POLICY IF EXISTS "settings_read" ON public.hospital_settings;
+DROP POLICY IF EXISTS "settings_write" ON public.hospital_settings;
+CREATE POLICY "settings_read_all"  ON public.hospital_settings FOR SELECT USING (true);
+CREATE POLICY "settings_write_all" ON public.hospital_settings FOR ALL USING (true) WITH CHECK (true);
 
--- ── Prescriptions: all read; doctor creates/updates ──
-CREATE POLICY "rx_read"   ON public.prescriptions FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "rx_write"  ON public.prescriptions FOR INSERT WITH CHECK (get_my_role() IN ('admin','doctor'));
-CREATE POLICY "rx_update" ON public.prescriptions FOR UPDATE USING (get_my_role() IN ('admin','doctor'));
+-- ── 4. Patients ──
+DROP POLICY IF EXISTS "patients_all" ON public.patients;
+DROP POLICY IF EXISTS "patients_read_all" ON public.patients;
+DROP POLICY IF EXISTS "patients_write" ON public.patients;
+DROP POLICY IF EXISTS "patients_update" ON public.patients;
+CREATE POLICY "patients_all" ON public.patients FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "rx_items_read"  ON public.prescription_items FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "rx_items_write" ON public.prescription_items FOR ALL USING (get_my_role() IN ('admin','doctor'));
+-- ── 5. Visits (OPD) ──
+DROP POLICY IF EXISTS "visits_all" ON public.visits;
+DROP POLICY IF EXISTS "visits_read" ON public.visits;
+DROP POLICY IF EXISTS "visits_insert" ON public.visits;
+DROP POLICY IF EXISTS "visits_update" ON public.visits;
+CREATE POLICY "visits_all" ON public.visits FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "lab_read"  ON public.lab_test_orders FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "lab_write" ON public.lab_test_orders FOR ALL USING (get_my_role() IN ('admin','doctor'));
+-- ── 6. Prescriptions & Line Items ──
+DROP POLICY IF EXISTS "rx_all" ON public.prescriptions;
+DROP POLICY IF EXISTS "rx_items_all" ON public.prescription_items;
+DROP POLICY IF EXISTS "rx_read" ON public.prescriptions;
+DROP POLICY IF EXISTS "rx_write" ON public.prescriptions;
+DROP POLICY IF EXISTS "rx_update" ON public.prescriptions;
+DROP POLICY IF EXISTS "rx_items_read" ON public.prescription_items;
+DROP POLICY IF EXISTS "rx_items_write" ON public.prescription_items;
+CREATE POLICY "rx_all" ON public.prescriptions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "rx_items_all" ON public.prescription_items FOR ALL USING (true) WITH CHECK (true);
 
--- ── Drugs: all read; pharmacist/admin write ──
-CREATE POLICY "drugs_read"  ON public.drugs FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "drugs_write" ON public.drugs FOR ALL USING (get_my_role() IN ('admin','pharmacist'));
+-- ── 7. Lab Tests ──
+DROP POLICY IF EXISTS "lab_all" ON public.lab_test_orders;
+DROP POLICY IF EXISTS "lab_read" ON public.lab_test_orders;
+DROP POLICY IF EXISTS "lab_write" ON public.lab_test_orders;
+CREATE POLICY "lab_all" ON public.lab_test_orders FOR ALL USING (true) WITH CHECK (true);
 
--- ── Dispensing: pharmacist/admin only ──
-CREATE POLICY "disp_read"  ON public.dispensings FOR SELECT USING (get_my_role() IN ('admin','pharmacist'));
-CREATE POLICY "disp_write" ON public.dispensings FOR ALL USING (get_my_role() IN ('admin','pharmacist'));
-CREATE POLICY "disp_items_all" ON public.dispensing_items FOR ALL USING (get_my_role() IN ('admin','pharmacist'));
+-- ── 8. Pharmacy Drugs & Inventory ──
+DROP POLICY IF EXISTS "drugs_all" ON public.drugs;
+DROP POLICY IF EXISTS "drugs_read" ON public.drugs;
+DROP POLICY IF EXISTS "drugs_write" ON public.drugs;
+CREATE POLICY "drugs_all" ON public.drugs FOR ALL USING (true) WITH CHECK (true);
 
--- ── IP: receptionist/admin manage beds/wards/admissions ──
-CREATE POLICY "wards_read"   ON public.wards FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "wards_write"  ON public.wards FOR ALL USING (get_my_role() IN ('admin','receptionist'));
-CREATE POLICY "beds_read"    ON public.beds FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "beds_write"   ON public.beds FOR ALL USING (get_my_role() IN ('admin','receptionist'));
-CREATE POLICY "admissions_read"  ON public.admissions FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "admissions_write" ON public.admissions FOR ALL USING (get_my_role() IN ('admin','receptionist'));
+-- ── 9. Dispensings & Line Items ──
+DROP POLICY IF EXISTS "disp_all" ON public.dispensings;
+DROP POLICY IF EXISTS "disp_items_all" ON public.dispensing_items;
+DROP POLICY IF EXISTS "disp_read" ON public.dispensings;
+DROP POLICY IF EXISTS "disp_write" ON public.dispensings;
+CREATE POLICY "disp_all" ON public.dispensings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "disp_items_all" ON public.dispensing_items FOR ALL USING (true) WITH CHECK (true);
 
--- ── Audit log: admin read only; insert via server-side only ──
-CREATE POLICY "audit_read"   ON public.audit_logs FOR SELECT USING (get_my_role() = 'admin');
-CREATE POLICY "audit_insert" ON public.audit_logs FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+-- ── 10. In-Patient: Wards, Beds & Admissions ──
+DROP POLICY IF EXISTS "wards_all" ON public.wards;
+DROP POLICY IF EXISTS "beds_all" ON public.beds;
+DROP POLICY IF EXISTS "admissions_all" ON public.admissions;
+DROP POLICY IF EXISTS "wards_read" ON public.wards;
+DROP POLICY IF EXISTS "wards_write" ON public.wards;
+DROP POLICY IF EXISTS "beds_read" ON public.beds;
+DROP POLICY IF EXISTS "beds_write" ON public.beds;
+DROP POLICY IF EXISTS "admissions_read" ON public.admissions;
+DROP POLICY IF EXISTS "admissions_write" ON public.admissions;
+CREATE POLICY "wards_all" ON public.wards FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "beds_all" ON public.beds FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "admissions_all" ON public.admissions FOR ALL USING (true) WITH CHECK (true);
 
--- ── Settings: admin only ──
-CREATE POLICY "settings_read"  ON public.hospital_settings FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "settings_write" ON public.hospital_settings FOR ALL USING (get_my_role() = 'admin');
-
--- ── User profiles: own profile or admin ──
-CREATE POLICY "profiles_read_own"  ON public.user_profiles FOR SELECT USING (id = auth.uid() OR get_my_role() = 'admin');
-CREATE POLICY "profiles_update_own" ON public.user_profiles FOR UPDATE USING (id = auth.uid() OR get_my_role() = 'admin');
-CREATE POLICY "profiles_insert"    ON public.user_profiles FOR INSERT WITH CHECK (get_my_role() = 'admin');
-
--- ── Doctors: all read ──
-CREATE POLICY "doctors_read"  ON public.doctors FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "doctors_write" ON public.doctors FOR ALL USING (get_my_role() = 'admin');
+-- ── 11. Audit Logs ──
+DROP POLICY IF EXISTS "audit_all" ON public.audit_logs;
+DROP POLICY IF EXISTS "audit_read" ON public.audit_logs;
+DROP POLICY IF EXISTS "audit_insert" ON public.audit_logs;
+CREATE POLICY "audit_all" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- ════════════════════════════════════════════════════════════════
 --  USEFUL INDEXES
 -- ════════════════════════════════════════════════════════════════
 
-CREATE INDEX idx_patients_phone ON public.patients (phone);
-CREATE INDEX idx_patients_uhid  ON public.patients (uhid);
-CREATE INDEX idx_visits_patient ON public.visits (patient_id);
-CREATE INDEX idx_visits_doctor  ON public.visits (doctor_id);
-CREATE INDEX idx_visits_status  ON public.visits (status);
-CREATE INDEX idx_visits_created ON public.visits (created_at DESC);
-CREATE INDEX idx_drugs_name     ON public.drugs USING GIN (to_tsvector('english', name));
-CREATE INDEX idx_drugs_expiry   ON public.drugs (expiry_date);
-CREATE INDEX idx_dispensings_rx ON public.dispensings (prescription_id);
-
--- ════════════════════════════════════════════════════════════════
---  REALTIME — enable for live queues
--- ════════════════════════════════════════════════════════════════
-
--- Run in Supabase dashboard: Database > Replication, or:
--- ALTER PUBLICATION supabase_realtime ADD TABLE public.visits;
--- ALTER PUBLICATION supabase_realtime ADD TABLE public.dispensings;
+CREATE INDEX IF NOT EXISTS idx_patients_phone ON public.patients (phone);
+CREATE INDEX IF NOT EXISTS idx_patients_uhid  ON public.patients (uhid);
+CREATE INDEX IF NOT EXISTS idx_visits_patient ON public.visits (patient_id);
+CREATE INDEX IF NOT EXISTS idx_visits_doctor  ON public.visits (doctor_id);
+CREATE INDEX IF NOT EXISTS idx_visits_status  ON public.visits (status);
+CREATE INDEX IF NOT EXISTS idx_visits_created ON public.visits (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_drugs_name     ON public.drugs USING GIN (to_tsvector('english', name));
+CREATE INDEX IF NOT EXISTS idx_drugs_expiry   ON public.drugs (expiry_date);
+CREATE INDEX IF NOT EXISTS idx_dispensings_rx ON public.dispensings (prescription_id);

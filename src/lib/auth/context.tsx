@@ -1,8 +1,9 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { HMSStore, UserAccount } from '@/lib/store/hms-store';
+import { syncFromSupabase } from '@/lib/supabase/sync';
 import type { UserRole } from '@/lib/types/database';
 
 export interface AuthUser {
@@ -45,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Load from store or Supabase
-  function syncLocalUser() {
+  const syncLocalUser = useCallback(() => {
     const local = HMSStore.getCurrentUser();
     if (local && local.is_active) {
       setUser({
@@ -62,7 +63,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
     }
     setLoading(false);
-  }
+  }, []);
+
+  const loadUser = useCallback(async (uid: string, email: string) => {
+    try {
+      const supabase = createClient();
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('full_name, role, is_active, phone')
+        .eq('id', uid)
+        .single();
+
+      if (!profile || !profile.is_active) {
+        syncLocalUser();
+        return;
+      }
+
+      let doctorId: string | undefined;
+      let specialization: string | undefined;
+      let consultationRoom: string | undefined;
+
+      if (profile.role === 'doctor') {
+        const { data: doc } = await supabase
+          .from('doctors')
+          .select('id, specialization, consultation_room')
+          .eq('user_id', uid)
+          .single();
+        if (doc) {
+          doctorId = doc.id;
+          specialization = doc.specialization ?? undefined;
+          consultationRoom = doc.consultation_room ?? undefined;
+        }
+      }
+
+      const authUser: AuthUser = {
+        id: uid,
+        email,
+        fullName: profile.full_name,
+        role: profile.role as UserRole,
+        phone: profile.phone ?? undefined,
+        doctorId,
+        specialization,
+        consultationRoom,
+      };
+      setUser(authUser);
+
+      // Also persist current user into HMSStore so sync & routing find the account
+      HMSStore.setCurrentUser({
+        id: uid,
+        email,
+        full_name: profile.full_name,
+        role: profile.role as UserRole,
+        phone: profile.phone ?? undefined,
+        is_active: profile.is_active,
+        specialization,
+        consultation_room: consultationRoom,
+        created_at: new Date().toISOString(),
+      });
+      await syncFromSupabase();
+    } catch {
+      syncLocalUser();
+    }
+  }, [syncLocalUser]);
 
   useEffect(() => {
     const onStoreChange = () => syncLocalUser();
@@ -76,56 +138,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Supabase mode
     const supabase = createClient();
 
-    async function loadUser(uid: string, email: string) {
-      try {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('full_name, role, is_active, phone')
-          .eq('id', uid)
-          .single();
-
-        if (!profile || !profile.is_active) {
-          syncLocalUser();
-          return;
-        }
-
-        let doctorId: string | undefined;
-        let specialization: string | undefined;
-        let consultationRoom: string | undefined;
-
-        if (profile.role === 'doctor') {
-          const { data: doc } = await supabase
-            .from('doctors')
-            .select('id, specialization, consultation_room')
-            .eq('user_id', uid)
-            .single();
-          if (doc) {
-            doctorId = doc.id;
-            specialization = doc.specialization ?? undefined;
-            consultationRoom = doc.consultation_room ?? undefined;
-          }
-        }
-
-        setUser({
-          id: uid,
-          email,
-          fullName: profile.full_name,
-          role: profile.role as UserRole,
-          phone: profile.phone ?? undefined,
-          doctorId,
-          specialization,
-          consultationRoom,
-        });
-      } catch {
-        syncLocalUser();
-      }
-    }
-
     (supabase.auth as any)
       .getSession()
-      .then(({ data: { session } }: any) => {
+      .then(async ({ data: { session } }: any) => {
         if (session?.user) {
-          loadUser(session.user.id, session.user.email ?? '').finally(() => setLoading(false));
+          await loadUser(session.user.id, session.user.email ?? '');
+          setLoading(false);
         } else {
           syncLocalUser();
         }
@@ -134,9 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         syncLocalUser();
       });
 
-    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
+    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(async (_event: any, session: any) => {
       if (session?.user) {
-        loadUser(session.user.id, session.user.email ?? '');
+        await loadUser(session.user.id, session.user.email ?? '');
       } else {
         syncLocalUser();
       }
@@ -146,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       window.removeEventListener('hms-store-change', onStoreChange);
     };
-  }, []);
+  }, [loadUser, syncLocalUser]);
 
   async function signIn(email: string, password?: string): Promise<{ success: boolean; error?: string }> {
     if (!isSupabaseConfigured()) {
@@ -165,6 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: password || '',
       });
       if (!error && data?.session) {
+        // Pre-load user & sync before returning so router finds role
+        await loadUser(data.session.user.id, data.session.user.email ?? email);
         return { success: true };
       }
     } catch {

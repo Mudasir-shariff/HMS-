@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Input, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { HMSStore } from '@/lib/store/hms-store';
+import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import type { DrugType, Drug } from '@/lib/types/database';
 
 const DEFAULT_SUPPLIERS = [
@@ -180,7 +180,7 @@ export default function AddDrugPage() {
       : 'other';
 
     const newDrug: Drug = {
-      id: `drug-${Date.now()}`,
+      id: generateUUID(),
       name: form.name.trim(),
       drug_type: normalizedType,
       custom_type_name: normalizedType === 'other' ? form.drugType : undefined,
