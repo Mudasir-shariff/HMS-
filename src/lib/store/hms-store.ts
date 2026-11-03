@@ -192,13 +192,19 @@ checkAndInitializeProductionStorage();
 export const HMSStore = {
   // ── Supabase Background Push Hooks ──
   _onSaveUser: undefined as ((user: UserAccount) => void) | undefined,
+  _onDeleteUser: undefined as ((userId: string) => void) | undefined,
   _onSavePatient: undefined as ((patient: Patient) => void) | undefined,
+  _onDeletePatient: undefined as ((patientId: string) => void) | undefined,
   _onSaveVisit: undefined as ((visit: Visit) => void) | undefined,
+  _onDeleteVisit: undefined as ((visitId: string) => void) | undefined,
   _onSaveDrug: undefined as ((drug: Drug) => void) | undefined,
+  _onDeleteDrug: undefined as ((drugId: string) => void) | undefined,
   _onSavePrescription: undefined as ((rx: Prescription) => void) | undefined,
+  _onDeletePrescription: undefined as ((rxId: string) => void) | undefined,
   _onSaveDispensing: undefined as ((disp: Dispensing) => void) | undefined,
   _onSaveAdmission: undefined as ((adm: Admission) => void) | undefined,
   _onSaveSettings: undefined as ((settings: HospitalSettings) => void) | undefined,
+  _onPurgeAll: undefined as (() => void) | undefined,
 
   // ── Session ──
   getCurrentUser(): UserAccount | null {
@@ -275,6 +281,7 @@ export const HMSStore = {
   deleteUser(userId: string) {
     const users = this.getUsers().filter((u) => u.id !== userId);
     setStorage('users', users);
+    if (this._onDeleteUser) this._onDeleteUser(userId);
   },
 
   getDoctors(): UserAccount[] {
@@ -312,6 +319,7 @@ export const HMSStore = {
     // Also remove associated visits
     const visits = this.getVisits().filter((v) => v.patient_id !== patientId);
     setStorage('visits', visits);
+    if (this._onDeletePatient) this._onDeletePatient(patientId);
   },
 
   // ── Visits (OPD) ──
@@ -374,6 +382,7 @@ export const HMSStore = {
     // Also remove associated prescription if any
     const rx = this.getPrescriptions().filter((p) => p.visit_id !== visitId);
     setStorage('prescriptions', rx);
+    if (this._onDeleteVisit) this._onDeleteVisit(visitId);
   },
 
   updateVisitStatus(visitId: string, status: VisitStatus) {
@@ -519,6 +528,7 @@ export const HMSStore = {
   deletePrescription(rxId: string) {
     const rxList = this.getPrescriptions().filter((p) => p.id !== rxId);
     setStorage('prescriptions', rxList);
+    if (this._onDeletePrescription) this._onDeletePrescription(rxId);
   },
 
   // ── Drugs & Pharmacy Inventory ──
@@ -545,6 +555,7 @@ export const HMSStore = {
   deleteDrug(drugId: string) {
     const drugs = this.getDrugs().filter((d) => d.id !== drugId);
     setStorage('drugs', drugs);
+    if (this._onDeleteDrug) this._onDeleteDrug(drugId);
   },
 
   reduceStock(drugId: string, qty: number): boolean {
@@ -956,6 +967,7 @@ export const HMSStore = {
     setStorage('settings', DEFAULT_SETTINGS);
     setStorage('dispensings', []);
     this.setCurrentUser(null);
+    if (this._onPurgeAll) this._onPurgeAll();
   },
 };
 

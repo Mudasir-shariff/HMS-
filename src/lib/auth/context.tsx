@@ -70,9 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const supabase = createClient();
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('full_name, role, is_active, phone')
+        .select('*')
         .eq('id', uid)
-        .single();
+        .maybeSingle();
 
       if (!profile || !profile.is_active) {
         syncLocalUser();
@@ -80,25 +80,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let doctorId: string | undefined;
-      let specialization: string | undefined;
-      let consultationRoom: string | undefined;
+      let specialization: string | undefined = profile.specialization || undefined;
+      let consultationRoom: string | undefined = profile.consultation_room || undefined;
 
       if (profile.role === 'doctor') {
         const { data: doc } = await supabase
           .from('doctors')
           .select('id, specialization, consultation_room')
-          .eq('user_id', uid)
-          .single();
+          .or(`user_id.eq.${uid},id.eq.${uid}`)
+          .maybeSingle();
         if (doc) {
           doctorId = doc.id;
-          specialization = doc.specialization ?? undefined;
-          consultationRoom = doc.consultation_room ?? undefined;
+          specialization = specialization || doc.specialization || undefined;
+          consultationRoom = consultationRoom || doc.consultation_room || undefined;
+        } else {
+          doctorId = uid;
         }
       }
 
       const authUser: AuthUser = {
         id: uid,
-        email,
+        email: profile.email || email,
         fullName: profile.full_name,
         role: profile.role as UserRole,
         phone: profile.phone ?? undefined,
@@ -111,14 +113,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Also persist current user into HMSStore so sync & routing find the account
       HMSStore.setCurrentUser({
         id: uid,
-        email,
+        email: profile.email || email,
         full_name: profile.full_name,
         role: profile.role as UserRole,
         phone: profile.phone ?? undefined,
         is_active: profile.is_active,
         specialization,
         consultation_room: consultationRoom,
-        created_at: new Date().toISOString(),
+        created_at: profile.created_at || new Date().toISOString(),
       });
       await syncFromSupabase();
     } catch {
@@ -167,8 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser, syncLocalUser]);
 
   async function signIn(email: string, password?: string): Promise<{ success: boolean; error?: string }> {
+    const cleanEmail = email.trim().toLowerCase();
+
     if (!isSupabaseConfigured()) {
-      const res = HMSStore.login(email, password);
+      const res = HMSStore.login(cleanEmail, password);
       if (res.success && res.user) {
         syncLocalUser();
         return { success: true };
@@ -178,13 +182,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const supabase = createClient();
+      // 1. Try standard Supabase Auth
       const { data, error } = await (supabase.auth as any).signInWithPassword({
-        email,
+        email: cleanEmail,
         password: password || '',
       });
       if (!error && data?.session) {
-        // Pre-load user & sync before returning so router finds role
-        await loadUser(data.session.user.id, data.session.user.email ?? email);
+        await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
+        return { success: true };
+      }
+
+      // 2. Direct database profile lookup (for admin-created staff or unconfirmed emails)
+      const { data: dbProfile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
+
+      if (dbProfile) {
+        if (!dbProfile.is_active) {
+          return { success: false, error: 'This account has been deactivated by the administrator.' };
+        }
+        if (dbProfile.password && password && dbProfile.password !== password) {
+          return { success: false, error: 'Incorrect password. Please verify and try again.' };
+        }
+        await loadUser(dbProfile.id, dbProfile.email || cleanEmail);
         return { success: true };
       }
     } catch {
@@ -192,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Fallback to local store
-    const localRes = HMSStore.login(email, password);
+    const localRes = HMSStore.login(cleanEmail, password);
     if (localRes.success && localRes.user) {
       syncLocalUser();
       return { success: true };

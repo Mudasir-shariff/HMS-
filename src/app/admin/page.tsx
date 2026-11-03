@@ -25,6 +25,17 @@ import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar } from '@/com
 import { PageHeader } from '@/components/layout';
 import { useHMSStore } from '@/lib/store/use-store';
 import { HMSStore, UserAccount } from '@/lib/store/hms-store';
+import {
+  syncFromSupabase,
+  pushUserToSupabase,
+  deleteUserFromSupabase,
+  pushPatientToSupabase,
+  deletePatientFromSupabase,
+  deleteVisitFromSupabase,
+  deletePrescriptionFromSupabase,
+  deleteDrugFromSupabase,
+  purgeAllRecordsFromSupabase,
+} from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import type { Patient, Visit, Drug, Prescription, UserRole } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -101,36 +112,84 @@ export default function AdminPage() {
       d.drug_type.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Handlers for Staff
-  function handleToggleUserActive(user: UserAccount) {
-    HMSStore.saveUser({ ...user, is_active: !user.is_active });
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  async function handleManualSync() {
+    setIsManualSyncing(true);
+    await syncFromSupabase();
+    setIsManualSyncing(false);
   }
 
-  function handleSaveUserEdit(e: React.FormEvent) {
+  // Handlers for Staff
+  async function handleToggleUserActive(user: UserAccount) {
+    const updated = { ...user, is_active: !user.is_active };
+    HMSStore.saveUser(updated);
+    await pushUserToSupabase(updated);
+  }
+
+  async function handleSaveUserEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
     HMSStore.saveUser(editingUser);
+    await pushUserToSupabase(editingUser);
     setEditingUser(null);
   }
 
-  function handleDeleteUserConfirm() {
+  async function handleDeleteUserConfirm() {
     if (!deletingUser) return;
-    HMSStore.deleteUser(deletingUser.id);
+    const uid = deletingUser.id;
+    HMSStore.deleteUser(uid);
+    await deleteUserFromSupabase(uid);
     setDeletingUser(null);
   }
 
   // Handlers for Patients
-  function handleSavePatientEdit(e: React.FormEvent) {
+  async function handleSavePatientEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingPatient) return;
     HMSStore.savePatient(editingPatient);
+    await pushPatientToSupabase(editingPatient);
     setEditingPatient(null);
   }
 
-  function handleDeletePatientConfirm() {
+  async function handleDeletePatientConfirm() {
     if (!deletingPatient) return;
-    HMSStore.deletePatient(deletingPatient.id);
+    const pid = deletingPatient.id;
+    HMSStore.deletePatient(pid);
+    await deletePatientFromSupabase(pid);
     setDeletingPatient(null);
+  }
+
+  // Delete Visit
+  async function handleDeleteVisit(v: Visit) {
+    if (confirm(`Delete visit ${v.visit_number}?`)) {
+      HMSStore.deleteVisit(v.id);
+      await deleteVisitFromSupabase(v.id);
+    }
+  }
+
+  // Delete Prescription
+  async function handleDeleteRx(rxId: string) {
+    if (confirm('Permanently delete this prescription?')) {
+      HMSStore.deletePrescription(rxId);
+      await deletePrescriptionFromSupabase(rxId);
+    }
+  }
+
+  // Delete Drug
+  async function handleDeleteDrug(d: Drug) {
+    if (confirm(`Delete drug ${d.name} from inventory?`)) {
+      HMSStore.deleteDrug(d.id);
+      await deleteDrugFromSupabase(d.id);
+    }
+  }
+
+  // Purge Records
+  async function handlePurgeAll() {
+    if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
+      HMSStore.resetAllData();
+      await purgeAllRecordsFromSupabase();
+    }
   }
 
   return (
@@ -139,13 +198,18 @@ export default function AdminPage() {
         title="Super Admin Master Control"
         subtitle="Complete hospital administration: view, edit, and delete all logins, staff, patients, visits, and data"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => {
-                if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
-                  HMSStore.resetAllData();
-                }
-              }}
+              onClick={handleManualSync}
+              disabled={isManualSyncing}
+              className="flex items-center gap-1.5 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-semibold text-[var(--green-800)] hover:bg-[var(--bg-tile)] transition-all shadow-sm"
+              title="Force instant sync with Supabase cloud database"
+            >
+              <RotateCcw size={14} className={isManualSyncing ? 'animate-spin text-[var(--green-600)]' : ''} />
+              <span>{isManualSyncing ? 'Syncing...' : 'Sync Database'}</span>
+            </button>
+            <button
+              onClick={handlePurgeAll}
               className="flex items-center gap-1.5 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-all"
             >
               <Trash2 size={14} />
@@ -450,11 +514,7 @@ export default function AdminPage() {
 
                     <button
                       title="Delete Visit"
-                      onClick={() => {
-                        if (confirm(`Delete visit ${v.visit_number}?`)) {
-                          HMSStore.deleteVisit(v.id);
-                        }
-                      }}
+                      onClick={() => handleDeleteVisit(v)}
                       className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
                     >
                       <Trash2 size={14} />
@@ -497,11 +557,7 @@ export default function AdminPage() {
                       </div>
                       <button
                         title="Delete Prescription"
-                        onClick={() => {
-                          if (confirm('Permanently delete this prescription?')) {
-                            HMSStore.deletePrescription(rx.id);
-                          }
-                        }}
+                        onClick={() => handleDeleteRx(rx.id)}
                         className="h-7 w-7 flex items-center justify-center rounded-full bg-[var(--danger-bg)] text-[var(--danger)]"
                       >
                         <Trash2 size={13} />
@@ -583,11 +639,7 @@ export default function AdminPage() {
 
                   <button
                     title="Delete Drug"
-                    onClick={() => {
-                      if (confirm(`Delete drug ${drug.name} from inventory?`)) {
-                        HMSStore.deleteDrug(drug.id);
-                      }
-                    }}
+                    onClick={() => handleDeleteDrug(drug)}
                     className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
                   >
                     <Trash2 size={14} />

@@ -6,7 +6,7 @@ import { Activity, Eye, EyeOff, CheckCircle, Stethoscope, ArrowLeft, ShieldCheck
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
-import { syncFromSupabase } from '@/lib/supabase/sync';
+import { syncFromSupabase, pushUserToSupabase } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import type { UserRole } from '@/lib/types/database';
@@ -180,8 +180,9 @@ export default function RegisterPage() {
         : {}),
     };
 
-    // Save into HMSStore and trigger fresh sync
+    // Save into HMSStore and immediately push to Supabase table
     HMSStore.saveUser(newAccount);
+    await pushUserToSupabase(newAccount);
     await syncFromSupabase();
 
     setLoading(false);

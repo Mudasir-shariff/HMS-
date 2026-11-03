@@ -44,31 +44,30 @@ export async function syncFromSupabase(): Promise<boolean> {
     if (!profilesRes.error && profilesRes.data) {
       const docs = docsRes.data || [];
       const syncedUsers: UserAccount[] = profilesRes.data.map((p: any) => {
-        const doc = docs.find((d: any) => d.user_id === p.id);
+        const doc = docs.find((d: any) => d.user_id === p.id || d.id === p.id);
         return {
           id: p.id,
-          email: `${p.full_name.toLowerCase().replace(/[^a-z0-9]/g, '') || 'user'}@hospital.local`,
+          email: p.email || (p.full_name ? `${p.full_name.toLowerCase().replace(/[^a-z0-9]/g, '')}@hospital.local` : 'user@hospital.local'),
+          password: p.password || undefined,
           full_name: p.full_name,
           role: p.role as UserRole,
           phone: p.phone || undefined,
           is_active: p.is_active ?? true,
-          specialization: doc?.specialization || undefined,
-          consultation_room: doc?.consultation_room || undefined,
-          consultation_fee: 500,
+          specialization: p.specialization || doc?.specialization || undefined,
+          consultation_room: p.consultation_room || doc?.consultation_room || undefined,
+          consultation_fee: p.consultation_fee ? Number(p.consultation_fee) : 500,
+          opd_timings: p.opd_timings || undefined,
           created_at: p.created_at || new Date().toISOString(),
         };
       });
 
-      // Merge with any local users to ensure no local unsaved edits are lost
-      const existing = HMSStore.getUsers();
-      const mergedMap = new Map<string, UserAccount>();
-      existing.forEach((u) => mergedMap.set(u.id, u));
-      syncedUsers.forEach((u) => {
-        const local = mergedMap.get(u.id);
-        mergedMap.set(u.id, { ...local, ...u });
-      });
+      const localUsers = HMSStore.getUsers();
+      const remoteUserIds = new Set(syncedUsers.map((u) => u.id));
+      const unsyncedLocals = localUsers.filter((u) => !remoteUserIds.has(u.id));
+      // Auto-push any locally registered accounts that aren't on Supabase yet
+      unsyncedLocals.forEach((u) => pushUserToSupabase(u));
 
-      HMSStore.setUsers(Array.from(mergedMap.values()));
+      HMSStore.setUsers([...syncedUsers, ...unsyncedLocals]);
     }
 
     // 2. Fetch Patients
@@ -281,6 +280,12 @@ export function initSupabaseRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
         syncFromSupabase();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, () => {
+        syncFromSupabase();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
         syncFromSupabase();
       })
@@ -317,14 +322,22 @@ export async function pushUserToSupabase(user: UserAccount) {
   if (!isSupabaseConfigured() || !isValidUUID(user.id)) return;
   try {
     const supabase = createClient();
-    const { error: pErr } = await supabase.from('user_profiles').upsert({
+    const userPayload: any = {
       id: user.id,
       full_name: user.full_name,
       role: user.role,
       phone: user.phone || null,
       is_active: user.is_active,
       updated_at: new Date().toISOString(),
-    });
+    };
+    if (user.email) userPayload.email = user.email.toLowerCase().trim();
+    if (user.password) userPayload.password = user.password;
+    if (user.specialization) userPayload.specialization = user.specialization;
+    if (user.consultation_room) userPayload.consultation_room = user.consultation_room;
+    if (user.consultation_fee) userPayload.consultation_fee = user.consultation_fee;
+    if (user.opd_timings) userPayload.opd_timings = user.opd_timings;
+
+    const { error: pErr } = await supabase.from('user_profiles').upsert(userPayload);
     if (pErr) console.error('Error pushing user_profile to Supabase:', pErr);
 
     if (user.role === 'doctor') {
@@ -339,6 +352,80 @@ export async function pushUserToSupabase(user: UserAccount) {
     }
   } catch (e) {
     console.warn('Failed to push user to Supabase:', e);
+  }
+}
+
+export async function deleteUserFromSupabase(userId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(userId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('doctors').delete().eq('user_id', userId);
+    await supabase.from('doctors').delete().eq('id', userId);
+    await supabase.from('user_profiles').delete().eq('id', userId);
+  } catch (err) {
+    console.warn('Failed to delete user from Supabase:', err);
+  }
+}
+
+export async function deletePatientFromSupabase(patientId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(patientId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('dispensings').delete().eq('patient_id', patientId);
+    await supabase.from('prescriptions').delete().eq('patient_id', patientId);
+    await supabase.from('visits').delete().eq('patient_id', patientId);
+    await supabase.from('patients').delete().eq('id', patientId);
+  } catch (err) {
+    console.warn('Failed to delete patient from Supabase:', err);
+  }
+}
+
+export async function deleteVisitFromSupabase(visitId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(visitId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('dispensings').delete().eq('prescription_id', visitId);
+    await supabase.from('prescription_items').delete().eq('prescription_id', visitId);
+    await supabase.from('prescriptions').delete().eq('visit_id', visitId);
+    await supabase.from('visits').delete().eq('id', visitId);
+  } catch (err) {
+    console.warn('Failed to delete visit from Supabase:', err);
+  }
+}
+
+export async function deletePrescriptionFromSupabase(rxId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(rxId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('prescription_items').delete().eq('prescription_id', rxId);
+    await supabase.from('prescriptions').delete().eq('id', rxId);
+  } catch (err) {
+    console.warn('Failed to delete prescription from Supabase:', err);
+  }
+}
+
+export async function deleteDrugFromSupabase(drugId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(drugId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('drugs').delete().eq('id', drugId);
+  } catch (err) {
+    console.warn('Failed to delete drug from Supabase:', err);
+  }
+}
+
+export async function purgeAllRecordsFromSupabase() {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('dispensing_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('dispensings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('prescription_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('prescriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('visits').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('patients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  } catch (err) {
+    console.warn('Failed to purge records from Supabase:', err);
   }
 }
 
@@ -594,15 +681,21 @@ export async function pushSettingsToSupabase(settings: HospitalSettings) {
   }
 }
 
-// ── Wire HMSStore push hooks to Supabase ──
+// ── Wire HMSStore push & delete hooks to Supabase ──
 if (typeof window !== 'undefined') {
   HMSStore._onSaveUser = pushUserToSupabase;
+  HMSStore._onDeleteUser = deleteUserFromSupabase;
   HMSStore._onSavePatient = pushPatientToSupabase;
+  HMSStore._onDeletePatient = deletePatientFromSupabase;
   HMSStore._onSaveVisit = pushVisitToSupabase;
+  HMSStore._onDeleteVisit = deleteVisitFromSupabase;
   HMSStore._onSaveDrug = pushDrugToSupabase;
+  HMSStore._onDeleteDrug = deleteDrugFromSupabase;
   HMSStore._onSavePrescription = pushPrescriptionToSupabase;
+  HMSStore._onDeletePrescription = deletePrescriptionFromSupabase;
   HMSStore._onSaveDispensing = pushDispensingToSupabase;
   HMSStore._onSaveAdmission = pushAdmissionToSupabase;
   HMSStore._onSaveSettings = pushSettingsToSupabase;
+  HMSStore._onPurgeAll = purgeAllRecordsFromSupabase;
 }
 
