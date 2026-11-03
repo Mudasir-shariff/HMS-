@@ -20,9 +20,19 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, StatusPill, Input } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useVisits,
+  usePatients,
+  useDoctors,
+  useDrugs,
+  usePrescriptions,
+  useHospitalSettings,
+} from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import type { DrugType, Drug, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 interface DispenseItemState {
@@ -59,8 +69,14 @@ export default function DispensePage() {
 function DispenseContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { visits, patients, doctors, drugs, prescriptions, settings } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
+  const { data: drugs = [] } = useDrugs();
+  const { data: prescriptions = [] } = usePrescriptions();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const visitId = searchParams.get('visitId') || '';
   const token = searchParams.get('token') || '—';
@@ -330,7 +346,7 @@ function DispenseContent() {
   // ────────────────────────────────────────────────────────────────────────────
   // DELIVERED BUTTON HANDLER (PRD v1.1 Rule: Only confirmation step. No bill needed)
   // ────────────────────────────────────────────────────────────────────────────
-  function handleMarkDelivered() {
+  async function handleMarkDelivered() {
     if (includedItems.length === 0) {
       alert('Please include at least one medicine to dispense.');
       return;
@@ -342,32 +358,93 @@ function DispenseContent() {
     }
 
     const pharmacistName = user?.fullName || 'Pharmacist on Duty';
-
     const pharmacistId = user?.id && user.id.length === 36 ? user.id : (HMSStore.getUsers().find(u => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID());
 
-    HMSStore.deliverPrescription({
-      visitId: visit?.id,
-      prescriptionId: rx?.id || generateUUID(),
-      pharmacistId,
-      pharmacistName,
-      patientId: patient?.id,
-      patientName: patient?.name,
-      patientPhone: patient?.phone,
-      patientUhid: patient?.uhid,
-      uaid: rx?.uaid,
-      stayDayNumber: rx?.stay_day_number,
-      items: includedItems.map((i) => ({
-        drugId: i.drugId,
-        drugName: i.name,
-        quantity: i.qty,
-        unitPrice: i.unitPrice,
-        totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
-        isCustom: i.isCustom,
-      })),
-      totalAmount,
-      overrideReason: overrideReason.trim() || undefined,
-      hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
-    });
+    try {
+      // 1. Transactional RPC (Phase 2): Locks visit, checks stock, decrements stock atomically
+      await dispensePrescriptionAtomic({
+        prescriptionId: rx?.id,
+        pharmacistId,
+        pharmacistName,
+        items: includedItems.map((i) => ({
+          drugId: i.drugId,
+          drugName: i.name,
+          quantity: i.qty,
+          unitPrice: i.unitPrice,
+          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
+          isCustom: i.isCustom,
+        })),
+        totalAmount,
+        overrideReason: overrideReason.trim() || undefined,
+        isWalkIn: false,
+        patientId: patient?.id,
+        patientName: patient?.name,
+        patientPhone: patient?.phone,
+        patientUhid: patient?.uhid,
+        uaid: rx?.uaid,
+        stayDayNumber: rx?.stay_day_number,
+      });
+
+      // Also mirror local store for immediate UI reactivity
+      HMSStore.deliverPrescription({
+        visitId: visit?.id,
+        prescriptionId: rx?.id || generateUUID(),
+        pharmacistId,
+        pharmacistName,
+        patientId: patient?.id,
+        patientName: patient?.name,
+        patientPhone: patient?.phone,
+        patientUhid: patient?.uhid,
+        uaid: rx?.uaid,
+        stayDayNumber: rx?.stay_day_number,
+        items: includedItems.map((i) => ({
+          drugId: i.drugId,
+          drugName: i.name,
+          quantity: i.qty,
+          unitPrice: i.unitPrice,
+          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
+          isCustom: i.isCustom,
+        })),
+        totalAmount,
+        overrideReason: overrideReason.trim() || undefined,
+        hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
+      });
+    } catch (err: any) {
+      console.warn('dispensePrescriptionAtomic error:', err?.message);
+      if (err?.message?.includes('already been dispensed') || err?.message?.includes('Insufficient stock')) {
+        alert(err.message);
+        return;
+      }
+      // Fallback local store
+      HMSStore.deliverPrescription({
+        visitId: visit?.id,
+        prescriptionId: rx?.id || generateUUID(),
+        pharmacistId,
+        pharmacistName,
+        patientId: patient?.id,
+        patientName: patient?.name,
+        patientPhone: patient?.phone,
+        patientUhid: patient?.uhid,
+        uaid: rx?.uaid,
+        stayDayNumber: rx?.stay_day_number,
+        items: includedItems.map((i) => ({
+          drugId: i.drugId,
+          drugName: i.name,
+          quantity: i.qty,
+          unitPrice: i.unitPrice,
+          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
+          isCustom: i.isCustom,
+        })),
+        totalAmount,
+        overrideReason: overrideReason.trim() || undefined,
+        hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
+      });
+    }
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
 
     setDeliveryResult({
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),

@@ -6,14 +6,16 @@ import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, Avatar, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { useAuth } from '@/lib/auth/context';
-import { useHMSStore } from '@/lib/store/use-store';
+import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
 import { clsx } from 'clsx';
 
 type Tab = 'queue' | 'completed';
 
 export default function DoctorPage() {
   const { user } = useAuth();
-  const { visits, patients, doctors } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
   const [tab, setTab] = useState<Tab>('queue');
 
   // If logged in as Doctor, lock to current doctor id. If admin, allow switching doctor view.
@@ -23,10 +25,11 @@ export default function DoctorPage() {
   );
 
   const activeDoctorId = isDoctor ? user?.doctorId || user?.id : selectedDoctorId;
-  const currentDoctor = doctors.find((d) => d.id === activeDoctorId) || {
-    full_name: user?.fullName || 'Doctor',
-    specialization: user?.specialization || 'Consultant',
-    consultation_room: user?.consultationRoom || 'OPD Room',
+  const currentDoctorObj = doctors.find((d) => d.id === activeDoctorId || d.user_id === activeDoctorId);
+  const currentDoctor = {
+    full_name: currentDoctorObj?.user?.full_name || user?.fullName || 'Doctor',
+    specialization: currentDoctorObj?.specialization || user?.specialization || 'Consultant',
+    consultation_room: currentDoctorObj?.consultation_room || user?.consultationRoom || 'OPD Room',
   };
 
   // Filter visits: Check against activeDoctorId, user.id, user.doctorId

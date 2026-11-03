@@ -18,8 +18,8 @@ import {
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
-import { HMSStore } from '@/lib/store/hms-store';
+import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
+import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -36,7 +36,9 @@ const statusMap: Record<VisitStatus, { variant: 'info' | 'success' | 'danger' | 
 
 export default function ReceptionPage() {
   const { user } = useAuth();
-  const { visits, patients, doctors } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
   const [search, setSearch] = useState('');
   const [doctorFilter, setDoctorFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
@@ -95,19 +97,22 @@ export default function ReceptionPage() {
     .sort((a, b) => a.token_number - b.token_number);
 
   // Action: Direct status transition on a specific row
-  function handleMoveToCabin(visitId: string, token: number) {
-    HMSStore.updateVisitStatus(visitId, 'in_consultation');
+  async function handleMoveToCabin(visitId: string, token: number) {
+    const supabase = createClient();
+    await supabase.from('visits').update({ status: 'in_consultation', updated_at: new Date().toISOString() }).eq('id', visitId);
     triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
   }
 
-  function handleSendToPharmacy(visitId: string, token: number) {
-    HMSStore.updateVisitStatus(visitId, 'prescribed');
+  async function handleSendToPharmacy(visitId: string, token: number) {
+    const supabase = createClient();
+    await supabase.from('visits').update({ status: 'prescribed', updated_at: new Date().toISOString() }).eq('id', visitId);
     triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
   }
 
-  function handleQuickDeliver(visitId: string, token: number) {
-    HMSStore.quickDeliverVisit(visitId, user?.fullName || 'Pharmacist on Duty');
-    triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered! Pharmacy inventory auto-deducted.`);
+  async function handleQuickDeliver(visitId: string, token: number) {
+    const supabase = createClient();
+    await supabase.from('visits').update({ status: 'dispensed', updated_at: new Date().toISOString() }).eq('id', visitId);
+    triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
   }
 
   return (

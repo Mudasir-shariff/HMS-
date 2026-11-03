@@ -29,6 +29,10 @@ export interface User {
   full_name: string;
   role: UserRole;
   phone?: string;
+  specialization?: string;
+  consultation_room?: string;
+  consultation_fee?: number;
+  opd_timings?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -36,8 +40,14 @@ export interface User {
 export interface Doctor {
   id: string;
   user_id: string;
+  full_name?: string;
   specialization?: string;
+  qualification?: string;
+  reg_number?: string;
+  phone?: string;
   consultation_room?: string;
+  consultation_fee?: number;
+  opd_timings?: string;
   is_available: boolean;
   created_at: string;
   // joined

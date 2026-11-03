@@ -23,7 +23,7 @@ import {
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { canAccess, ROLE_HOME } from '@/lib/auth/roles';
-import { useHMSStore } from '@/lib/store/use-store';
+import { ConnectionIndicator } from './connection-indicator';
 import type { UserRole } from '@/lib/types/database';
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -68,7 +68,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
-  const { users } = useHMSStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -164,8 +163,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           )}
 
-          {/* Right: User Profile Chip */}
-          <div className="flex items-center gap-2">
+          {/* Right: Realtime status + User Profile Chip */}
+          <div className="flex items-center gap-2.5">
+            <ConnectionIndicator />
+
             {/* User Chip */}
             <div className="relative">
               <button

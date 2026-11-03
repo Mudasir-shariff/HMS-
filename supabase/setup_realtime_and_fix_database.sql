@@ -1,10 +1,10 @@
--- ============================================================================
+-- =============================================================================
 -- RADHAKRISHNA HOSPITAL MANAGEMENT SYSTEM
 -- Setup Realtime Replication, Unify Staff & Doctor Profiles, Remove Constraints
--- ============================================================================
+-- =============================================================================
 -- Execute this script in your Supabase SQL Editor:
 -- Dashboard -> SQL Editor -> New Query -> Paste & Run
--- ============================================================================
+-- =============================================================================
 
 -- 1. Support Injections & Nullable drug_id for Custom Items
 DO $$ BEGIN

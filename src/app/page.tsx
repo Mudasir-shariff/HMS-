@@ -4,12 +4,26 @@ import { ClipboardList, Stethoscope, Pill, BedDouble, BarChart3, Settings, Shiel
 import { Card, Button } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { useAuth } from '@/lib/auth/context';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useVisits,
+  usePatients,
+  useDoctors,
+  useDrugs,
+  useAdmissions,
+  useDispensings,
+  useBeds,
+} from '@/lib/query/hooks';
 import Link from 'next/link';
 
 export default function HomePage() {
   const { user } = useAuth();
-  const { visits, patients, doctors, drugs, admissions, dispensings, beds } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
+  const { data: drugs = [] } = useDrugs();
+  const { data: admissions = [] } = useAdmissions();
+  const { data: dispensings = [] } = useDispensings();
+  const { data: beds = [] } = useBeds();
 
   if (!user) return null;
 

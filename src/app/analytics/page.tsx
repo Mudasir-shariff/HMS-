@@ -19,10 +19,24 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, Button, StatusPill } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useVisits,
+  usePatients,
+  useDoctors,
+  useDrugs,
+  useAdmissions,
+  useDispensings,
+  useHospitalSettings,
+} from '@/lib/query/hooks';
 
 export default function AnalyticsPage() {
-  const { visits, patients, doctors, drugs, admissions, dispensings, settings } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
+  const { data: drugs = [] } = useDrugs();
+  const { data: admissions = [] } = useAdmissions();
+  const { data: dispensings = [] } = useDispensings();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('month');
 

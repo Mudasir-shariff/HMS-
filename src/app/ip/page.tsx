@@ -19,13 +19,28 @@ import {
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, Avatar, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useAdmissions,
+  useWards,
+  useBeds,
+  usePatients,
+  useDoctors,
+  useHospitalSettings,
+} from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
 import { HMSStore } from '@/lib/store/hms-store';
 import type { Admission, Bed, Ward } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 export default function InPatientPage() {
-  const { admissions, wards, beds, patients, doctors, settings } = useHMSStore();
+  const queryClient = useQueryClient();
+  const { data: admissions = [] } = useAdmissions();
+  const { data: wards = [] } = useWards();
+  const { data: beds = [] } = useBeds();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL', ip_hours_per_day: 18 } as any } = useHospitalSettings();
 
   const [activeTab, setActiveTab] = useState<'admissions' | 'beds'>('admissions');
   const [showAdmitModal, setShowAdmitModal] = useState(false);
@@ -82,6 +97,8 @@ export default function InPatientPage() {
     };
 
     HMSStore.saveAdmission(newAdmission);
+    queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setShowAdmitModal(false);
   }
 
@@ -100,6 +117,8 @@ export default function InPatientPage() {
     };
 
     HMSStore.saveAdmission(updated);
+    queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setDischargeTarget(null);
   }
 
@@ -125,6 +144,7 @@ export default function InPatientPage() {
     HMSStore.saveSettings(settings); // triggers event
     localStorage.setItem('hms_data_wards', JSON.stringify(currentWards));
     window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'wards' } }));
+    queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
     setNewWardName('');
     setShowAddWardModal(false);
   }
@@ -143,6 +163,7 @@ export default function InPatientPage() {
     currentBeds.push(newBed);
     localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
     window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
+    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setNewBedNumber('');
     setShowAddBedModal(false);
   }
@@ -155,6 +176,7 @@ export default function InPatientPage() {
       bed.price_per_day = editBedPrice;
       localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
       window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
+      queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     }
     setEditingBed(null);
   }

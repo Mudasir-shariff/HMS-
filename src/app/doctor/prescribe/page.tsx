@@ -28,10 +28,19 @@ import {
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, Textarea, Input, StatusPill } from '@/components/ui';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useDrugs,
+  useDoctors,
+  useHospitalSettings,
+  usePatients,
+  useVisits,
+  usePrescriptions,
+} from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
-import { syncFromSupabase } from '@/lib/supabase/sync';
+import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -115,8 +124,14 @@ export default function PrescribePage() {
 function PrescribeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { drugs, doctors, settings, patients, visits, prescriptions } = useHMSStore();
+  const { data: drugs = [] } = useDrugs();
+  const { data: doctors = [] } = useDoctors();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
+  const { data: patients = [] } = usePatients();
+  const { data: visits = [] } = useVisits();
+  const { data: prescriptions = [] } = usePrescriptions();
 
   const visitId = searchParams.get('visitId') || '';
   const patientId = searchParams.get('patientId') || '';
@@ -425,7 +440,7 @@ function PrescribeContent() {
 
     const validPatientId = patientId || activePatient?.id || activeVisit?.patient_id || generateUUID();
 
-    HMSStore.savePrescription({
+    const rxPayload = {
       id: rxId,
       visit_id: visitId || generateUUID(),
       doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
@@ -436,20 +451,29 @@ function PrescribeContent() {
       items: rxItems,
       lab_tests: rxLabOrders,
       created_at: new Date().toISOString(),
-    });
+    };
+
+    HMSStore.savePrescription(rxPayload);
+    pushPrescriptionToSupabase(rxPayload);
 
     // Ensure the visit record is strictly moved to 'prescribed' so it appears in the Pharmacy Dispensing Queue immediately
     if (visitId) {
-      const allVisits = HMSStore.getVisits();
-      const currentVisit = allVisits.find((v) => v.id === visitId);
+      const currentVisit = visits.find((v) => v.id === visitId) || HMSStore.getVisits().find((v) => v.id === visitId);
       if (currentVisit) {
-        currentVisit.status = 'prescribed';
-        currentVisit.follow_up_date = followUp || undefined;
-        currentVisit.instructions = instructions;
-        currentVisit.updated_at = new Date().toISOString();
-        HMSStore.saveVisit(currentVisit);
+        const updatedVisit = {
+          ...currentVisit,
+          status: 'prescribed' as const,
+          follow_up_date: followUp || undefined,
+          instructions: instructions,
+          updated_at: new Date().toISOString(),
+        };
+        HMSStore.saveVisit(updatedVisit);
+        pushVisitToSupabase(updatedVisit);
       }
     }
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
 
     setSavedRxId(rxId);
     return rxId;
@@ -474,7 +498,7 @@ function PrescribeContent() {
       rxId,
       patientName,
       token,
-      doctorName: doctor.full_name,
+      doctorName: doctor.full_name || 'Dr. Consultant',
       printerName: settings.default_printer,
     });
     setQueuedPrinterSuccess(`Prescription sent to ${job.printerName}. Printing now at Hospital reception.`);

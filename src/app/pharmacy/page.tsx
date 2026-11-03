@@ -23,17 +23,35 @@ import {
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useVisits,
+  usePatients,
+  useDoctors,
+  useDrugs,
+  usePrescriptions,
+  useDispensings,
+  useHospitalSettings,
+} from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
+import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import type { Dispensing, Drug } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 type Tab = 'queue' | 'dispensed' | 'inventory' | 'reorder';
 
 export default function PharmacyPage() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { visits, patients, doctors, drugs, prescriptions, dispensings, settings } = useHMSStore();
+  const { data: visits = [] } = useVisits();
+  const { data: patients = [] } = usePatients();
+  const { data: doctors = [] } = useDoctors();
+  const { data: drugs = [] } = useDrugs();
+  const { data: prescriptions = [] } = usePrescriptions();
+  const { data: dispensings = [] } = useDispensings();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [tab, setTab] = useState<Tab>('queue');
   const [invSearch, setInvSearch] = useState('');
@@ -247,7 +265,7 @@ export default function PharmacyPage() {
     setWalkInItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function handleCompleteWalkInSale() {
+  async function handleCompleteWalkInSale() {
     if (walkInItems.length === 0) {
       alert('Please add at least one drug to the sale.');
       return;
@@ -263,23 +281,66 @@ export default function PharmacyPage() {
       return;
     }
 
-    HMSStore.recordWalkInSale({
-      pharmacistId: user?.id || 'pharm-1',
-      pharmacistName: user?.fullName || 'Pharmacist on Duty',
-      patientName: walkInPatientName.trim() || undefined,
-      patientPhone: walkInPatientPhone.trim() || undefined,
-      patientUhid: walkInPatientUhid.trim() || undefined,
-      items: walkInItems.map((wi) => ({
-        drugId: wi.drugId || '',
-        drugName: wi.name,
-        quantity: wi.quantity,
-        unitPrice: wi.unitPrice,
-        totalPrice: wi.totalPrice,
-      })),
-      totalAmount: Number(walkInTotal.toFixed(2)),
-      hasScheduleHWarning: walkInHasScheduleH,
-      overrideReason: walkInOverrideReason.trim() || undefined,
-    });
+    try {
+      await dispensePrescriptionAtomic({
+        pharmacistId: user?.id || undefined,
+        pharmacistName: user?.fullName || 'Pharmacist on Duty',
+        patientName: walkInPatientName.trim() || undefined,
+        patientPhone: walkInPatientPhone.trim() || undefined,
+        patientUhid: walkInPatientUhid.trim() || undefined,
+        items: walkInItems.map((wi) => ({
+          drugId: wi.drugId || undefined,
+          drugName: wi.name,
+          quantity: wi.quantity,
+          unitPrice: wi.unitPrice,
+          totalPrice: wi.totalPrice,
+        })),
+        totalAmount: Number(walkInTotal.toFixed(2)),
+        overrideReason: walkInOverrideReason.trim() || undefined,
+        isWalkIn: true,
+      });
+
+      // Mirror local store
+      HMSStore.recordWalkInSale({
+        pharmacistId: user?.id || 'pharm-1',
+        pharmacistName: user?.fullName || 'Pharmacist on Duty',
+        patientName: walkInPatientName.trim() || undefined,
+        patientPhone: walkInPatientPhone.trim() || undefined,
+        patientUhid: walkInPatientUhid.trim() || undefined,
+        items: walkInItems.map((wi) => ({
+          drugId: wi.drugId || '',
+          drugName: wi.name,
+          quantity: wi.quantity,
+          unitPrice: wi.unitPrice,
+          totalPrice: wi.totalPrice,
+        })),
+        totalAmount: Number(walkInTotal.toFixed(2)),
+        hasScheduleHWarning: walkInHasScheduleH,
+        overrideReason: walkInOverrideReason.trim() || undefined,
+      });
+    } catch (err: any) {
+      console.warn('Walk-in atomic RPC failed, using local store:', err?.message);
+      HMSStore.recordWalkInSale({
+        pharmacistId: user?.id || 'pharm-1',
+        pharmacistName: user?.fullName || 'Pharmacist on Duty',
+        patientName: walkInPatientName.trim() || undefined,
+        patientPhone: walkInPatientPhone.trim() || undefined,
+        patientUhid: walkInPatientUhid.trim() || undefined,
+        items: walkInItems.map((wi) => ({
+          drugId: wi.drugId || '',
+          drugName: wi.name,
+          quantity: wi.quantity,
+          unitPrice: wi.unitPrice,
+          totalPrice: wi.totalPrice,
+        })),
+        totalAmount: Number(walkInTotal.toFixed(2)),
+        hasScheduleHWarning: walkInHasScheduleH,
+        overrideReason: walkInOverrideReason.trim() || undefined,
+      });
+    }
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
 
     setShowWalkInModal(false);
     setWalkInItems([]);

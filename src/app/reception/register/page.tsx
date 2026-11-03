@@ -6,9 +6,12 @@ import { ArrowLeft, CheckCircle, MessageSquare, Plus, Search, UserCheck, AlertCi
 import Link from 'next/link';
 import { Card, Button, Input, Select, Checkbox, Textarea, StatusPill } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import { useDoctors, usePatients, useHospitalSettings } from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
 import { HMSStore } from '@/lib/store/hms-store';
 import { pushPatientToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
+import { registerPatientAndVisitAtomic } from '@/lib/api/mutations';
 import type { Patient, Visit } from '@/lib/types/database';
 
 const BLOOD_GROUPS = [
@@ -37,7 +40,10 @@ interface FormState {
 
 export default function RegisterPatientPage() {
   const router = useRouter();
-  const { doctors, patients, settings } = useHMSStore();
+  const queryClient = useQueryClient();
+  const { data: doctors = [] } = useDoctors();
+  const { data: patients = [] } = usePatients();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const doctorOptions = doctors.map((d) => ({
     value: d.id,
@@ -130,22 +136,47 @@ export default function RegisterPatientPage() {
     e.preventDefault();
     if (!validate()) return;
 
-    const res = HMSStore.registerPatientAndVisit({
-      name: form.name.trim(),
-      age: Number(form.age),
-      phone: form.phone.trim(),
-      blood_group: form.bloodGroup || undefined,
-      has_bp: form.hasBP,
-      has_sugar: form.hasSugar,
-      other_conditions: form.hasOther ? form.otherCondition.trim() : undefined,
-      doctorId: form.doctorId,
-    });
+    try {
+      // 1. Attempt atomic DB registration with advisory locking & sequences (Phase 2)
+      const res = await registerPatientAndVisitAtomic({
+        name: form.name.trim(),
+        age: Number(form.age),
+        phone: form.phone.trim(),
+        doctorId: form.doctorId,
+        bloodGroup: form.bloodGroup || undefined,
+        hasBP: form.hasBP,
+        hasSugar: form.hasSugar,
+        otherConditions: form.hasOther ? form.otherCondition.trim() : undefined,
+        uhid: form.uhidLookup.trim() || undefined,
+      });
 
-    // Push directly to Supabase
-    await pushPatientToSupabase(res.patient);
-    await pushVisitToSupabase(res.visit);
+      // Mirror to local store for offline consistency
+      HMSStore.savePatient(res.patient);
+      HMSStore.saveVisit(res.visit);
 
-    setCreatedResult(res);
+      setCreatedResult(res);
+    } catch (err: any) {
+      console.warn('Atomic DB registration fell back to client generator:', err?.message);
+      // Fallback: Client-side generation with push to Supabase
+      const res = HMSStore.registerPatientAndVisit({
+        name: form.name.trim(),
+        age: Number(form.age),
+        phone: form.phone.trim(),
+        blood_group: form.bloodGroup || undefined,
+        has_bp: form.hasBP,
+        has_sugar: form.hasSugar,
+        other_conditions: form.hasOther ? form.otherCondition.trim() : undefined,
+        doctorId: form.doctorId,
+      });
+
+      await pushPatientToSupabase(res.patient);
+      await pushVisitToSupabase(res.visit);
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+
+      setCreatedResult(res);
+    }
   }
 
   const assignedDoctor = doctors.find((d) => d.id === (createdResult?.visit.doctor_id || form.doctorId));

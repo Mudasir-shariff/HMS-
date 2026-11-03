@@ -1,30 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, Save, CheckCircle, Hospital, ShieldCheck, Printer, MessageSquare, AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, Button, Input, Select, Textarea, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import { useHospitalSettings } from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
+import { createClient } from '@/lib/supabase/client';
 import { HMSStore } from '@/lib/store/hms-store';
 import type { HospitalSettings } from '@/lib/types/database';
 
 export default function SettingsPage() {
-  const { settings } = useHMSStore();
+  const queryClient = useQueryClient();
+  const { data: dbSettings } = useHospitalSettings();
 
   const [form, setForm] = useState<HospitalSettings>({
-    ...settings,
-    default_printer: settings.default_printer || 'Hospital Reception LaserJet Pro',
-    schedule_h_action: settings.schedule_h_action || 'warn',
-    whatsapp_enabled: settings.whatsapp_enabled ?? true,
-    whatsapp_template: settings.whatsapp_template ||
+    id: 'default',
+    hospital_name: 'RADHAKRISHNA HOSPITAL',
+    address: 'Main Road, Hospital Circle',
+    phone: '+91 98765 43210',
+    token_reset_hour: 0,
+    ip_hours_per_day: 18,
+    prescription_paper_size: 'A4',
+    prescription_header: 'RADHAKRISHNA MULTISPECIALITY CARE',
+    prescription_footer: "Please follow the doctor's instructions carefully.",
+    default_printer: 'Hospital Reception LaserJet Pro',
+    schedule_h_action: 'warn',
+    whatsapp_enabled: true,
+    whatsapp_template:
       'Namaste {patient_name}, this is a reminder from {hospital_name}. Your follow-up appointment with {doctor_name} is scheduled on {follow_up_date}. Please contact {phone} if you need to reschedule.',
+    low_stock_days_warning: 7,
+    expiry_days_warning: [90, 60, 30],
+    updated_at: new Date().toISOString(),
   });
+
+  useEffect(() => {
+    if (dbSettings) {
+      setForm((prev) => ({
+        ...prev,
+        ...dbSettings,
+      }));
+    }
+  }, [dbSettings]);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     HMSStore.saveSettings(form);
+
+    const supabase = createClient();
+    await supabase.from('hospital_settings').upsert({
+      id: form.id || 'default',
+      hospital_name: form.hospital_name,
+      address: form.address,
+      phone: form.phone,
+      token_reset_hour: form.token_reset_hour,
+      ip_hours_per_day: form.ip_hours_per_day,
+      prescription_paper_size: form.prescription_paper_size,
+      prescription_header: form.prescription_header,
+      prescription_footer: form.prescription_footer,
+      low_stock_days_warning: form.low_stock_days_warning,
+      updated_at: new Date().toISOString(),
+    });
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   }

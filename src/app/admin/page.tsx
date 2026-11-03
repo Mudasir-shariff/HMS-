@@ -23,7 +23,14 @@ import {
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { useHMSStore } from '@/lib/store/use-store';
+import {
+  useUserProfiles,
+  usePatients,
+  useVisits,
+  useDrugs,
+  usePrescriptions,
+  useDoctors,
+} from '@/lib/query/hooks';
 import { HMSStore, UserAccount } from '@/lib/store/hms-store';
 import {
   syncFromSupabase,
@@ -59,7 +66,12 @@ const ROLE_PILL: Record<string, { variant: 'info' | 'success' | 'warning' | 'dan
 
 export default function AdminPage() {
   const { user: currentUser } = useAuth();
-  const { users, patients, visits, drugs, prescriptions, doctors } = useHMSStore();
+  const { data: users = [] } = useUserProfiles();
+  const { data: patients = [] } = usePatients();
+  const { data: visits = [] } = useVisits();
+  const { data: drugs = [] } = useDrugs();
+  const { data: prescriptions = [] } = usePrescriptions();
+  const { data: doctors = [] } = useDoctors();
 
   const [tab, setTab] = useState<TabId>('staff');
   const [search, setSearch] = useState('');
@@ -99,7 +111,7 @@ export default function AdminPage() {
       const doc = doctors.find((d) => d.id === v.doctor_id);
       return (
         (pat && pat.name.toLowerCase().includes(search.toLowerCase())) ||
-        (doc && doc.full_name.toLowerCase().includes(search.toLowerCase())) ||
+        (doc && (doc.full_name || '').toLowerCase().includes(search.toLowerCase())) ||
         v.visit_number.toLowerCase().includes(search.toLowerCase())
       );
     })
@@ -328,7 +340,7 @@ export default function AdminPage() {
                         )}
                         {u.opd_timings && <span>· Timings: {u.opd_timings}</span>}
                         {u.consultation_fee && <span>· Fee: ₹{u.consultation_fee}</span>}
-                        <span>· Password: <code className="bg-white px-1 py-0.5 rounded text-[10px]">{u.password || '••••'}</code></span>
+                        <span className="text-emerald-700 font-medium">· Auth: Secure Supabase Auth</span>
                       </div>
                     </div>
 
