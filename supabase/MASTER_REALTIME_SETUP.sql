@@ -620,7 +620,65 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 6. SEED ESSENTIAL HOSPITAL DATA (STAFF, DRUGS, SETTINGS, WARDS, BEDS)
+-- 6. ENSURE PRIMARY KEYS
+-- -----------------------------------------------------------------------------
+
+DO $$
+BEGIN
+  ALTER TABLE public.user_profiles ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.doctors ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.patients ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.visits ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.prescriptions ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.drugs ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.hospital_settings ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.wards ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.beds ADD PRIMARY KEY (id);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- 7. SEED ESSENTIAL HOSPITAL DATA (STAFF, DRUGS, SETTINGS, WARDS, BEDS)
 -- -----------------------------------------------------------------------------
 
 -- Standard Staff Accounts for Multi-Device Logins:
@@ -630,40 +688,52 @@ END $$;
 -- Receptionist: reception@hospital.local  / reception123
 -- Pharmacist:   pharmacy@hospital.local   / pharmacy123
 
+DELETE FROM public.user_profiles WHERE id IN (
+  '11111111-1111-4111-a111-111111111111',
+  '22222222-2222-4222-a222-222222222222',
+  '33333333-3333-4333-a333-333333333333',
+  '44444444-4444-4444-a444-444444444444',
+  '55555555-5555-4555-a555-555555555555'
+);
+
 INSERT INTO public.user_profiles (id, email, password, full_name, role, phone, is_active, specialization, consultation_room, consultation_fee, opd_timings, version, created_at, updated_at)
 VALUES
   ('11111111-1111-4111-a111-111111111111', 'admin@hospital.local', 'admin123', 'Super Admin', 'admin', '9800000001', TRUE, NULL, NULL, 0, NULL, 1, NOW(), NOW()),
   ('22222222-2222-4222-a222-222222222222', 'doctor@hospital.local', 'doctor123', 'Dr. Ramesh Gupta', 'doctor', '9800000002', TRUE, 'Cardiologist', 'OPD Room 1', 500, '09:00 AM - 01:00 PM', 1, NOW(), NOW()),
   ('33333333-3333-4333-a333-333333333333', 'dr.priya@hospital.local', 'doctor123', 'Dr. Priya Sharma', 'doctor', '9800000003', TRUE, 'General Physician', 'OPD Room 2', 400, '10:00 AM - 02:00 PM', 1, NOW(), NOW()),
   ('44444444-4444-4444-a444-444444444444', 'reception@hospital.local', 'reception123', 'Anjali Sharma', 'receptionist', '9800000004', TRUE, NULL, 'Reception Desk', 0, NULL, 1, NOW(), NOW()),
-  ('55555555-5555-4555-a555-555555555555', 'pharmacy@hospital.local', 'pharmacy123', 'Suresh Patel', 'pharmacist', '9800000005', TRUE, NULL, 'Main Pharmacy', 0, NULL, 1, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-  email = EXCLUDED.email,
-  password = EXCLUDED.password,
-  full_name = EXCLUDED.full_name,
-  role = EXCLUDED.role,
-  phone = EXCLUDED.phone,
-  specialization = EXCLUDED.specialization,
-  consultation_room = EXCLUDED.consultation_room,
-  consultation_fee = EXCLUDED.consultation_fee,
-  opd_timings = EXCLUDED.opd_timings,
-  is_active = TRUE;
+  ('55555555-5555-4555-a555-555555555555', 'pharmacy@hospital.local', 'pharmacy123', 'Suresh Patel', 'pharmacist', '9800000005', TRUE, NULL, 'Main Pharmacy', 0, NULL, 1, NOW(), NOW());
 
 -- Doctors Table Sync
+DELETE FROM public.doctors WHERE id IN (
+  '22222222-2222-4222-a222-222222222222',
+  '33333333-3333-4333-a333-333333333333'
+);
+
 INSERT INTO public.doctors (id, user_id, full_name, specialization, consultation_room, consultation_fee, opd_timings, is_available, created_at)
 VALUES
   ('22222222-2222-4222-a222-222222222222', '22222222-2222-4222-a222-222222222222', 'Dr. Ramesh Gupta', 'Cardiologist', 'OPD Room 1', 500, '09:00 AM - 01:00 PM', TRUE, NOW()),
-  ('33333333-3333-4333-a333-333333333333', '33333333-3333-4333-a333-333333333333', 'Dr. Priya Sharma', 'General Physician', 'OPD Room 2', 400, '10:00 AM - 02:00 PM', TRUE, NOW())
-ON CONFLICT (id) DO UPDATE SET
-  user_id = EXCLUDED.user_id,
-  full_name = EXCLUDED.full_name,
-  specialization = EXCLUDED.specialization,
-  consultation_room = EXCLUDED.consultation_room,
-  consultation_fee = EXCLUDED.consultation_fee,
-  opd_timings = EXCLUDED.opd_timings,
-  is_available = TRUE;
+  ('33333333-3333-4333-a333-333333333333', '33333333-3333-4333-a333-333333333333', 'Dr. Priya Sharma', 'General Physician', 'OPD Room 2', 400, '10:00 AM - 02:00 PM', TRUE, NOW());
 
 -- Drugs Inventory (15 Essential Medicines)
+DELETE FROM public.drugs WHERE id IN (
+  'd0000001-0000-0000-0000-000000000001',
+  'd0000002-0000-0000-0000-000000000002',
+  'd0000003-0000-0000-0000-000000000003',
+  'd0000004-0000-0000-0000-000000000004',
+  'd0000005-0000-0000-0000-000000000005',
+  'd0000006-0000-0000-0000-000000000006',
+  'd0000007-0000-0000-0000-000000000007',
+  'd0000008-0000-0000-0000-000000000008',
+  'd0000009-0000-0000-0000-000000000009',
+  'd0000010-0000-0000-0000-000000000010',
+  'd0000011-0000-0000-0000-000000000011',
+  'd0000012-0000-0000-0000-000000000012',
+  'd0000013-0000-0000-0000-000000000013',
+  'd0000014-0000-0000-0000-000000000014',
+  'd0000015-0000-0000-0000-000000000015'
+);
+
 INSERT INTO public.drugs (id, name, drug_type, unit_price, stock_quantity, reorder_level, schedule_h, schedule_h1, batch_number, expiry_date, version, created_at, updated_at)
 VALUES
   ('d0000001-0000-0000-0000-000000000001', 'Paracetamol 500mg', 'tablet', 3.50, 500, 100, FALSE, FALSE, 'PCM-2026-A', '2028-12-31', 1, NOW(), NOW()),
@@ -680,17 +750,11 @@ VALUES
   ('d0000012-0000-0000-0000-000000000012', 'Ambroxol Cough Syrup 100ml', 'syrup', 85.00, 500, 40, FALSE, FALSE, 'AMB-2026-L', '2027-12-31', 1, NOW(), NOW()),
   ('d0000013-0000-0000-0000-000000000013', 'Multivitamin Daily', 'tablet', 7.00, 500, 100, FALSE, FALSE, 'MTV-2026-M', '2029-03-31', 1, NOW(), NOW()),
   ('d0000014-0000-0000-0000-000000000014', 'Diclofenac 50mg', 'tablet', 5.00, 500, 60, FALSE, FALSE, 'DIC-2026-N', '2028-04-30', 1, NOW(), NOW()),
-  ('d0000015-0000-0000-0000-000000000015', 'Ciprofloxacin 500mg', 'tablet', 18.00, 500, 40, TRUE, FALSE, 'CIP-2026-O', '2028-06-30', 1, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  drug_type = EXCLUDED.drug_type,
-  unit_price = EXCLUDED.unit_price,
-  stock_quantity = EXCLUDED.stock_quantity,
-  reorder_level = EXCLUDED.reorder_level,
-  batch_number = EXCLUDED.batch_number,
-  expiry_date = EXCLUDED.expiry_date;
+  ('d0000015-0000-0000-0000-000000000015', 'Ciprofloxacin 500mg', 'tablet', 18.00, 500, 40, TRUE, FALSE, 'CIP-2026-O', '2028-06-30', 1, NOW(), NOW());
 
 -- Hospital Settings
+DELETE FROM public.hospital_settings WHERE id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO public.hospital_settings (id, hospital_name, tagline, phone, email, address, registration_fee, default_printer, schedule_h_action, whatsapp_enabled, low_stock_days_warning, updated_at)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
@@ -705,23 +769,33 @@ VALUES (
   TRUE,
   7,
   NOW()
-)
-ON CONFLICT (id) DO UPDATE SET
-  hospital_name = EXCLUDED.hospital_name,
-  tagline = EXCLUDED.tagline,
-  phone = EXCLUDED.phone,
-  email = EXCLUDED.email,
-  address = EXCLUDED.address,
-  registration_fee = EXCLUDED.registration_fee,
-  updated_at = NOW();
+);
 
 -- Wards & Beds
+DELETE FROM public.beds WHERE id IN (
+  'b0000001-0000-0000-0000-000000000001',
+  'b0000002-0000-0000-0000-000000000001',
+  'b0000003-0000-0000-0000-000000000001',
+  'b0000004-0000-0000-0000-000000000001',
+  'b0000005-0000-0000-0000-000000000001',
+  'b0000006-0000-0000-0000-000000000002',
+  'b0000007-0000-0000-0000-000000000002',
+  'b0000008-0000-0000-0000-000000000002',
+  'b0000009-0000-0000-0000-000000000003',
+  'b0000010-0000-0000-0000-000000000003'
+);
+
+DELETE FROM public.wards WHERE id IN (
+  'e0000001-0000-0000-0000-000000000001',
+  'e0000002-0000-0000-0000-000000000002',
+  'e0000003-0000-0000-0000-000000000003'
+);
+
 INSERT INTO public.wards (id, name, floor, total_beds, price_per_day, is_active, created_at)
 VALUES
   ('e0000001-0000-0000-0000-000000000001', 'General Ward', 'Ground Floor', 5, 800, TRUE, NOW()),
   ('e0000002-0000-0000-0000-000000000002', 'Semi-Private Ward', 'First Floor', 3, 1800, TRUE, NOW()),
-  ('e0000003-0000-0000-0000-000000000003', 'ICU (Intensive Care)', 'Second Floor', 2, 4500, TRUE, NOW())
-ON CONFLICT (id) DO NOTHING;
+  ('e0000003-0000-0000-0000-000000000003', 'ICU (Intensive Care)', 'Second Floor', 2, 4500, TRUE, NOW());
 
 INSERT INTO public.beds (id, ward_id, bed_number, is_occupied, is_active, created_at)
 VALUES
@@ -734,8 +808,10 @@ VALUES
   ('b0000007-0000-0000-0000-000000000002', 'e0000002-0000-0000-0000-000000000002', 'SP-02', FALSE, TRUE, NOW()),
   ('b0000008-0000-0000-0000-000000000002', 'e0000002-0000-0000-0000-000000000002', 'SP-03', FALSE, TRUE, NOW()),
   ('b0000009-0000-0000-0000-000000000003', 'e0000003-0000-0000-0000-000000000003', 'ICU-01', FALSE, TRUE, NOW()),
-  ('b0000010-0000-0000-0000-000000000003', 'e0000003-0000-0000-0000-000000000003', 'ICU-02', FALSE, TRUE, NOW())
-ON CONFLICT (id) DO NOTHING;
+  ('b0000010-0000-0000-0000-000000000003', 'e0000003-0000-0000-0000-000000000003', 'ICU-02', FALSE, TRUE, NOW());
+
+-- Verification
+SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
 
 -- Verification
 SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
