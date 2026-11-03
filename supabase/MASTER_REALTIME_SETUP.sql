@@ -813,6 +813,4 @@ VALUES
 -- Verification
 SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
 
--- Verification
-SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
 
