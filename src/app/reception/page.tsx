@@ -83,7 +83,11 @@ export default function ReceptionPage() {
         v.patientUhid.toLowerCase().includes(search.toLowerCase()) ||
         v.visit_number.toLowerCase().includes(search.toLowerCase());
 
-      const matchesDoc = doctorFilter === 'all' || v.doctor_id === doctorFilter;
+      const selectedDoc = doctors.find((d) => d.id === doctorFilter || d.user_id === doctorFilter);
+      const matchesDoc =
+        doctorFilter === 'all' ||
+        v.doctor_id === doctorFilter ||
+        Boolean(selectedDoc && (v.doctor_id === selectedDoc.id || v.doctor_id === selectedDoc.user_id));
 
       let matchesStage = true;
       if (stageFilter === 'with_doctor') matchesStage = v.status === 'waiting' || v.status === 'in_consultation';

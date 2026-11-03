@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query/keys';
 import { PageHeader } from '@/components/layout';
 import {
   useUserProfiles,
@@ -65,6 +67,7 @@ const ROLE_PILL: Record<string, { variant: 'info' | 'success' | 'warning' | 'dan
 };
 
 export default function AdminPage() {
+  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   const { data: users = [] } = useUserProfiles();
   const { data: patients = [] } = usePatients();
@@ -108,7 +111,7 @@ export default function AdminPage() {
   const filteredVisits = visits
     .filter((v) => {
       const pat = patients.find((p) => p.id === v.patient_id);
-      const doc = doctors.find((d) => d.id === v.doctor_id);
+      const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
       return (
         (pat && pat.name.toLowerCase().includes(search.toLowerCase())) ||
         (doc && (doc.full_name || '').toLowerCase().includes(search.toLowerCase())) ||
@@ -129,6 +132,7 @@ export default function AdminPage() {
   async function handleManualSync() {
     setIsManualSyncing(true);
     await syncFromSupabase();
+    queryClient.invalidateQueries();
     setIsManualSyncing(false);
   }
 
@@ -137,6 +141,8 @@ export default function AdminPage() {
     const updated = { ...user, is_active: !user.is_active };
     HMSStore.saveUser(updated);
     await pushUserToSupabase(updated);
+    queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
   }
 
   async function handleSaveUserEdit(e: React.FormEvent) {
@@ -144,6 +150,8 @@ export default function AdminPage() {
     if (!editingUser) return;
     HMSStore.saveUser(editingUser);
     await pushUserToSupabase(editingUser);
+    queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
     setEditingUser(null);
   }
 
@@ -152,6 +160,8 @@ export default function AdminPage() {
     const uid = deletingUser.id;
     HMSStore.deleteUser(uid);
     await deleteUserFromSupabase(uid);
+    queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
     setDeletingUser(null);
   }
 
@@ -161,6 +171,7 @@ export default function AdminPage() {
     if (!editingPatient) return;
     HMSStore.savePatient(editingPatient);
     await pushPatientToSupabase(editingPatient);
+    queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
     setEditingPatient(null);
   }
 
@@ -169,6 +180,7 @@ export default function AdminPage() {
     const pid = deletingPatient.id;
     HMSStore.deletePatient(pid);
     await deletePatientFromSupabase(pid);
+    queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
     setDeletingPatient(null);
   }
 
@@ -177,6 +189,7 @@ export default function AdminPage() {
     if (confirm(`Delete visit ${v.visit_number}?`)) {
       HMSStore.deleteVisit(v.id);
       await deleteVisitFromSupabase(v.id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     }
   }
 
@@ -185,6 +198,8 @@ export default function AdminPage() {
     if (confirm('Permanently delete this prescription?')) {
       HMSStore.deletePrescription(rxId);
       await deletePrescriptionFromSupabase(rxId);
+      queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     }
   }
 
@@ -193,6 +208,7 @@ export default function AdminPage() {
     if (confirm(`Delete drug ${d.name} from inventory?`)) {
       HMSStore.deleteDrug(d.id);
       await deleteDrugFromSupabase(d.id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
     }
   }
 
@@ -201,6 +217,7 @@ export default function AdminPage() {
     if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
       HMSStore.resetAllData();
       await purgeAllRecordsFromSupabase();
+      queryClient.invalidateQueries();
     }
   }
 

@@ -28,12 +28,14 @@ export async function registerPatientAndVisitAtomic(
   params: RegisterPatientParams
 ): Promise<RegisterResult> {
   const supabase = createClient();
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.doctorId);
+  const doctorId = isValidUUID ? params.doctorId : null;
 
   const { data, error } = await supabase.rpc('register_patient_and_visit_atomic', {
     p_name: params.name,
     p_age: params.age,
     p_phone: params.phone,
-    p_doctor_id: params.doctorId,
+    p_doctor_id: doctorId,
     p_blood_group: params.bloodGroup || null,
     p_has_bp: Boolean(params.hasBP),
     p_has_sugar: Boolean(params.hasSugar),
@@ -49,8 +51,21 @@ export async function registerPatientAndVisitAtomic(
   const patient = data.patient as Patient;
   const visit = data.visit as Visit;
 
-  // Invalidate queries to update cache
+  // Direct cache update for instant UI response (<1s)
   const client = getQueryClient();
+  client.setQueriesData<Patient[]>({ queryKey: ['patients'] }, (old) => {
+    if (!old) return [patient];
+    if (old.some((p) => p.id === patient.id)) return old.map((p) => (p.id === patient.id ? patient : p));
+    return [patient, ...old];
+  });
+  client.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+    if (!old) return [visit];
+    if (old.some((v) => v.id === visit.id)) return old.map((v) => (v.id === visit.id ? visit : v));
+    const next = [...old, visit];
+    next.sort((a, b) => (Number(a.token_number) || 0) - (Number(b.token_number) || 0));
+    return next;
+  });
+
   client.invalidateQueries({ queryKey: queryKeys.patients.all });
   client.invalidateQueries({ queryKey: queryKeys.visits.all });
 

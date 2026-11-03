@@ -3,8 +3,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/lib/auth/context';
 import { queryKeys } from '@/lib/query/keys';
+import { HMSStore } from '@/lib/store/hms-store';
+import { syncFromSupabase } from '@/lib/supabase/sync';
 import type { Visit, Patient, Drug } from '@/lib/types/database';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
@@ -16,7 +17,7 @@ interface RealtimeContextValue {
 }
 
 const RealtimeContext = createContext<RealtimeContextValue>({
-  status: 'connecting' as ConnectionStatus,
+  status: 'reconnecting',
   lastSyncedAt: null,
   reconnect: () => {},
 });
@@ -27,16 +28,16 @@ export function useRealtime() {
 
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const [status, setStatus] = useState<ConnectionStatus>('reconnecting');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const refetchAllActive = useCallback(() => {
     queryClient.refetchQueries({ type: 'active' });
+    syncFromSupabase().catch(() => {});
     setLastSyncedAt(new Date());
   }, [queryClient]);
 
-  // Window Focus & Online/Offline listeners
+  // Window Focus & Online/Offline listeners (re-fetch when phone wakes or tab regains focus)
   useEffect(() => {
     function handleOnline() {
       setStatus('reconnecting');
@@ -48,7 +49,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     }
 
     function handleFocus() {
-      // Re-synchronize when user returns to tab or phone wakes from sleep
       refetchAllActive();
     }
 
@@ -63,7 +63,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refetchAllActive]);
 
-  // Main Realtime Channel Subscription
+  // Main Persistent Realtime Channel (One channel per session across all tables)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -73,28 +73,16 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     }
 
     const supabase = createClient();
-    const channelId = `hms-rt-${user?.id || 'anon'}-${Date.now().toString().slice(-4)}`;
-
+    const channelId = `hospital-sync-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase.channel(channelId);
 
-    // ── 1. VISITS (Scoped by doctor for doctors, global for others) ──
-    const visitFilter =
-      user?.role === 'doctor' && user?.id
-        ? `doctor_id=eq.${user.id}`
-        : undefined;
-
+    // ── 1. VISITS (Live OPD Queue & Status updates across all roles) ──
     channel.on(
       'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'visits',
-        ...(visitFilter ? { filter: visitFilter } : {}),
-      },
+      { event: '*', schema: 'public', table: 'visits' },
       (payload) => {
         setLastSyncedAt(new Date());
 
-        // Direct Cache Mutation for < 1s responsiveness
         queryClient.setQueriesData<Visit[]>(
           { queryKey: ['visits'] },
           (oldVisits) => {
@@ -102,7 +90,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
             if (payload.eventType === 'INSERT') {
               const newVisit = payload.new as Visit;
-              // Avoid duplicates
               if (oldVisits.some((v) => v.id === newVisit.id)) return oldVisits;
               const next = [...oldVisits, newVisit];
               next.sort((a, b) => (Number(a.token_number) || 0) - (Number(b.token_number) || 0));
@@ -124,12 +111,18 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        // Fallback invalidate to guarantee data relationship integrity
+        // Mirror to HMSStore
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          HMSStore.saveVisit(payload.new as any);
+        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
+          HMSStore.deleteVisit((payload.old as any).id);
+        }
+
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
       }
     );
 
-    // ── 2. PATIENTS ──
+    // ── 2. PATIENTS (Live Patient Registration & Updates) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'patients' },
@@ -162,11 +155,18 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
+        // Mirror to HMSStore
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          HMSStore.savePatient(payload.new as any);
+        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
+          HMSStore.deletePatient((payload.old as any).id);
+        }
+
         queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
       }
     );
 
-    // ── 3. DRUGS (Live Pharmacy Inventory & Stock updates) ──
+    // ── 3. DRUGS (Live Pharmacy Inventory & Stock decrements) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'drugs' },
@@ -199,11 +199,17 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          HMSStore.saveDrug(payload.new as any);
+        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
+          HMSStore.deleteDrug((payload.old as any).id);
+        }
+
         queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
       }
     );
 
-    // ── 4. PRESCRIPTIONS & PRESCRIPTION ITEMS ──
+    // ── 4. PRESCRIPTIONS (Doctor finalize -> Instant Pharmacy queue) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescriptions' },
@@ -211,6 +217,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -223,7 +230,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // ── 5. DISPENSINGS & DISPENSING ITEMS ──
+    // ── 5. DISPENSINGS (Pharmacy dispense -> Complete visit & update stock) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'dispensings' },
@@ -232,6 +239,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -243,6 +251,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
+        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -252,6 +261,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       () => {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
+        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -276,12 +286,21 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // Channel connection status callback
+    // ── 8. HOSPITAL SETTINGS ──
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'hospital_settings' },
+      () => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
+      }
+    );
+
+    // Channel subscription lifecycle
     channel.subscribe((subStatus) => {
       if (subStatus === 'SUBSCRIBED') {
         setStatus('connected');
         setLastSyncedAt(new Date());
-        // Immediate sync on connect to ensure no missed events during handshake
         refetchAllActive();
       } else if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT') {
         setStatus('reconnecting');
@@ -293,7 +312,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     return () => {
       channel.unsubscribe();
     };
-  }, [user?.id, user?.role, queryClient, refetchAllActive]);
+  }, [queryClient, refetchAllActive]);
 
   const reconnect = useCallback(() => {
     setStatus('reconnecting');
@@ -315,4 +334,3 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     </RealtimeContext.Provider>
   );
 }
-

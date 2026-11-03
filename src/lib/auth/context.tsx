@@ -41,11 +41,35 @@ function isSupabaseConfigured(): boolean {
   );
 }
 
+// ── Cookie Session Persistence (Survives browser cache wipes) ──
+
+function setSessionCookie(u: { id: string; email: string; role: string; fullName: string }) {
+  if (typeof document === 'undefined') return;
+  const val = encodeURIComponent(JSON.stringify(u));
+  document.cookie = `hms_session_user=${val}; path=/; max-age=2592000; SameSite=Lax`;
+}
+
+function getSessionCookie(): { id: string; email: string; role: string; fullName: string } | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|; )hms_session_user=([^;]*)/);
+  if (!match) return null;
+  try {
+    return JSON.parse(decodeURIComponent(match[1]));
+  } catch {
+    return null;
+  }
+}
+
+function clearSessionCookie() {
+  if (typeof document === 'undefined') return;
+  document.cookie = 'hms_session_user=; path=/; max-age=0; SameSite=Lax';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load from store or Supabase
+  // Fallback to local store
   const syncLocalUser = useCallback(() => {
     const local = HMSStore.getCurrentUser();
     if (local && local.is_active) {
@@ -65,14 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const loadUser = useCallback(async (uid: string, email: string) => {
+  const loadUser = useCallback(async (uid?: string, email?: string) => {
     try {
       const supabase = createClient();
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', uid)
-        .maybeSingle();
+      let query = supabase.from('user_profiles').select('*');
+      if (uid) {
+        query = query.eq('id', uid);
+      } else if (email) {
+        query = query.ilike('email', email);
+      }
+      const { data: profile } = await query.maybeSingle();
 
       if (!profile || !profile.is_active) {
         syncLocalUser();
@@ -87,20 +113,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: doc } = await supabase
           .from('doctors')
           .select('id, specialization, consultation_room')
-          .or(`user_id.eq.${uid},id.eq.${uid}`)
+          .or(`user_id.eq.${profile.id},id.eq.${profile.id}`)
           .maybeSingle();
         if (doc) {
           doctorId = doc.id;
           specialization = specialization || doc.specialization || undefined;
           consultationRoom = consultationRoom || doc.consultation_room || undefined;
         } else {
-          doctorId = uid;
+          doctorId = profile.id;
         }
       }
 
       const authUser: AuthUser = {
-        id: uid,
-        email: profile.email || email,
+        id: profile.id,
+        email: profile.email || email || '',
         fullName: profile.full_name,
         role: profile.role as UserRole,
         phone: profile.phone ?? undefined,
@@ -108,12 +134,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         specialization,
         consultationRoom,
       };
-      setUser(authUser);
 
-      // Also persist current user into HMSStore so sync & routing find the account
+      setUser(authUser);
+      setSessionCookie({
+        id: profile.id,
+        email: profile.email || email || '',
+        role: profile.role,
+        fullName: profile.full_name,
+      });
+
+      // Persist in HMSStore so routing and local fallbacks match
       HMSStore.setCurrentUser({
-        id: uid,
-        email: profile.email || email,
+        id: profile.id,
+        email: profile.email || email || '',
         full_name: profile.full_name,
         role: profile.role as UserRole,
         phone: profile.phone ?? undefined,
@@ -122,9 +155,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         consultation_room: consultationRoom,
         created_at: profile.created_at || new Date().toISOString(),
       });
-      await syncFromSupabase();
+      await syncFromSupabase().catch(() => {});
     } catch {
       syncLocalUser();
+    } finally {
+      setLoading(false);
     }
   }, [syncLocalUser]);
 
@@ -137,33 +172,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return () => window.removeEventListener('hms-store-change', onStoreChange);
     }
 
-    // Supabase mode
     const supabase = createClient();
 
+    // 1. Check Supabase Auth Session
     (supabase.auth as any)
       .getSession()
       .then(async ({ data: { session } }: any) => {
         if (session?.user) {
           await loadUser(session.user.id, session.user.email ?? '');
-          setLoading(false);
         } else {
-          syncLocalUser();
+          // 2. Check Cookie Session
+          const cookieUser = getSessionCookie();
+          if (cookieUser?.id || cookieUser?.email) {
+            await loadUser(cookieUser.id, cookieUser.email);
+          } else {
+            syncLocalUser();
+          }
         }
       })
       .catch(() => {
-        syncLocalUser();
+        const cookieUser = getSessionCookie();
+        if (cookieUser?.id || cookieUser?.email) {
+          loadUser(cookieUser.id, cookieUser.email);
+        } else {
+          syncLocalUser();
+        }
       });
 
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(async (_event: any, session: any) => {
       if (session?.user) {
         await loadUser(session.user.id, session.user.email ?? '');
-      } else {
-        syncLocalUser();
       }
     });
 
     return () => {
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
       window.removeEventListener('hms-store-change', onStoreChange);
     };
   }, [loadUser, syncLocalUser]);
@@ -187,19 +230,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: cleanEmail,
         password: password || '',
       });
-      if (!error && data?.session) {
+      if (!error && data?.session?.user) {
         await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
         return { success: true };
       }
 
-      // 2. Direct database profile lookup (for admin-created staff or unconfirmed emails)
-      const { data: dbProfile } = await supabase
+      // 2. Direct database profile verification (for hospital staff logins)
+      const { data: dbProfile, error: pErr } = await supabase
         .from('user_profiles')
         .select('*')
         .ilike('email', cleanEmail)
         .maybeSingle();
 
-      if (dbProfile) {
+      if (dbProfile && !pErr) {
         if (!dbProfile.is_active) {
           return { success: false, error: 'This account has been deactivated by the administrator.' };
         }
@@ -223,9 +266,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    clearSessionCookie();
     if (isSupabaseConfigured()) {
       const supabase = createClient();
-      await (supabase.auth as any).signOut();
+      await (supabase.auth as any).signOut().catch(() => {});
     }
     HMSStore.setCurrentUser(null);
     setUser(null);
@@ -234,6 +278,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function switchUser(account: UserAccount) {
     HMSStore.setCurrentUser(account);
+    setSessionCookie({
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      fullName: account.full_name,
+    });
     syncLocalUser();
   }
 

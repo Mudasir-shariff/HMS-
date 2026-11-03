@@ -25,20 +25,32 @@ export default function DoctorPage() {
   );
 
   const activeDoctorId = isDoctor ? user?.doctorId || user?.id : selectedDoctorId;
-  const currentDoctorObj = doctors.find((d) => d.id === activeDoctorId || d.user_id === activeDoctorId);
+  const currentDoctorObj = doctors.find(
+    (d) =>
+      d.id === activeDoctorId ||
+      d.user_id === activeDoctorId ||
+      (user?.id && (d.id === user.id || d.user_id === user.id)) ||
+      (user?.email && d.user?.email === user.email)
+  );
+
   const currentDoctor = {
-    full_name: currentDoctorObj?.user?.full_name || user?.fullName || 'Doctor',
+    full_name: currentDoctorObj?.user?.full_name || currentDoctorObj?.full_name || user?.fullName || 'Doctor',
     specialization: currentDoctorObj?.specialization || user?.specialization || 'Consultant',
     consultation_room: currentDoctorObj?.consultation_room || user?.consultationRoom || 'OPD Room',
   };
 
-  // Filter visits: Check against activeDoctorId, user.id, user.doctorId
+  // Collect all valid IDs belonging to this doctor (UUID unification)
+  const doctorIdSet = new Set<string>();
+  if (activeDoctorId) doctorIdSet.add(activeDoctorId);
+  if (user?.id) doctorIdSet.add(user.id);
+  if (user?.doctorId) doctorIdSet.add(user.doctorId);
+  if (currentDoctorObj?.id) doctorIdSet.add(currentDoctorObj.id);
+  if (currentDoctorObj?.user_id) doctorIdSet.add(currentDoctorObj.user_id);
+
+  // Filter visits: Check against any matched ID
   const doctorVisits = visits.filter((v) => {
-    if (!v.doctor_id) return false;
-    if (v.doctor_id === activeDoctorId) return true;
-    if (user?.id && v.doctor_id === user.id) return true;
-    if (user?.doctorId && v.doctor_id === user.doctorId) return true;
-    return false;
+    if (!v.doctor_id) return isDoctor && doctors.length <= 1;
+    return doctorIdSet.has(v.doctor_id);
   });
 
   const enrichedVisits = doctorVisits.map((v) => {

@@ -142,18 +142,28 @@ export default function RegisterPage() {
       // Upsert directly into public.user_profiles table
       await supabase.from('user_profiles').upsert({
         id: assignedId,
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
         full_name: form.fullName.trim(),
         role: form.role,
         phone: form.phone.trim() || null,
+        specialization: form.specialization || null,
+        consultation_room: form.consultationRoom || null,
+        consultation_fee: Number(form.consultationFee) || 500,
+        opd_timings: form.opdTimings || null,
         is_active: true,
       });
 
       // If registering a Doctor, also upsert into public.doctors table
       if (form.role === 'doctor') {
         await supabase.from('doctors').upsert({
+          id: assignedId,
           user_id: assignedId,
+          full_name: form.fullName.trim(),
           specialization: form.specialization || 'General Medicine',
           consultation_room: form.consultationRoom || 'Room 1',
+          consultation_fee: Number(form.consultationFee) || 500,
+          opd_timings: form.opdTimings || null,
           is_available: true,
         });
       }

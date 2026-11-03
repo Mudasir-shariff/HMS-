@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { HMSStore } from '@/lib/store/hms-store';
 import type {
   Patient,
   Visit,
@@ -22,11 +23,26 @@ export async function fetchUserProfiles(): Promise<User[]> {
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.warn('fetchUserProfiles error:', error.message);
+  if (error || !data || data.length === 0) {
+    const local = HMSStore.getUsers();
+    if (local && local.length > 0) {
+      return local.map((u) => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.full_name,
+        role: u.role,
+        phone: u.phone,
+        specialization: u.specialization,
+        consultation_room: u.consultation_room,
+        consultation_fee: u.consultation_fee,
+        opd_timings: u.opd_timings,
+        is_active: u.is_active,
+        created_at: u.created_at,
+      }));
+    }
     return [];
   }
-  return data || [];
+  return data;
 }
 
 export async function fetchDoctors(): Promise<Doctor[]> {
@@ -39,12 +55,16 @@ export async function fetchDoctors(): Promise<Doctor[]> {
   const docs = docsRes.data || [];
   const profiles = profilesRes.data || [];
 
-  return docs.map((doc: any) => {
+  const doctorMap = new Map<string, Doctor>();
+
+  // 1. Process records in public.doctors table
+  for (const doc of docs) {
     const user = profiles.find((p: any) => p.id === doc.user_id || p.id === doc.id);
-    return {
+    const key = doc.id || doc.user_id;
+    doctorMap.set(key, {
       id: doc.id,
-      user_id: doc.user_id,
-      full_name: user?.full_name || 'Dr. Unknown',
+      user_id: doc.user_id || doc.id,
+      full_name: doc.full_name || user?.full_name || 'Dr. Consultant',
       specialization: doc.specialization || user?.specialization || 'General Medicine',
       consultation_room: doc.consultation_room || user?.consultation_room || 'Room 1',
       consultation_fee: doc.consultation_fee ?? user?.consultation_fee ?? 500,
@@ -66,8 +86,60 @@ export async function fetchDoctors(): Promise<Doctor[]> {
             created_at: user.created_at,
           }
         : undefined,
-    };
-  });
+    });
+  }
+
+  // 2. Also ensure any doctor profile in user_profiles is included
+  for (const prof of profiles) {
+    if (!doctorMap.has(prof.id)) {
+      doctorMap.set(prof.id, {
+        id: prof.id,
+        user_id: prof.id,
+        full_name: prof.full_name,
+        specialization: prof.specialization || 'General Medicine',
+        consultation_room: prof.consultation_room || 'Room 1',
+        consultation_fee: prof.consultation_fee ?? 500,
+        opd_timings: prof.opd_timings || '09:00 AM - 01:00 PM',
+        is_available: prof.is_active ?? true,
+        created_at: prof.created_at,
+        user: {
+          id: prof.id,
+          email: prof.email || '',
+          full_name: prof.full_name,
+          role: prof.role,
+          phone: prof.phone || undefined,
+          specialization: prof.specialization,
+          consultation_room: prof.consultation_room,
+          consultation_fee: prof.consultation_fee,
+          opd_timings: prof.opd_timings,
+          is_active: prof.is_active,
+          created_at: prof.created_at,
+        },
+      });
+    }
+  }
+
+  if (doctorMap.size > 0) {
+    return Array.from(doctorMap.values());
+  }
+
+  // Fallback to local store doctors if database is temporarily empty
+  const localDocs = HMSStore.getDoctors();
+  if (localDocs && localDocs.length > 0) {
+    return localDocs.map((d) => ({
+      id: d.id,
+      user_id: d.id,
+      full_name: d.full_name,
+      specialization: d.specialization,
+      consultation_room: d.consultation_room,
+      consultation_fee: d.consultation_fee ?? 500,
+      opd_timings: d.opd_timings,
+      is_available: (d as any).is_available ?? d.is_active ?? true,
+      created_at: d.created_at,
+    }));
+  }
+
+  return [];
 }
 
 export async function fetchPatients(search?: string): Promise<Patient[]> {
@@ -80,11 +152,20 @@ export async function fetchPatients(search?: string): Promise<Patient[]> {
   }
 
   const { data, error } = await query;
-  if (error) {
-    console.warn('fetchPatients error:', error.message);
-    return [];
+  if (error || !data || data.length === 0) {
+    const local = HMSStore.getPatients();
+    if (search && search.trim()) {
+      const s = search.trim().toLowerCase();
+      return local.filter(
+        (p) =>
+          p.name.toLowerCase().includes(s) ||
+          p.phone.includes(s) ||
+          p.uhid.toLowerCase().includes(s)
+      );
+    }
+    return local || [];
   }
-  return data || [];
+  return data;
 }
 
 export async function fetchVisits(filters?: { doctorId?: string; status?: string; date?: string }): Promise<Visit[]> {
@@ -113,12 +194,18 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
   }
 
   const { data, error } = await query;
-  if (error) {
-    console.warn('fetchVisits error:', error.message);
-    return [];
+  if (error || !data || data.length === 0) {
+    let local = HMSStore.getVisits();
+    if (filters?.doctorId) {
+      local = local.filter((v) => v.doctor_id === filters.doctorId);
+    }
+    if (filters?.status) {
+      local = local.filter((v) => v.status === filters.status);
+    }
+    return local || [];
   }
 
-  return (data || []).map((v: any) => ({
+  return data.map((v: any) => ({
     id: v.id,
     visit_number: v.visit_number,
     patient_id: v.patient_id,
@@ -144,13 +231,16 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     supabase.from('prescription_items').select('*'),
   ]);
 
-  if (rxRes.error) {
-    console.warn('fetchPrescriptions error:', rxRes.error.message);
-    return [];
+  if (rxRes.error || !rxRes.data || rxRes.data.length === 0) {
+    let local = HMSStore.getPrescriptions();
+    if (visitId) {
+      local = local.filter((p) => p.visit_id === visitId);
+    }
+    return local || [];
   }
 
   const allItems = itemsRes.data || [];
-  return (rxRes.data || []).map((r: any) => ({
+  return rxRes.data.map((r: any) => ({
     id: r.id,
     visit_id: r.visit_id,
     doctor_id: r.doctor_id,
@@ -189,12 +279,12 @@ export async function fetchDrugs(): Promise<Drug[]> {
     .select('*')
     .order('name', { ascending: true });
 
-  if (error) {
-    console.warn('fetchDrugs error:', error.message);
-    return [];
+  if (error || !data || data.length === 0) {
+    const local = HMSStore.getDrugs();
+    return local || [];
   }
 
-  return (data || []).map((d: any) => ({
+  return data.map((d: any) => ({
     id: d.id,
     name: d.name,
     drug_type: d.drug_type,
@@ -225,13 +315,12 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
     supabase.from('dispensing_items').select('*'),
   ]);
 
-  if (dispRes.error) {
-    console.warn('fetchDispensings error:', dispRes.error.message);
-    return [];
+  if (dispRes.error || !dispRes.data || dispRes.data.length === 0) {
+    return HMSStore.getDispensings() || [];
   }
 
   const allItems = itemsRes.data || [];
-  return (dispRes.data || []).map((d: any) => ({
+  return dispRes.data.map((d: any) => ({
     id: d.id,
     prescription_id: d.prescription_id || undefined,
     patient_id: d.patient_id || undefined,
@@ -264,15 +353,15 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
 export async function fetchWards(): Promise<Ward[]> {
   const supabase = createClient();
   const { data, error } = await supabase.from('wards').select('*').order('name', { ascending: true });
-  if (error) return [];
-  return data || [];
+  if (error || !data || data.length === 0) return HMSStore.getWards() || [];
+  return data;
 }
 
 export async function fetchBeds(): Promise<Bed[]> {
   const supabase = createClient();
   const { data, error } = await supabase.from('beds').select('*').order('bed_number', { ascending: true });
-  if (error) return [];
-  return (data || []).map((b: any) => ({
+  if (error || !data || data.length === 0) return HMSStore.getBeds() || [];
+  return data.map((b: any) => ({
     id: b.id,
     ward_id: b.ward_id,
     bed_number: b.bed_number,
@@ -285,14 +374,34 @@ export async function fetchBeds(): Promise<Bed[]> {
 export async function fetchAdmissions(): Promise<Admission[]> {
   const supabase = createClient();
   const { data, error } = await supabase.from('admissions').select('*').order('created_at', { ascending: false });
-  if (error) return [];
-  return data || [];
+  if (error || !data || data.length === 0) return HMSStore.getAdmissions() || [];
+  return data;
 }
 
 export async function fetchSettings(): Promise<HospitalSettings | null> {
   const supabase = createClient();
   const { data, error } = await supabase.from('hospital_settings').select('*').limit(1).maybeSingle();
-  if (error || !data) return null;
+  if (error || !data) {
+    const s = HMSStore.getSettings();
+    return {
+      id: '00000000-0000-0000-0000-000000000001',
+      hospital_name: s.hospital_name || 'RADHAKRISHNA HOSPITAL',
+      address: s.address || '',
+      phone: s.phone || '',
+      token_reset_hour: s.token_reset_hour ?? 0,
+      ip_hours_per_day: s.ip_hours_per_day ?? 18,
+      prescription_paper_size: s.prescription_paper_size || 'A4',
+      prescription_header: s.prescription_header || 'MULTISPECIALITY CARE',
+      prescription_footer: s.prescription_footer || "Please follow the doctor's advice.",
+      default_printer: s.default_printer || 'Pharmacy LaserJet Pro (Network)',
+      schedule_h_action: s.schedule_h_action || 'warn',
+      whatsapp_enabled: s.whatsapp_enabled ?? true,
+      whatsapp_template: s.whatsapp_template || 'Namaste {patient_name}, your token at {hospital_name} is #{token}.',
+      low_stock_days_warning: s.low_stock_days_warning ?? 7,
+      expiry_days_warning: s.expiry_days_warning || [90, 60, 30],
+      updated_at: new Date().toISOString(),
+    };
+  }
   return {
     id: data.id,
     hospital_name: data.hospital_name || 'RADHAKRISHNA HOSPITAL',
@@ -303,10 +412,10 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
     prescription_paper_size: data.prescription_paper_size || 'A4',
     prescription_header: data.prescription_header || 'MULTISPECIALITY CARE',
     prescription_footer: data.prescription_footer || "Please follow the doctor's advice.",
-    default_printer: 'Pharmacy LaserJet Pro (Network)',
-    schedule_h_action: 'warn',
-    whatsapp_enabled: true,
-    whatsapp_template: 'Namaste {patient_name}, your token at {hospital_name} is #{token}.',
+    default_printer: data.default_printer || 'Pharmacy LaserJet Pro (Network)',
+    schedule_h_action: data.schedule_h_action || 'warn',
+    whatsapp_enabled: data.whatsapp_enabled ?? true,
+    whatsapp_template: data.whatsapp_template || 'Namaste {patient_name}, your token at {hospital_name} is #{token}.',
     low_stock_days_warning: data.low_stock_days_warning ?? 7,
     expiry_days_warning: data.expiry_days_warning || [90, 60, 30],
     updated_at: data.updated_at || new Date().toISOString(),
