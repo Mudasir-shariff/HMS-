@@ -114,66 +114,87 @@ export default function RegisterPage() {
     if (!validate()) return;
     setLoading(true);
 
+    const supabase = createClient();
+    const cleanEmail = form.email.trim().toLowerCase();
+
+    // 1. Verify email uniqueness directly in Supabase
+    try {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
+
+      if (!checkError && existingUser) {
+        setErrors({ email: 'An account with this email address already exists. Please sign in instead.' });
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.warn('Email uniqueness check failed:', err);
+    }
+
     let assignedId = generateUUID();
 
-    // 1. If Supabase is connected, register in Supabase Auth & DB tables
+    // 2. Try Supabase Auth sign up (best effort, ignore internal domain restrictions)
     try {
-      const supabase = createClient();
       const { data: authData } = await (supabase.auth as any).signUp({
-        email: form.email.trim().toLowerCase(),
+        email: cleanEmail,
         password: form.password,
-        options: {
-          data: {
-            full_name: form.fullName.trim(),
-            role: form.role,
-            phone: form.phone.trim() || undefined,
-            specialization: form.specialization || undefined,
-            consultation_room: form.consultationRoom || undefined,
-            consultation_fee: Number(form.consultationFee) || 500,
-            opd_timings: form.opdTimings || undefined,
-          },
-        },
       });
-
       if (authData?.user?.id) {
         assignedId = authData.user.id;
       }
+    } catch {
+      // Non-blocking for hospital intranet emails
+    }
 
-      // Upsert directly into public.user_profiles table
-      await supabase.from('user_profiles').upsert({
+    // 3. Upsert directly into Supabase public.user_profiles table
+    const userPayload: any = {
+      id: assignedId,
+      email: cleanEmail,
+      password: form.password,
+      full_name: form.fullName.trim(),
+      role: form.role,
+      phone: form.phone.trim() || null,
+      specialization: form.role === 'doctor' ? (form.specialization || 'General Medicine') : null,
+      consultation_room: form.role === 'doctor' ? (form.consultationRoom || 'Room 1') : null,
+      consultation_fee: form.role === 'doctor' ? (Number(form.consultationFee) || 500) : 0,
+      opd_timings: form.role === 'doctor' ? (form.opdTimings || null) : null,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: profileError } = await supabase.from('user_profiles').upsert(userPayload);
+
+    if (profileError) {
+      console.error('Failed to save to user_profiles:', profileError);
+      setErrors({ form: `Supabase database error: ${profileError.message || 'Could not save profile'}` });
+      setLoading(false);
+      return;
+    }
+
+    // 4. If registering a Doctor, also upsert into public.doctors table
+    if (form.role === 'doctor') {
+      const { error: docError } = await supabase.from('doctors').upsert({
         id: assignedId,
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
+        user_id: assignedId,
         full_name: form.fullName.trim(),
-        role: form.role,
-        phone: form.phone.trim() || null,
-        specialization: form.specialization || null,
-        consultation_room: form.consultationRoom || null,
+        specialization: form.specialization || 'General Medicine',
+        consultation_room: form.consultationRoom || 'Room 1',
         consultation_fee: Number(form.consultationFee) || 500,
         opd_timings: form.opdTimings || null,
-        is_active: true,
+        is_available: true,
+        updated_at: new Date().toISOString(),
       });
-
-      // If registering a Doctor, also upsert into public.doctors table
-      if (form.role === 'doctor') {
-        await supabase.from('doctors').upsert({
-          id: assignedId,
-          user_id: assignedId,
-          full_name: form.fullName.trim(),
-          specialization: form.specialization || 'General Medicine',
-          consultation_room: form.consultationRoom || 'Room 1',
-          consultation_fee: Number(form.consultationFee) || 500,
-          opd_timings: form.opdTimings || null,
-          is_available: true,
-        });
+      if (docError) {
+        console.warn('Doctor table sync warning:', docError);
       }
-    } catch (err) {
-      console.warn('Supabase signup fallback:', err);
     }
 
     const newAccount = {
       id: assignedId,
-      email: form.email.trim().toLowerCase(),
+      email: cleanEmail,
       password: form.password,
       full_name: form.fullName.trim(),
       role: form.role,
@@ -190,10 +211,9 @@ export default function RegisterPage() {
         : {}),
     };
 
-    // Save into HMSStore and immediately push to Supabase table
+    // Save into HMSStore cache and trigger global sync
     HMSStore.saveUser(newAccount);
-    await pushUserToSupabase(newAccount);
-    await syncFromSupabase();
+    await syncFromSupabase().catch(() => {});
 
     setLoading(false);
     setRegisteredAccount(newAccount);
@@ -273,6 +293,12 @@ export default function RegisterPage() {
 
         <div className="bg-[var(--bg-card)] rounded-[var(--r-card)] p-6 sm:p-8 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
           <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+            {errors.form && (
+              <div className="bg-[var(--danger-bg)] border border-[var(--danger)] text-xs text-[#C03028] rounded-[var(--r-tile)] px-3.5 py-2.5 font-medium leading-relaxed">
+                {errors.form}
+              </div>
+            )}
+
             {/* Role Picker */}
             <div>
               <label className="text-xs font-semibold text-[var(--text-strong)] mb-2 block">
