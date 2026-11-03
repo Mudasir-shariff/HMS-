@@ -739,3 +739,4 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Verification
 SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
+
