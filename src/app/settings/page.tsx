@@ -51,8 +51,12 @@ export default function SettingsPage() {
     HMSStore.saveSettings(form);
 
     const supabase = createClient();
+    const validId = (form.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form.id))
+      ? form.id
+      : '00000000-0000-0000-0000-000000000001';
+
     await supabase.from('hospital_settings').upsert({
-      id: form.id || 'default',
+      id: validId,
       hospital_name: form.hospital_name,
       address: form.address,
       phone: form.phone,

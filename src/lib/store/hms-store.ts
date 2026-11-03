@@ -43,22 +43,9 @@ const DEFAULT_PRESCRIPTIONS: Prescription[] = [];
 
 const DEFAULT_DRUGS: Drug[] = [];
 
-const DEFAULT_WARDS: Ward[] = [
-  { id: 'a0000000-0000-0000-0000-000000000001', name: 'General Ward Male', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'a0000000-0000-0000-0000-000000000002', name: 'General Ward Female', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'a0000000-0000-0000-0000-000000000003', name: 'ICU & Critical Care', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'a0000000-0000-0000-0000-000000000004', name: 'Private Deluxe Suite', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-];
+const DEFAULT_WARDS: Ward[] = [];
 
-const DEFAULT_BEDS: Bed[] = [
-  { id: 'b0000000-0000-0000-0000-000000000101', ward_id: 'a0000000-0000-0000-0000-000000000001', bed_number: 'Bed 101', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000102', ward_id: 'a0000000-0000-0000-0000-000000000001', bed_number: 'Bed 102', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000103', ward_id: 'a0000000-0000-0000-0000-000000000001', bed_number: 'Bed 103', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000201', ward_id: 'a0000000-0000-0000-0000-000000000002', bed_number: 'Bed 201', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000202', ward_id: 'a0000000-0000-0000-0000-000000000002', bed_number: 'Bed 202', price_per_day: 1200, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000301', ward_id: 'a0000000-0000-0000-0000-000000000003', bed_number: 'ICU Bed 1', price_per_day: 4500, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'b0000000-0000-0000-0000-000000000401', ward_id: 'a0000000-0000-0000-0000-000000000004', bed_number: 'Suite 401', price_per_day: 3500, is_occupied: false, created_at: '2026-10-01T08:00:00Z' },
-];
+const DEFAULT_BEDS: Bed[] = [];
 
 const DEFAULT_ADMISSIONS: Admission[] = [];
 

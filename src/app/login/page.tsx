@@ -2,7 +2,7 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Activity, Eye, EyeOff, ShieldCheck, UserPlus, FileText, KeyRound } from 'lucide-react';
+import { Activity, Eye, EyeOff, ShieldCheck, UserPlus, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
@@ -63,11 +63,6 @@ function LoginForm() {
     }
   }
 
-  function fillCredentials(e: string, p: string) {
-    setEmail(e);
-    setPassword(p);
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
@@ -114,48 +109,6 @@ function LoginForm() {
               {error}
             </div>
           )}
-
-          {/* Quick Staff Login Selector for Multi-Device Setup */}
-          <div className="bg-[var(--bg-canvas)] rounded-[var(--r-control)] p-3 mb-4 border border-[var(--line-soft)] text-xs">
-            <p className="font-medium text-[var(--text-strong)] mb-2 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
-              <KeyRound size={12} />
-              Quick Staff Logins (Multi-Device)
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => fillCredentials('doctor@hospital.local', 'doctor123')}
-                className="text-left px-2.5 py-1.5 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] transition-all text-xs"
-              >
-                <div className="font-semibold text-[var(--text-strong)] text-[11px]">Doctor Desk</div>
-                <div className="text-[10px] text-[var(--text-muted)]">doctor@hospital.local</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials('reception@hospital.local', 'reception123')}
-                className="text-left px-2.5 py-1.5 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] transition-all text-xs"
-              >
-                <div className="font-semibold text-[var(--text-strong)] text-[11px]">Reception OPD</div>
-                <div className="text-[10px] text-[var(--text-muted)]">reception@hospital.local</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials('pharmacy@hospital.local', 'pharmacy123')}
-                className="text-left px-2.5 py-1.5 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] transition-all text-xs"
-              >
-                <div className="font-semibold text-[var(--text-strong)] text-[11px]">Pharmacy Desk</div>
-                <div className="text-[10px] text-[var(--text-muted)]">pharmacy@hospital.local</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials('admin@hospital.local', 'admin123')}
-                className="text-left px-2.5 py-1.5 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] transition-all text-xs"
-              >
-                <div className="font-semibold text-[var(--text-strong)] text-[11px]">Super Admin</div>
-                <div className="text-[10px] text-[var(--text-muted)]">admin@hospital.local</div>
-              </button>
-            </div>
-          </div>
 
           <form
             onSubmit={(e) => {

@@ -678,17 +678,17 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 7. SEED ESSENTIAL HOSPITAL DATA (STAFF, DRUGS, SETTINGS, WARDS, BEDS)
+-- 7. PURGE LEGACY TEST DATA & VERIFY CLEAN PRODUCTION SCHEMA
 -- -----------------------------------------------------------------------------
 
--- Standard Staff Accounts for Multi-Device Logins:
--- Super Admin:  admin@hospital.local      / admin123
--- Doctor 1:     doctor@hospital.local     / doctor123
--- Doctor 2:     dr.priya@hospital.local   / doctor123
--- Receptionist: reception@hospital.local  / reception123
--- Pharmacist:   pharmacy@hospital.local   / pharmacy123
-
-DELETE FROM public.user_profiles WHERE id IN (
+-- Delete any legacy demo / test staff accounts
+DELETE FROM public.user_profiles WHERE email IN (
+  'admin@hospital.local',
+  'doctor@hospital.local',
+  'dr.priya@hospital.local',
+  'reception@hospital.local',
+  'pharmacy@hospital.local'
+) OR id IN (
   '11111111-1111-4111-a111-111111111111',
   '22222222-2222-4222-a222-222222222222',
   '33333333-3333-4333-a333-333333333333',
@@ -696,26 +696,16 @@ DELETE FROM public.user_profiles WHERE id IN (
   '55555555-5555-4555-a555-555555555555'
 );
 
-INSERT INTO public.user_profiles (id, email, password, full_name, role, phone, is_active, specialization, consultation_room, consultation_fee, opd_timings, version, created_at, updated_at)
-VALUES
-  ('11111111-1111-4111-a111-111111111111', 'admin@hospital.local', 'admin123', 'Super Admin', 'admin', '9800000001', TRUE, NULL, NULL, 0, NULL, 1, NOW(), NOW()),
-  ('22222222-2222-4222-a222-222222222222', 'doctor@hospital.local', 'doctor123', 'Dr. Ramesh Gupta', 'doctor', '9800000002', TRUE, 'Cardiologist', 'OPD Room 1', 500, '09:00 AM - 01:00 PM', 1, NOW(), NOW()),
-  ('33333333-3333-4333-a333-333333333333', 'dr.priya@hospital.local', 'doctor123', 'Dr. Priya Sharma', 'doctor', '9800000003', TRUE, 'General Physician', 'OPD Room 2', 400, '10:00 AM - 02:00 PM', 1, NOW(), NOW()),
-  ('44444444-4444-4444-a444-444444444444', 'reception@hospital.local', 'reception123', 'Anjali Sharma', 'receptionist', '9800000004', TRUE, NULL, 'Reception Desk', 0, NULL, 1, NOW(), NOW()),
-  ('55555555-5555-4555-a555-555555555555', 'pharmacy@hospital.local', 'pharmacy123', 'Suresh Patel', 'pharmacist', '9800000005', TRUE, NULL, 'Main Pharmacy', 0, NULL, 1, NOW(), NOW());
-
--- Doctors Table Sync
-DELETE FROM public.doctors WHERE id IN (
+-- Delete any legacy demo doctors
+DELETE FROM public.doctors WHERE full_name IN (
+  'Dr. Ramesh Gupta',
+  'Dr. Priya Sharma'
+) OR id IN (
   '22222222-2222-4222-a222-222222222222',
   '33333333-3333-4333-a333-333333333333'
 );
 
-INSERT INTO public.doctors (id, user_id, full_name, specialization, consultation_room, consultation_fee, opd_timings, is_available, created_at)
-VALUES
-  ('22222222-2222-4222-a222-222222222222', '22222222-2222-4222-a222-222222222222', 'Dr. Ramesh Gupta', 'Cardiologist', 'OPD Room 1', 500, '09:00 AM - 01:00 PM', TRUE, NOW()),
-  ('33333333-3333-4333-a333-333333333333', '33333333-3333-4333-a333-333333333333', 'Dr. Priya Sharma', 'General Physician', 'OPD Room 2', 400, '10:00 AM - 02:00 PM', TRUE, NOW());
-
--- Drugs Inventory (15 Essential Medicines)
+-- Delete any legacy demo drugs
 DELETE FROM public.drugs WHERE id IN (
   'd0000001-0000-0000-0000-000000000001',
   'd0000002-0000-0000-0000-000000000002',
@@ -732,46 +722,9 @@ DELETE FROM public.drugs WHERE id IN (
   'd0000013-0000-0000-0000-000000000013',
   'd0000014-0000-0000-0000-000000000014',
   'd0000015-0000-0000-0000-000000000015'
-);
+) OR batch_number LIKE '%-2026-%';
 
-INSERT INTO public.drugs (id, name, drug_type, unit_price, stock_quantity, reorder_level, schedule_h, schedule_h1, batch_number, expiry_date, version, created_at, updated_at)
-VALUES
-  ('d0000001-0000-0000-0000-000000000001', 'Paracetamol 500mg', 'tablet', 3.50, 500, 100, FALSE, FALSE, 'PCM-2026-A', '2028-12-31', 1, NOW(), NOW()),
-  ('d0000002-0000-0000-0000-000000000002', 'Amoxicillin 500mg', 'capsule', 12.00, 500, 80, FALSE, FALSE, 'AMX-2026-B', '2028-06-30', 1, NOW(), NOW()),
-  ('d0000003-0000-0000-0000-000000000003', 'Cetirizine 10mg', 'tablet', 4.00, 500, 100, FALSE, FALSE, 'CTZ-2026-C', '2029-01-31', 1, NOW(), NOW()),
-  ('d0000004-0000-0000-0000-000000000004', 'Omeprazole 20mg', 'capsule', 8.00, 500, 60, FALSE, FALSE, 'OMP-2026-D', '2028-10-31', 1, NOW(), NOW()),
-  ('d0000005-0000-0000-0000-000000000005', 'Amlodipine 5mg', 'tablet', 5.50, 500, 60, FALSE, FALSE, 'AML-2026-E', '2028-09-30', 1, NOW(), NOW()),
-  ('d0000006-0000-0000-0000-000000000006', 'Metformin 500mg', 'tablet', 6.00, 500, 100, FALSE, FALSE, 'MET-2026-F', '2028-11-30', 1, NOW(), NOW()),
-  ('d0000007-0000-0000-0000-000000000007', 'Azithromycin 500mg', 'tablet', 24.00, 500, 50, TRUE, FALSE, 'AZI-2026-G', '2028-08-31', 1, NOW(), NOW()),
-  ('d0000008-0000-0000-0000-000000000008', 'Pantoprazole 40mg', 'tablet', 10.00, 500, 80, FALSE, FALSE, 'PAN-2026-H', '2028-12-31', 1, NOW(), NOW()),
-  ('d0000009-0000-0000-0000-000000000009', 'Ibuprofen 400mg', 'tablet', 4.50, 500, 75, FALSE, FALSE, 'IBU-2026-I', '2028-07-31', 1, NOW(), NOW()),
-  ('d0000010-0000-0000-0000-000000000010', 'Atorvastatin 10mg', 'tablet', 11.00, 500, 50, FALSE, FALSE, 'ATV-2026-J', '2028-05-31', 1, NOW(), NOW()),
-  ('d0000011-0000-0000-0000-000000000011', 'Telmisartan 40mg', 'tablet', 9.50, 500, 50, FALSE, FALSE, 'TEL-2026-K', '2028-10-31', 1, NOW(), NOW()),
-  ('d0000012-0000-0000-0000-000000000012', 'Ambroxol Cough Syrup 100ml', 'syrup', 85.00, 500, 40, FALSE, FALSE, 'AMB-2026-L', '2027-12-31', 1, NOW(), NOW()),
-  ('d0000013-0000-0000-0000-000000000013', 'Multivitamin Daily', 'tablet', 7.00, 500, 100, FALSE, FALSE, 'MTV-2026-M', '2029-03-31', 1, NOW(), NOW()),
-  ('d0000014-0000-0000-0000-000000000014', 'Diclofenac 50mg', 'tablet', 5.00, 500, 60, FALSE, FALSE, 'DIC-2026-N', '2028-04-30', 1, NOW(), NOW()),
-  ('d0000015-0000-0000-0000-000000000015', 'Ciprofloxacin 500mg', 'tablet', 18.00, 500, 40, TRUE, FALSE, 'CIP-2026-O', '2028-06-30', 1, NOW(), NOW());
-
--- Hospital Settings
-DELETE FROM public.hospital_settings WHERE id = '00000000-0000-0000-0000-000000000001';
-
-INSERT INTO public.hospital_settings (id, hospital_name, tagline, phone, email, address, registration_fee, default_printer, schedule_h_action, whatsapp_enabled, low_stock_days_warning, updated_at)
-VALUES (
-  '00000000-0000-0000-0000-000000000001',
-  'RADHAKRISHNA HOSPITAL',
-  'Compassionate Care · Clinical Excellence',
-  '080-23456789',
-  'contact@radhakrishnahospital.com',
-  '123, Healthcare Road, Bengaluru, Karnataka 560001',
-  100,
-  'Reception Thermal Printer',
-  'warn',
-  TRUE,
-  7,
-  NOW()
-);
-
--- Wards & Beds
+-- Delete any legacy demo beds & wards
 DELETE FROM public.beds WHERE id IN (
   'b0000001-0000-0000-0000-000000000001',
   'b0000002-0000-0000-0000-000000000001',
@@ -791,26 +744,10 @@ DELETE FROM public.wards WHERE id IN (
   'e0000003-0000-0000-0000-000000000003'
 );
 
-INSERT INTO public.wards (id, name, floor, total_beds, price_per_day, is_active, created_at)
-VALUES
-  ('e0000001-0000-0000-0000-000000000001', 'General Ward', 'Ground Floor', 5, 800, TRUE, NOW()),
-  ('e0000002-0000-0000-0000-000000000002', 'Semi-Private Ward', 'First Floor', 3, 1800, TRUE, NOW()),
-  ('e0000003-0000-0000-0000-000000000003', 'ICU (Intensive Care)', 'Second Floor', 2, 4500, TRUE, NOW());
-
-INSERT INTO public.beds (id, ward_id, bed_number, is_occupied, is_active, created_at)
-VALUES
-  ('b0000001-0000-0000-0000-000000000001', 'e0000001-0000-0000-0000-000000000001', 'GW-01', FALSE, TRUE, NOW()),
-  ('b0000002-0000-0000-0000-000000000001', 'e0000001-0000-0000-0000-000000000001', 'GW-02', FALSE, TRUE, NOW()),
-  ('b0000003-0000-0000-0000-000000000001', 'e0000001-0000-0000-0000-000000000001', 'GW-03', FALSE, TRUE, NOW()),
-  ('b0000004-0000-0000-0000-000000000001', 'e0000001-0000-0000-0000-000000000001', 'GW-04', FALSE, TRUE, NOW()),
-  ('b0000005-0000-0000-0000-000000000001', 'e0000001-0000-0000-0000-000000000001', 'GW-05', FALSE, TRUE, NOW()),
-  ('b0000006-0000-0000-0000-000000000002', 'e0000002-0000-0000-0000-000000000002', 'SP-01', FALSE, TRUE, NOW()),
-  ('b0000007-0000-0000-0000-000000000002', 'e0000002-0000-0000-0000-000000000002', 'SP-02', FALSE, TRUE, NOW()),
-  ('b0000008-0000-0000-0000-000000000002', 'e0000002-0000-0000-0000-000000000002', 'SP-03', FALSE, TRUE, NOW()),
-  ('b0000009-0000-0000-0000-000000000003', 'e0000003-0000-0000-0000-000000000003', 'ICU-01', FALSE, TRUE, NOW()),
-  ('b0000010-0000-0000-0000-000000000003', 'e0000003-0000-0000-0000-000000000003', 'ICU-02', FALSE, TRUE, NOW());
+-- NOTE: No dummy patients, visits, prescriptions, drugs, or accounts are inserted.
+-- All data is created exclusively through live hospital operations.
 
 -- Verification
-SELECT 'RADHAKRISHNA HOSPITAL: Master Realtime Schema Active and Verified' AS result;
+SELECT 'RADHAKRISHNA HOSPITAL: Clean Production Schema Active with 0 Test Data' AS result;
 
 
