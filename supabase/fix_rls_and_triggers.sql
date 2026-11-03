@@ -60,7 +60,12 @@ INSERT INTO public.user_profiles (id, full_name, role, phone, is_active)
 SELECT
   id,
   COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
-  COALESCE(NULLIF(raw_user_meta_data->>'role', '')::user_role, 'receptionist'),
+  CASE 
+    WHEN LOWER(COALESCE(raw_user_meta_data->>'role', '')) = 'doctor' THEN 'doctor'::user_role
+    WHEN LOWER(COALESCE(raw_user_meta_data->>'role', '')) IN ('admin', 'super_admin', 'super admin') THEN 'admin'::user_role
+    WHEN LOWER(COALESCE(raw_user_meta_data->>'role', '')) = 'pharmacist' THEN 'pharmacist'::user_role
+    ELSE 'receptionist'::user_role
+  END,
   raw_user_meta_data->>'phone',
   true
 FROM auth.users
@@ -76,7 +81,7 @@ SELECT
   COALESCE(raw_user_meta_data->>'consultation_room', 'Room 1'),
   true
 FROM auth.users
-WHERE (raw_user_meta_data->>'role') = 'doctor'
+WHERE LOWER(COALESCE(raw_user_meta_data->>'role', '')) = 'doctor'
 ON CONFLICT (user_id) DO NOTHING;
 
 -- 3. Row Level Security (RLS) Permissive Policies for Hospital Web App
@@ -192,19 +197,19 @@ INSERT INTO public.hospital_settings (hospital_name, address, phone)
   ON CONFLICT DO NOTHING;
 
 INSERT INTO public.wards (id, name, is_active) VALUES
-  ('w0000000-0000-0000-0000-000000000001', 'General Ward Male', true),
-  ('w0000000-0000-0000-0000-000000000002', 'General Ward Female', true),
-  ('w0000000-0000-0000-0000-000000000003', 'ICU & Critical Care', true),
-  ('w0000000-0000-0000-0000-000000000004', 'Private Deluxe Suite', true)
+  ('a0000000-0000-0000-0000-000000000001', 'General Ward Male', true),
+  ('a0000000-0000-0000-0000-000000000002', 'General Ward Female', true),
+  ('a0000000-0000-0000-0000-000000000003', 'ICU & Critical Care', true),
+  ('a0000000-0000-0000-0000-000000000004', 'Private Deluxe Suite', true)
   ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.beds (id, ward_id, bed_number, price_per_day, is_occupied) VALUES
-  ('b0000000-0000-0000-0000-000000000101', 'w0000000-0000-0000-0000-000000000001', 'Bed 101', 1200, false),
-  ('b0000000-0000-0000-0000-000000000102', 'w0000000-0000-0000-0000-000000000001', 'Bed 102', 1200, false),
-  ('b0000000-0000-0000-0000-000000000103', 'w0000000-0000-0000-0000-000000000001', 'Bed 103', 1200, false),
-  ('b0000000-0000-0000-0000-000000000201', 'w0000000-0000-0000-0000-000000000002', 'Bed 201', 1200, false),
-  ('b0000000-0000-0000-0000-000000000202', 'w0000000-0000-0000-0000-000000000002', 'Bed 202', 1200, false),
-  ('b0000000-0000-0000-0000-000000000301', 'w0000000-0000-0000-0000-000000000003', 'ICU Bed 1', 4500, false),
-  ('b0000000-0000-0000-0000-000000000401', 'w0000000-0000-0000-0000-000000000004', 'Suite 401', 3500, false)
+  ('b0000000-0000-0000-0000-000000000101', 'a0000000-0000-0000-0000-000000000001', 'Bed 101', 1200, false),
+  ('b0000000-0000-0000-0000-000000000102', 'a0000000-0000-0000-0000-000000000001', 'Bed 102', 1200, false),
+  ('b0000000-0000-0000-0000-000000000103', 'a0000000-0000-0000-0000-000000000001', 'Bed 103', 1200, false),
+  ('b0000000-0000-0000-0000-000000000201', 'a0000000-0000-0000-0000-000000000002', 'Bed 201', 1200, false),
+  ('b0000000-0000-0000-0000-000000000202', 'a0000000-0000-0000-0000-000000000002', 'Bed 202', 1200, false),
+  ('b0000000-0000-0000-0000-000000000301', 'a0000000-0000-0000-0000-000000000003', 'ICU Bed 1', 4500, false),
+  ('b0000000-0000-0000-0000-000000000401', 'a0000000-0000-0000-0000-000000000004', 'Suite 401', 3500, false)
   ON CONFLICT (id) DO NOTHING;
 
