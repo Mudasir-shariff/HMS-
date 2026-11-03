@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Card, Button, Input, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { pushDrugToSupabase } from '@/lib/supabase/sync';
 import type { DrugType, Drug } from '@/lib/types/database';
 
 const DEFAULT_SUPPLIERS = [
@@ -171,7 +172,7 @@ export default function AddDrugPage() {
     return Object.keys(errs).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
 
@@ -204,6 +205,7 @@ export default function AddDrugPage() {
     };
 
     HMSStore.saveDrug(newDrug);
+    await pushDrugToSupabase(newDrug);
     setSavedDrug(newDrug);
   }
 

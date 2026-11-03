@@ -126,7 +126,7 @@ export default function RegisterPatientPage() {
     return Object.keys(errs).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
 
@@ -142,8 +142,8 @@ export default function RegisterPatientPage() {
     });
 
     // Push directly to Supabase
-    pushPatientToSupabase(res.patient);
-    pushVisitToSupabase(res.visit);
+    await pushPatientToSupabase(res.patient);
+    await pushVisitToSupabase(res.visit);
 
     setCreatedResult(res);
   }

@@ -51,7 +51,7 @@ export default function ReceptionPage() {
   const todayVisits = visits
     .map((v) => {
       const patient = patients.find((p) => p.id === v.patient_id);
-      const doc = doctors.find((d) => d.id === v.doctor_id);
+      const doc = doctors.find((d) => d.id === v.doctor_id || (d as any).user_id === v.doctor_id);
       return {
         ...v,
         patientName: patient?.name || 'Unknown Patient',

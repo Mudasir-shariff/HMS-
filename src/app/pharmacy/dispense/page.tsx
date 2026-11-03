@@ -22,7 +22,7 @@ import { Card, CardHeader, Button, StatusPill, Input } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { useHMSStore } from '@/lib/store/use-store';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore } from '@/lib/store/hms-store';
+import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import type { DrugType, Drug, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 interface DispenseItemState {
@@ -343,10 +343,12 @@ function DispenseContent() {
 
     const pharmacistName = user?.fullName || 'Pharmacist on Duty';
 
+    const pharmacistId = user?.id && user.id.length === 36 ? user.id : (HMSStore.getUsers().find(u => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID());
+
     HMSStore.deliverPrescription({
       visitId: visit?.id,
-      prescriptionId: rx?.id || `rx-${Date.now()}`,
-      pharmacistId: user?.id || 'pharm-1',
+      prescriptionId: rx?.id || generateUUID(),
+      pharmacistId,
       pharmacistName,
       patientId: patient?.id,
       patientName: patient?.name,

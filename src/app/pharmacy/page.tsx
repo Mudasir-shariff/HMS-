@@ -79,7 +79,7 @@ export default function PharmacyPage() {
     .filter((v) => v.status === 'prescribed')
     .map((v) => {
       const patient = patients.find((p) => p.id === v.patient_id);
-      const doctor = doctors.find((d) => d.id === v.doctor_id);
+      const doctor = doctors.find((d) => d.id === v.doctor_id || (d as any).user_id === v.doctor_id);
       const rx = prescriptions.find((p) => p.visit_id === v.id);
       return {
         ...v,

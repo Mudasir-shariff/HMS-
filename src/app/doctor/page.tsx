@@ -29,8 +29,14 @@ export default function DoctorPage() {
     consultation_room: user?.consultationRoom || 'OPD Room',
   };
 
-  // Filter visits: ONLY this doctor's patients!
-  const doctorVisits = visits.filter((v) => v.doctor_id === activeDoctorId);
+  // Filter visits: Check against activeDoctorId, user.id, user.doctorId
+  const doctorVisits = visits.filter((v) => {
+    if (!v.doctor_id) return false;
+    if (v.doctor_id === activeDoctorId) return true;
+    if (user?.id && v.doctor_id === user.id) return true;
+    if (user?.doctorId && v.doctor_id === user.doctorId) return true;
+    return false;
+  });
 
   const enrichedVisits = doctorVisits.map((v) => {
     const patient = patients.find((p) => p.id === v.patient_id);

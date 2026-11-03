@@ -30,7 +30,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, Textarea, Input, StatusPill } from '@/components/ui';
 import { useHMSStore } from '@/lib/store/use-store';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore } from '@/lib/store/hms-store';
+import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { syncFromSupabase } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -396,9 +396,9 @@ function PrescribeContent() {
   );
 
   function executeSavePrescription(): string {
-    const rxId = savedRxId || existingRx?.id || `rx-${Date.now()}`;
-    const rxItems: PrescriptionItem[] = medicines.map((m, idx) => ({
-      id: m.id || `rxi-${idx}-${Date.now()}`,
+    const rxId = savedRxId || existingRx?.id || generateUUID();
+    const rxItems: PrescriptionItem[] = medicines.map((m) => ({
+      id: m.id?.includes('-') && m.id.length === 36 ? m.id : generateUUID(),
       prescription_id: rxId,
       drug_id: m.drugId,
       drug_name: m.name,
@@ -416,18 +416,20 @@ function PrescribeContent() {
       created_at: new Date().toISOString(),
     }));
 
-    const rxLabOrders: LabTestOrder[] = labTests.map((t, idx) => ({
-      id: `labo-${idx}-${Date.now()}`,
+    const rxLabOrders: LabTestOrder[] = labTests.map((t) => ({
+      id: generateUUID(),
       prescription_id: rxId,
       test_name: t,
       created_at: new Date().toISOString(),
     }));
 
+    const validPatientId = patientId || activePatient?.id || activeVisit?.patient_id || generateUUID();
+
     HMSStore.savePrescription({
       id: rxId,
-      visit_id: visitId || `vis-${Date.now()}`,
-      doctor_id: doctorId,
-      patient_id: patientId || activePatient?.id || 'pat-1',
+      visit_id: visitId || generateUUID(),
+      doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
+      patient_id: validPatientId,
       notes: instructions,
       uaid: uaid || undefined,
       stay_day_number: stayDayNumber,

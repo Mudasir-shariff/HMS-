@@ -1,5 +1,5 @@
 import { createClient } from './client';
-import { HMSStore, UserAccount } from '../store/hms-store';
+import { HMSStore, UserAccount, generateUUID } from '../store/hms-store';
 import type {
   Patient,
   Visit,
@@ -277,15 +277,30 @@ export function initSupabaseRealtime() {
   try {
     const supabase = createClient();
     supabase
-      .channel('hms-db-live')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public' },
-        () => {
-          syncFromSupabase();
+      .channel('hms-db-live-v2')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drugs' }, () => {
+        syncFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispensings' }, () => {
+        syncFromSupabase();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('⚡ Realtime connected to Supabase live channels');
         }
-      )
-      .subscribe();
+      });
   } catch (e) {
     console.warn('Realtime subscription not active', e);
   }
@@ -293,11 +308,16 @@ export function initSupabaseRealtime() {
 
 // ── Background Push Helpers (Fire & Forget, Graceful offline fallback) ──
 
+function isValidUUID(id?: string | null): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export async function pushUserToSupabase(user: UserAccount) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured() || !isValidUUID(user.id)) return;
   try {
     const supabase = createClient();
-    await supabase.from('user_profiles').upsert({
+    const { error: pErr } = await supabase.from('user_profiles').upsert({
       id: user.id,
       full_name: user.full_name,
       role: user.role,
@@ -305,14 +325,17 @@ export async function pushUserToSupabase(user: UserAccount) {
       is_active: user.is_active,
       updated_at: new Date().toISOString(),
     });
+    if (pErr) console.error('Error pushing user_profile to Supabase:', pErr);
 
     if (user.role === 'doctor') {
-      await supabase.from('doctors').upsert({
+      const { error: dErr } = await supabase.from('doctors').upsert({
+        id: user.id,
         user_id: user.id,
         specialization: user.specialization || 'General Medicine',
         consultation_room: user.consultation_room || 'Room 1',
         is_available: user.is_active,
       });
+      if (dErr) console.error('Error pushing doctor to Supabase:', dErr);
     }
   } catch (e) {
     console.warn('Failed to push user to Supabase:', e);
@@ -323,8 +346,9 @@ export async function pushPatientToSupabase(patient: Patient) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('patients').upsert({
-      id: patient.id,
+    const patientId = isValidUUID(patient.id) ? patient.id : generateUUID();
+    const { error } = await supabase.from('patients').upsert({
+      id: patientId,
       uhid: patient.uhid,
       name: patient.name,
       age: patient.age,
@@ -335,6 +359,7 @@ export async function pushPatientToSupabase(patient: Patient) {
       other_conditions: patient.other_conditions || null,
       updated_at: new Date().toISOString(),
     });
+    if (error) console.error('Error pushing patient to Supabase:', error);
   } catch (e) {
     console.warn('Failed to push patient to Supabase:', e);
   }
@@ -344,17 +369,49 @@ export async function pushVisitToSupabase(visit: Visit) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('visits').upsert({
-      id: visit.id,
+    const visitId = isValidUUID(visit.id) ? visit.id : generateUUID();
+
+    // Resolve doctor: Ensure the doctor exists in public.doctors so foreign key never fails
+    let doctorIdToUse = visit.doctor_id;
+    if (isValidUUID(visit.doctor_id)) {
+      const { data: existingDoc } = await supabase
+        .from('doctors')
+        .select('id, user_id')
+        .or(`id.eq.${visit.doctor_id},user_id.eq.${visit.doctor_id}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingDoc) {
+        doctorIdToUse = existingDoc.id;
+      } else {
+        // Auto-provision doctor record so foreign key doesn't reject
+        const { data: newDoc } = await supabase
+          .from('doctors')
+          .insert({
+            id: visit.doctor_id,
+            user_id: visit.doctor_id,
+            specialization: 'General Medicine',
+            consultation_room: 'Room 1',
+            is_available: true,
+          })
+          .select('id')
+          .maybeSingle();
+        if (newDoc) doctorIdToUse = newDoc.id;
+      }
+    }
+
+    const { error } = await supabase.from('visits').upsert({
+      id: visitId,
       visit_number: visit.visit_number,
       patient_id: visit.patient_id,
-      doctor_id: visit.doctor_id,
+      doctor_id: doctorIdToUse,
       token_number: visit.token_number,
       status: visit.status,
       follow_up_date: visit.follow_up_date || null,
       instructions: visit.instructions || null,
       updated_at: new Date().toISOString(),
     });
+    if (error) console.error('Error pushing visit to Supabase:', error);
   } catch (e) {
     console.warn('Failed to push visit to Supabase:', e);
   }
@@ -364,10 +421,15 @@ export async function pushDrugToSupabase(drug: Drug) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('drugs').upsert({
-      id: drug.id,
+    const drugId = isValidUUID(drug.id) ? drug.id : generateUUID();
+    const normalizedType = ['tablet', 'capsule', 'syrup', 'injection'].includes(drug.drug_type)
+      ? drug.drug_type
+      : 'other';
+
+    const { error } = await supabase.from('drugs').upsert({
+      id: drugId,
       name: drug.name,
-      drug_type: drug.drug_type,
+      drug_type: normalizedType,
       custom_type_name: drug.custom_type_name || null,
       expiry_date: drug.expiry_date,
       purchase_price: drug.purchase_price,
@@ -383,6 +445,7 @@ export async function pushDrugToSupabase(drug: Drug) {
       is_active: drug.is_active,
       updated_at: new Date().toISOString(),
     });
+    if (error) console.error('Error pushing drug to Supabase:', error);
   } catch (e) {
     console.warn('Failed to push drug to Supabase:', e);
   }
@@ -392,28 +455,44 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('prescriptions').upsert({
-      id: rx.id,
+    const rxId = isValidUUID(rx.id) ? rx.id : generateUUID();
+
+    // Resolve doctor_id to ensure foreign key passes
+    let doctorIdToUse = rx.doctor_id;
+    if (isValidUUID(rx.doctor_id)) {
+      const { data: existingDoc } = await supabase
+        .from('doctors')
+        .select('id, user_id')
+        .or(`id.eq.${rx.doctor_id},user_id.eq.${rx.doctor_id}`)
+        .limit(1)
+        .maybeSingle();
+      if (existingDoc) doctorIdToUse = existingDoc.id;
+    }
+
+    const { error: rxErr } = await supabase.from('prescriptions').upsert({
+      id: rxId,
       visit_id: rx.visit_id,
-      doctor_id: rx.doctor_id,
+      doctor_id: doctorIdToUse,
       patient_id: rx.patient_id,
       notes: rx.notes || null,
     });
+    if (rxErr) console.error('Error pushing prescription to Supabase:', rxErr);
 
     if (rx.items && rx.items.length > 0) {
       const itemsPayload = rx.items.map((it) => ({
-        id: it.id,
-        prescription_id: rx.id,
-        drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
+        id: isValidUUID(it.id) ? it.id : generateUUID(),
+        prescription_id: rxId,
+        drug_id: isValidUUID(it.drug_id) ? it.drug_id : null,
         drug_name: it.drug_name,
-        dose_morning: it.dose_morning,
-        dose_afternoon: it.dose_afternoon,
-        dose_night: it.dose_night,
+        dose_morning: Boolean(it.dose_morning),
+        dose_afternoon: Boolean(it.dose_afternoon),
+        dose_night: Boolean(it.dose_night),
         dose_relation: it.dose_relation,
         num_days: it.num_days,
         quantity: it.quantity,
       }));
-      await supabase.from('prescription_items').upsert(itemsPayload);
+      const { error: itemsErr } = await supabase.from('prescription_items').upsert(itemsPayload);
+      if (itemsErr) console.error('Error pushing prescription_items to Supabase:', itemsErr);
     }
   } catch (e) {
     console.warn('Failed to push prescription to Supabase:', e);
@@ -424,27 +503,42 @@ export async function pushDispensingToSupabase(disp: Dispensing) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('dispensings').upsert({
-      id: disp.id,
-      prescription_id: disp.prescription_id || null,
-      patient_id: disp.patient_id || null,
-      pharmacist_id: disp.pharmacist_id,
-      is_walk_in: disp.is_walk_in,
+    const dispId = isValidUUID(disp.id) ? disp.id : generateUUID();
+
+    // Resolve pharmacist_id
+    let pharmacistIdToUse = disp.pharmacist_id;
+    if (!isValidUUID(disp.pharmacist_id)) {
+      const { data: activeUser } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+      if (activeUser) pharmacistIdToUse = activeUser.id;
+    }
+
+    const { error: dErr } = await supabase.from('dispensings').upsert({
+      id: dispId,
+      prescription_id: isValidUUID(disp.prescription_id) ? disp.prescription_id : null,
+      patient_id: isValidUUID(disp.patient_id) ? disp.patient_id : null,
+      pharmacist_id: pharmacistIdToUse,
+      is_walk_in: Boolean(disp.is_walk_in),
       total_amount: disp.total_amount,
       updated_at: new Date().toISOString(),
     });
+    if (dErr) console.error('Error pushing dispensing to Supabase:', dErr);
 
     if (disp.items && disp.items.length > 0) {
       const itemsPayload = disp.items.map((it) => ({
-        id: it.id,
-        dispensing_id: disp.id,
-        drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
+        id: isValidUUID(it.id) ? it.id : generateUUID(),
+        dispensing_id: dispId,
+        drug_id: isValidUUID(it.drug_id) ? it.drug_id : null,
         drug_name: it.drug_name,
         quantity: it.quantity,
         unit_price: it.unit_price,
         total_price: it.total_price,
       }));
-      await supabase.from('dispensing_items').upsert(itemsPayload);
+      const { error: itemsErr } = await supabase.from('dispensing_items').upsert(itemsPayload);
+      if (itemsErr) console.error('Error pushing dispensing_items to Supabase:', itemsErr);
     }
   } catch (e) {
     console.warn('Failed to push dispensing to Supabase:', e);

@@ -27,7 +27,14 @@ export function useHMSStore() {
     }
     window.addEventListener('hms-store-change', handleChange);
     window.addEventListener('storage', handleChange);
+
+    // Active live polling interval (every 2.5s) to guarantee end-to-end dynamic synchronization
+    const pollInterval = setInterval(() => {
+      syncFromSupabase();
+    }, 2500);
+
     return () => {
+      clearInterval(pollInterval);
       window.removeEventListener('hms-store-change', handleChange);
       window.removeEventListener('storage', handleChange);
     };
