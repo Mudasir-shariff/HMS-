@@ -25,7 +25,7 @@ export function useVisits(filters?: { doctorId?: string; status?: string; date?:
       if (filters?.status) v = v.filter((item) => item.status === filters.status);
       return v;
     },
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 30000, // 30s fallback safety net; Realtime handles instant <50ms updates
   });
@@ -48,7 +48,7 @@ export function usePatients(search?: string) {
       }
       return p;
     },
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 60000, // 60s fallback; Realtime handles immediate registration
   });
@@ -62,7 +62,7 @@ export function usePrescriptions(visitId?: string) {
       const rx = HMSStore.getPrescriptions();
       return visitId ? rx.filter((p) => p.visit_id === visitId) : rx;
     },
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 30000, // 30s fallback safety net; Realtime handles instant arrival
   });
@@ -73,7 +73,7 @@ export function useDrugs() {
     queryKey: queryKeys.drugs.all,
     queryFn: fetchDrugs,
     initialData: () => HMSStore.getDrugs(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 60000, // 60s fallback; Realtime patches inventory stock changes
   });
@@ -97,7 +97,7 @@ export function useDoctors() {
         created_at: doc.created_at,
       }));
     },
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: false, // Event-driven via Realtime + window focus
   });
@@ -108,7 +108,7 @@ export function useUserProfiles() {
     queryKey: queryKeys.users.all,
     queryFn: fetchUserProfiles,
     initialData: () => HMSStore.getUsers(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: false, // Event-driven via Realtime
   });
@@ -119,7 +119,7 @@ export function useDispensings() {
     queryKey: queryKeys.dispensings.all,
     queryFn: fetchDispensings,
     initialData: () => HMSStore.getDispensings(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 30000, // 30s fallback; Realtime patches dispensed records immediately
   });
@@ -130,7 +130,7 @@ export function useWards() {
     queryKey: queryKeys.wards.all,
     queryFn: fetchWards,
     initialData: () => HMSStore.getWards(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: false,
   });
@@ -141,7 +141,7 @@ export function useBeds() {
     queryKey: queryKeys.beds.all,
     queryFn: fetchBeds,
     initialData: () => HMSStore.getBeds(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 60000,
   });
@@ -152,7 +152,7 @@ export function useAdmissions() {
     queryKey: queryKeys.admissions.all,
     queryFn: fetchAdmissions,
     initialData: () => HMSStore.getAdmissions(),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: 60000,
   });
@@ -183,7 +183,7 @@ export function useHospitalSettings() {
         updated_at: new Date().toISOString(),
       };
     },
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: () => Date.now(),
     staleTime: 10000,
     refetchInterval: false,
   });

@@ -288,7 +288,7 @@ export default function RegisterPage() {
           >
             <ArrowLeft size={18} />
           </Link>
-          <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs">
+          <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs shrink-0">
             <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
           </div>
           <div>

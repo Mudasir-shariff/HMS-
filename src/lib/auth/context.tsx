@@ -66,8 +66,49 @@ function clearSessionCookie() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const local = HMSStore.getCurrentUser();
+      if (local && local.is_active) {
+        return {
+          id: local.id,
+          email: local.email,
+          fullName: local.full_name,
+          role: local.role,
+          phone: local.phone,
+          doctorId: local.role === 'doctor' ? local.id : undefined,
+          specialization: local.specialization,
+          consultationRoom: local.consultation_room,
+        };
+      }
+      const cookieUser = getSessionCookie();
+      if (cookieUser?.id) {
+        return {
+          id: cookieUser.id,
+          email: cookieUser.email,
+          fullName: cookieUser.fullName,
+          role: cookieUser.role as UserRole,
+        };
+      }
+    } catch {
+      // fallback
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const local = HMSStore.getCurrentUser();
+      if (local?.id && local.is_active) return false;
+      const cookieUser = getSessionCookie();
+      if (cookieUser?.id) return false;
+    } catch {
+      // fallback
+    }
+    return true;
+  });
 
   // Fallback to local store
   const syncLocalUser = useCallback(() => {
@@ -155,7 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         consultation_room: consultationRoom,
         created_at: profile.created_at || new Date().toISOString(),
       });
-      await syncFromSupabase().catch(() => {});
+      setLoading(false);
+
+      // Background non-blocking sync so UI renders instantly
+      void syncFromSupabase().catch(() => {});
     } catch {
       syncLocalUser();
     } finally {

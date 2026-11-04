@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -238,11 +238,13 @@ function PrescribeContent() {
   const [isSyncingDrugs, setIsSyncingDrugs] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Sync latest medicines from Supabase on mount
+  // Background drug sync on mount if cache is empty
   useEffect(() => {
-    setIsSyncingDrugs(true);
-    syncFromSupabase().finally(() => setIsSyncingDrugs(false));
-  }, []);
+    if (drugs.length === 0) {
+      setIsSyncingDrugs(true);
+      syncFromSupabase().finally(() => setIsSyncingDrugs(false));
+    }
+  }, [drugs.length]);
 
   // Custom Item Modal/Drawer State (PRD v1.1 Injections & Other Free-Text)
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -256,33 +258,37 @@ function PrescribeContent() {
   const [customDays, setCustomDays] = useState(1);
   const [customRelation, setCustomRelation] = useState<'before_food' | 'after_food'>('after_food');
 
-  const filteredCatalog = drugs.filter((d) => {
-    if (selectedCategory === 'all') return true;
-    if (selectedCategory === 'other') {
-      return !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type);
-    }
-    return d.drug_type === selectedCategory;
-  });
+  const filteredCatalog = useMemo(() => {
+    return drugs.filter((d) => {
+      if (selectedCategory === 'all') return true;
+      if (selectedCategory === 'other') {
+        return !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type);
+      }
+      return d.drug_type === selectedCategory;
+    });
+  }, [drugs, selectedCategory]);
 
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
-  const drugSuggestions = drugs.filter((d) => {
-    const matchesCategory =
-      selectedCategory === 'all'
-        ? true
-        : selectedCategory === 'other'
-        ? !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type)
-        : d.drug_type === selectedCategory;
-    if (!matchesCategory) return false;
+  const drugSuggestions = useMemo(() => {
+    return drugs.filter((d) => {
+      const matchesCategory =
+        selectedCategory === 'all'
+          ? true
+          : selectedCategory === 'other'
+          ? !['tablet', 'injection', 'syrup', 'capsule'].includes(d.drug_type)
+          : d.drug_type === selectedCategory;
+      if (!matchesCategory) return false;
 
-    if (!drugSearch.trim()) return true;
-    const q = drugSearch.toLowerCase();
-    return (
-      d.name.toLowerCase().includes(q) ||
-      d.drug_type.toLowerCase().includes(q) ||
-      (d.batch_number && d.batch_number.toLowerCase().includes(q))
-    );
-  });
+      if (!drugSearch.trim()) return true;
+      const q = drugSearch.toLowerCase();
+      return (
+        d.name.toLowerCase().includes(q) ||
+        d.drug_type.toLowerCase().includes(q) ||
+        (d.batch_number && d.batch_number.toLowerCase().includes(q))
+      );
+    });
+  }, [drugs, selectedCategory, drugSearch]);
 
   useEffect(() => {
     setHighlightedIndex(0);
@@ -1303,7 +1309,7 @@ function PrescribeContent() {
                         </button>
                       </div>
                     ) : (
-                      drugSuggestions.map((drug, index) => {
+                      drugSuggestions.map((drug: (typeof drugs)[0], index: number) => {
                         const isAdded = medicines.some((m) => m.drugId === drug.id);
                         const isHighlighted = index === highlightedIndex;
                         const isLow = drug.stock_quantity <= drug.low_stock_limit;

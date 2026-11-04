@@ -96,6 +96,11 @@
 }
 
 /* ── Base styles ── */
+html, body, button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--bg-canvas);
   color: var(--text-body);
@@ -104,6 +109,7 @@ body {
   line-height: 20px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: contain;
 }
 
 /* ── Focus ring ── */

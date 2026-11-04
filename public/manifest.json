@@ -9,23 +9,41 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/logo.png",
-      "sizes": "545x225",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "548x230",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
     {
-      "name": "Register patient",
+      "name": "Register Patient",
       "short_name": "Register",
       "url": "/reception/register",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Doctor queue",
+      "name": "Doctor Queue",
       "short_name": "Queue",
       "url": "/doctor",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pharmacy Queue",
+      "short_name": "Pharmacy",
+      "url": "/pharmacy",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
