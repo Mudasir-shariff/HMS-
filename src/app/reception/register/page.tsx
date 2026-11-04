@@ -283,11 +283,11 @@ export default function RegisterPatientPage() {
             </a>
 
             {/* Actions */}
-            <div className="flex gap-3 w-full">
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
               <Button
                 variant="secondary"
                 icon={<Plus size={16} />}
-                className="flex-1"
+                className="flex-1 w-full justify-center min-h-[42px]"
                 onClick={() => {
                   setCreatedResult(null);
                   setMatchedPatient(null);
@@ -313,7 +313,7 @@ export default function RegisterPatientPage() {
                   e.preventDefault();
                   window.location.href = '/reception';
                 }}
-                className="flex-1 h-10 px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+                className="flex-1 w-full min-h-[42px] px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
               >
                 Back to Reception Desk
               </a>

@@ -597,41 +597,50 @@ export default function PharmacyPage() {
               {pendingQueue.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[68px]"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[68px] border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
                 >
-                  {/* Token */}
-                  <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
-                    <p className="text-[20px] leading-none font-semibold text-[var(--text-strong)]">
-                      {String(item.token_number).padStart(2, '0')}
-                    </p>
-                    <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
-                  </div>
-
-                  <Avatar name={item.patientName} size="md" className="shrink-0" />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-[var(--text-strong)]">{item.patientName}</span>
-                      <span className="text-xs text-[var(--text-muted)]">{item.patientAge}y</span>
-                      {item.uaid ? (
-                        <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded">
-                          In-Patient ({item.uaid})
-                        </span>
-                      ) : (
-                        <StatusPill variant="warning" label="Ready to Dispense" />
-                      )}
+                  {/* Left: Token + Avatar + Info */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Token */}
+                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
+                      <p className="text-[20px] leading-none font-semibold text-[var(--text-strong)]">
+                        {String(item.token_number).padStart(2, '0')}
+                      </p>
+                      <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
                     </div>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                      UHID: {item.patientUhid} · Prescribed by: {item.doctorName} ·{' '}
-                      <strong className="text-[var(--text-strong)]">{item.medicineCount} medicines</strong>
-                    </p>
+
+                    <Avatar name={item.patientName} size="md" className="shrink-0" />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-[var(--text-strong)]">{item.patientName}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{item.patientAge}y</span>
+                        {item.uaid ? (
+                          <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded">
+                            In-Patient ({item.uaid})
+                          </span>
+                        ) : (
+                          <StatusPill variant="warning" label="Ready to Dispense" />
+                        )}
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                        UHID: {item.patientUhid} · Prescribed by: {item.doctorName} ·{' '}
+                        <strong className="text-[var(--text-strong)]">{item.medicineCount} medicines</strong>
+                      </p>
+                    </div>
                   </div>
 
-                  <Link href={`/pharmacy/dispense?visitId=${item.visitId || item.id}&rxId=${item.prescriptionId || ''}&token=${item.token_number}`}>
-                    <Button size="sm" icon={<ChevronRight size={14} />} iconPosition="right">
-                      Dispense Medicines
-                    </Button>
-                  </Link>
+                  {/* Right: Dispense Action */}
+                  <div className="w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60 flex justify-end">
+                    <Link
+                      href={`/pharmacy/dispense?visitId=${item.visitId || item.id}&rxId=${item.prescriptionId || ''}&token=${item.token_number}`}
+                      className="w-full sm:w-auto"
+                    >
+                      <Button size="sm" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
+                        Dispense Medicines
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
@@ -700,7 +709,7 @@ export default function PharmacyPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                      <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 text-xs text-[var(--text-muted)] w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                         <span className="font-bold text-xs text-[var(--green-900)] bg-[var(--sage-100)] px-2.5 py-1 rounded border border-[var(--green-600)]/30">
                           Total: ₹{disp.total_amount ? disp.total_amount.toFixed(2) : '0.00'}
                         </span>
@@ -784,7 +793,7 @@ export default function PharmacyPage() {
                 return (
                   <div
                     key={drug.id}
-                    className="flex items-center gap-4 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px]"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px] border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -818,7 +827,7 @@ export default function PharmacyPage() {
                       </div>
                     </div>
 
-                    <div className="shrink-0 flex items-center gap-2">
+                    <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                       {isLowStock ? (
                         <StatusPill variant="danger" label="Low Stock" />
                       ) : isExpiring ? (
@@ -827,26 +836,28 @@ export default function PharmacyPage() {
                         <StatusPill variant="success" label="In Stock" />
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => setEditingDrug({ ...drug })}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-colors shadow-2xs"
-                        title="Edit medicine details & stock"
-                      >
-                        <Edit2 size={13} className="text-[var(--green-700)]" />
-                        <span className="hidden sm:inline">Edit</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingDrug({ ...drug })}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-colors shadow-2xs cursor-pointer min-h-[34px]"
+                          title="Edit medicine details & stock"
+                        >
+                          <Edit2 size={13} className="text-[var(--green-700)]" />
+                          <span>Edit</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={isDeletingDrugId === drug.id}
-                        onClick={() => handleDeleteDrug(drug)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors shadow-2xs disabled:opacity-50"
-                        title="Delete medicine from inventory"
-                      >
-                        <Trash2 size={13} />
-                        <span className="hidden sm:inline">Delete</span>
-                      </button>
+                        <button
+                          type="button"
+                          disabled={isDeletingDrugId === drug.id}
+                          onClick={() => handleDeleteDrug(drug)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer min-h-[34px]"
+                          title="Delete medicine from inventory"
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

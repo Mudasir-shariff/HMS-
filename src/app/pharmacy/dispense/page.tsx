@@ -781,7 +781,7 @@ function DispenseContent() {
                   </div>
 
                   {/* Right: Interactive Steppers & Actions */}
-                  <div className="flex items-center gap-3 shrink-0 self-end lg:self-center">
+                  <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 w-full lg:w-auto pt-2.5 lg:pt-0 border-t lg:border-t-0 border-[var(--line-soft)]/60">
                     {/* Quantity Stepper Control */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-[var(--text-muted)] mr-1">Dispense:</span>
@@ -822,26 +822,28 @@ function DispenseContent() {
                       </span>
                     </div>
 
-                    {/* Edit Details Button */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingItem(item)}
-                      className="h-9 px-3 text-xs font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:border-[var(--green-600)] hover:bg-[var(--bg-tile)] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                      title="Edit price, dosage, or substitute medicine"
-                    >
-                      <Pencil size={12} className="text-[var(--green-700)]" />
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Edit Details Button */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingItem(item)}
+                        className="h-9 px-3 text-xs font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:border-[var(--green-600)] hover:bg-[var(--bg-tile)] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        title="Edit price, dosage, or substitute medicine"
+                      >
+                        <Pencil size={12} className="text-[var(--green-700)]" />
+                        Edit
+                      </button>
 
-                    {/* Remove Item Button */}
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="h-9 w-9 flex items-center justify-center rounded-[var(--r-control)] text-[var(--text-muted)] hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                      title="Remove this item"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      {/* Remove Item Button */}
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.id)}
+                        className="h-9 w-9 flex items-center justify-center rounded-[var(--r-control)] text-[var(--text-muted)] hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Remove this item"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -861,10 +863,10 @@ function DispenseContent() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             <Link
               href="/pharmacy"
-              className="h-11 px-5 text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+              className="h-11 px-5 text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer w-full sm:w-auto"
             >
               Back to Dispensing Queue
             </Link>
@@ -876,7 +878,7 @@ function DispenseContent() {
               onClick={handleMarkDelivered}
               disabled={isSubmitting}
               loading={isSubmitting}
-              className="bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] px-8 shadow-sm font-semibold"
+              className="bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] px-8 shadow-sm font-semibold w-full sm:w-auto justify-center"
             >
               {isSubmitting ? 'Delivering...' : `Delivered (₹${totalAmount.toFixed(2)})`}
             </Button>

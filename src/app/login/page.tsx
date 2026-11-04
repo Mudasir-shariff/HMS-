@@ -207,9 +207,9 @@ function LoginForm() {
               <span>Calling Hours:</span>
               <span className="font-medium">9:00 PM – 10:00 PM (Night)</span>
             </div>
-            <div className="flex items-center justify-between border-t border-[var(--line-soft)] pt-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-[var(--line-soft)] pt-1.5 gap-1">
               <span className="font-medium text-[var(--text-strong)]">Email:</span>
-              <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline">
+              <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline break-all text-right sm:text-left">
                 shariffmudasirshariff@gmail.com
               </a>
             </div>

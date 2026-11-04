@@ -357,7 +357,7 @@ export default function ReceptionPage() {
               return (
                 <div
                   key={doc.id}
-                  className="bg-white rounded-[var(--r-tile)] p-3.5 border border-[var(--line-soft)] shadow-xs flex items-center justify-between"
+                  className="bg-white rounded-[var(--r-tile)] p-3.5 border border-[var(--line-soft)] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
                 >
                   <div>
                     <p className="font-semibold text-xs text-[var(--text-strong)]">{doc.full_name}</p>
@@ -365,7 +365,7 @@ export default function ReceptionPage() {
                       {doc.specialization} · <strong>{doc.consultation_room}</strong>
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-right">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:text-right">
                     {docInConsult > 0 && (
                       <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
                         In Cabin ({docInConsult})
@@ -433,7 +433,7 @@ export default function ReceptionPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Search patient, phone, UHID..."
-                className="w-44 sm:w-56"
+                className="w-full sm:w-56"
               />
             </div>
           }
@@ -508,59 +508,59 @@ export default function ReceptionPage() {
                   </div>
 
                   {/* Right: Pipeline Stepper & Interactive Action Buttons */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0 self-end lg:self-auto">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full lg:w-auto pt-2.5 lg:pt-0 border-t lg:border-t-0 border-[var(--line-soft)]/60 justify-between lg:justify-end">
                     {/* 3-Step Journey Pipeline Stepper */}
-                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-[var(--r-control)] border border-[var(--line-soft)] text-[11px]">
+                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-[var(--r-control)] border border-[var(--line-soft)] text-[11px] overflow-x-auto max-w-full shrink-0">
                       {/* Step 1: Reception */}
-                      <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold">
+                      <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
                         <CheckCircle size={12} /> Reception
                       </span>
 
-                      <span className="text-[var(--text-faint)]">→</span>
+                      <span className="text-[var(--text-faint)] shrink-0">→</span>
 
                       {/* Step 2: Doctor */}
                       {item.status === 'waiting' && (
-                        <span className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+                        <span className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
                           <Clock size={11} /> Dr. Queue
                         </span>
                       )}
                       {item.status === 'in_consultation' && (
-                        <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded animate-pulse">
+                        <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded animate-pulse shrink-0">
                           <Stethoscope size={11} /> In Cabin
                         </span>
                       )}
                       {(item.status === 'prescribed' || item.status === 'dispensed' || item.status === 'completed') && (
-                        <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold">
+                        <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
                           <CheckCircle size={12} /> Doctor Done
                         </span>
                       )}
 
-                      <span className="text-[var(--text-faint)]">→</span>
+                      <span className="text-[var(--text-faint)] shrink-0">→</span>
 
                       {/* Step 3: Pharmacy */}
                       {item.status === 'prescribed' && (
-                        <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded animate-pulse">
+                        <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded animate-pulse shrink-0">
                           <Pill size={11} /> Pharmacy Queue
                         </span>
                       )}
                       {(item.status === 'dispensed' || item.status === 'completed') && (
-                        <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold">
+                        <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
                           <CheckCircle size={12} /> Dispensed
                         </span>
                       )}
                       {(item.status === 'waiting' || item.status === 'in_consultation') && (
-                        <span className="text-[var(--text-faint)]">Pharmacy</span>
+                        <span className="text-[var(--text-faint)] shrink-0">Pharmacy</span>
                       )}
                     </div>
 
                     {/* Stage-Specific 1-Click Action Buttons */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 w-full sm:w-auto">
                       {item.status === 'waiting' && (
                         <>
                           <button
                             type="button"
                             onClick={() => handleMoveToCabin(item.id, item.token_number)}
-                            className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-[var(--r-control)] border border-blue-200 transition-colors flex items-center gap-1"
+                            className="flex-1 sm:flex-initial text-xs font-semibold px-2.5 py-1.5 min-h-[36px] bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-[var(--r-control)] border border-blue-200 transition-colors flex items-center justify-center gap-1"
                             title="Call patient into doctor consultation room"
                           >
                             <Stethoscope size={13} />
@@ -570,8 +570,9 @@ export default function ReceptionPage() {
                             href={`/doctor/prescribe?visitId=${item.id}&patientId=${item.patient_id}&token=${item.token_number}&name=${encodeURIComponent(
                               item.patientName
                             )}`}
+                            className="flex-1 sm:flex-initial"
                           >
-                            <Button size="sm" variant="secondary" icon={<ChevronRight size={13} />} iconPosition="right">
+                            <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<ChevronRight size={13} />} iconPosition="right">
                               Prescribe
                             </Button>
                           </Link>
@@ -583,7 +584,7 @@ export default function ReceptionPage() {
                           <button
                             type="button"
                             onClick={() => handleSendToPharmacy(item.id, item.token_number)}
-                            className="text-xs font-semibold px-2.5 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-[var(--r-control)] border border-purple-200 transition-colors flex items-center gap-1"
+                            className="flex-1 sm:flex-initial text-xs font-semibold px-2.5 py-1.5 min-h-[36px] bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-[var(--r-control)] border border-purple-200 transition-colors flex items-center justify-center gap-1"
                             title="Complete doctor visit and send patient to pharmacy queue"
                           >
                             <Pill size={13} />
@@ -593,8 +594,9 @@ export default function ReceptionPage() {
                             href={`/doctor/prescribe?visitId=${item.id}&patientId=${item.patient_id}&token=${item.token_number}&name=${encodeURIComponent(
                               item.patientName
                             )}`}
+                            className="flex-1 sm:flex-initial"
                           >
-                            <Button size="sm" icon={<ChevronRight size={13} />} iconPosition="right">
+                            <Button size="sm" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<ChevronRight size={13} />} iconPosition="right">
                               Write Rx
                             </Button>
                           </Link>
@@ -606,7 +608,7 @@ export default function ReceptionPage() {
                           <button
                             type="button"
                             onClick={() => handleQuickDeliver(item.id, item.token_number)}
-                            className="text-xs font-semibold px-3 py-1.5 bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] rounded-[var(--r-control)] shadow-xs transition-colors flex items-center gap-1"
+                            className="flex-1 sm:flex-initial text-xs font-semibold px-3 py-1.5 min-h-[36px] bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] rounded-[var(--r-control)] shadow-xs transition-colors flex items-center justify-center gap-1"
                             title="Confirm delivery of prescribed medicines & deduct inventory"
                           >
                             <Check size={13} />
@@ -614,8 +616,9 @@ export default function ReceptionPage() {
                           </button>
                           <Link
                             href={`/pharmacy/dispense?visitId=${item.id}&token=${item.token_number}`}
+                            className="flex-1 sm:flex-initial"
                           >
-                            <Button size="sm" variant="secondary" icon={<ChevronRight size={13} />} iconPosition="right">
+                            <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<ChevronRight size={13} />} iconPosition="right">
                               Dispense Desk
                             </Button>
                           </Link>
@@ -623,7 +626,7 @@ export default function ReceptionPage() {
                       )}
 
                       {(item.status === 'dispensed' || item.status === 'completed') && (
-                        <span className="text-xs font-semibold text-[var(--green-800)] bg-[var(--success-bg)] px-2.5 py-1.5 rounded-[var(--r-control)] border border-[var(--success)] flex items-center gap-1">
+                        <span className="w-full sm:w-auto text-xs font-semibold text-[var(--green-800)] bg-[var(--success-bg)] px-2.5 py-1.5 min-h-[36px] rounded-[var(--r-control)] border border-[var(--success)] flex items-center justify-center gap-1">
                           <CheckCircle size={13} /> Completed
                         </span>
                       )}

@@ -194,52 +194,55 @@ export default function DoctorPage() {
               return (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[72px]"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[72px] border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
                 >
-                  {/* Token */}
-                  <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
-                    <p className="text-[20px] leading-none font-semibold text-[var(--text-strong)]">
-                      {String(p.token_number).padStart(2, '0')}
-                    </p>
-                    <p className="text-[9px] text-[var(--text-faint)] mt-0.5">{timeStr}</p>
-                  </div>
-
-                  <div className="w-px h-10 bg-[var(--line-soft)] shrink-0 hidden sm:block" />
-
-                  {/* Avatar + Info */}
-                  <Avatar name={p.patientName} size="md" className="shrink-0" />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-[var(--text-strong)]">{p.patientName}</span>
-                      <span className="text-xs text-[var(--text-muted)]">{p.patientAge}y</span>
-                      {p.hasBP && <StatusPill variant="warning" label="BP" />}
-                      {p.hasSugar && <StatusPill variant="info" label="Sugar" />}
+                  {/* Left: Token + Avatar + Info */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Token */}
+                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
+                      <p className="text-[20px] leading-none font-semibold text-[var(--text-strong)]">
+                        {String(p.token_number).padStart(2, '0')}
+                      </p>
+                      <p className="text-[9px] text-[var(--text-faint)] mt-0.5">{timeStr}</p>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] flex-wrap">
-                      <span className="font-mono text-[var(--text-strong)]">{p.patientUhid}</span>
-                      <span>·</span>
-                      <span>Visit: {p.visit_number}</span>
-                      {p.pastVisits > 0 && (
-                        <>
-                          <span>·</span>
-                          <span className="text-[var(--green-700)] font-medium">
-                            {p.pastVisits} past visit{p.pastVisits !== 1 ? 's' : ''}
-                          </span>
-                        </>
-                      )}
-                      {p.otherConditions && (
-                        <>
-                          <span>·</span>
-                          <span className="italic truncate max-w-xs">{p.otherConditions}</span>
-                        </>
-                      )}
+                    <div className="w-px h-10 bg-[var(--line-soft)] shrink-0 hidden sm:block" />
+
+                    {/* Avatar + Info */}
+                    <Avatar name={p.patientName} size="md" className="shrink-0" />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-[var(--text-strong)]">{p.patientName}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{p.patientAge}y</span>
+                        {p.hasBP && <StatusPill variant="warning" label="BP" />}
+                        {p.hasSugar && <StatusPill variant="info" label="Sugar" />}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] flex-wrap">
+                        <span className="font-mono text-[var(--text-strong)]">{p.patientUhid}</span>
+                        <span>·</span>
+                        <span>Visit: {p.visit_number}</span>
+                        {p.pastVisits > 0 && (
+                          <>
+                            <span>·</span>
+                            <span className="text-[var(--green-700)] font-medium">
+                              {p.pastVisits} past visit{p.pastVisits !== 1 ? 's' : ''}
+                            </span>
+                          </>
+                        )}
+                        {p.otherConditions && (
+                          <>
+                            <span>·</span>
+                            <span className="italic truncate max-w-xs">{p.otherConditions}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Action */}
-                  <div className="shrink-0 flex items-center gap-2">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                     {tab === 'queue' ? (
                       <>
                         {p.status === 'in_consultation' ? (
@@ -255,10 +258,11 @@ export default function DoctorPage() {
                           href={`/doctor/prescribe?visitId=${p.id}&patientId=${p.patient_id}&token=${p.token_number}&name=${encodeURIComponent(
                             p.patientName
                           )}&uhid=${p.patientUhid}&age=${p.patientAge}&doctorId=${activeDoctorId}`}
+                          className="w-full sm:w-auto"
                         >
                           <Button
                             size="sm"
-                            className={p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}
+                            className={`w-full sm:w-auto justify-center min-h-[36px] ${p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}`}
                             icon={<ChevronRight size={14} />}
                             iconPosition="right"
                           >
@@ -267,7 +271,7 @@ export default function DoctorPage() {
                         </Link>
                       </>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
                         {p.status === 'prescribed' ? (
                           <span className="text-[11px] bg-amber-100 text-amber-900 font-bold px-2.5 py-1 rounded-full border border-amber-300">
                             💊 At Pharmacy (Pending Dispense)
@@ -281,8 +285,9 @@ export default function DoctorPage() {
                           href={`/doctor/prescribe?visitId=${p.id}&patientId=${p.patient_id}&token=${p.token_number}&name=${encodeURIComponent(
                             p.patientName
                           )}&uhid=${p.patientUhid}&age=${p.patientAge}&doctorId=${activeDoctorId}`}
+                          className="w-full sm:w-auto"
                         >
-                          <Button size="sm" variant="secondary" icon={<FileText size={13} />}>
+                          <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<FileText size={13} />}>
                             View Rx
                           </Button>
                         </Link>

@@ -127,16 +127,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             )}
 
-            <Link href={ROLE_HOME[user.role] || '/'} className="flex items-center gap-2.5">
-              <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs">
+            <Link href={ROLE_HOME[user.role] || '/'} className="flex items-center gap-2 sm:gap-2.5">
+              <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs shrink-0">
                 <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
               </div>
               <div>
-                <span className="text-sm font-bold text-[var(--text-strong)] hidden sm:block leading-none">
+                <span className="text-xs sm:text-sm font-bold text-[var(--text-strong)] leading-tight block">
                   Radha Krishna HMS
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)] font-medium hidden sm:block mt-0.5">
-                  {roleLabels[user.role]} Portal · <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="text-[var(--green-700)] hover:underline font-semibold">opti-x.in</a>
+                <span className="text-[9px] sm:text-[10px] text-[var(--text-muted)] font-medium leading-tight block mt-0.5">
+                  {roleLabels[user.role]} · <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="text-[var(--green-700)] hover:underline font-semibold">opti-x.in</a>
                 </span>
               </div>
             </Link>
@@ -264,7 +264,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <aside
         className={clsx(
-          'fixed top-16 left-0 z-30 h-[calc(100vh-64px)] w-64 bg-[var(--bg-card)] border-r border-[var(--line-soft)]',
+          'fixed top-16 left-0 z-30 h-[calc(100vh-64px)] w-64 bg-[var(--bg-card)] border-r border-[var(--line-soft)] flex flex-col',
           'transform transition-transform duration-200 ease-in-out lg:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
@@ -276,7 +276,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{user.specialization}</p>
           )}
         </div>
-        <nav className="p-3 flex flex-col gap-1">
+        <nav className="p-3 flex flex-col gap-1 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = ICON_MAP[item.iconName] ?? Activity;
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -296,6 +296,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        {/* Mobile Quick Support & Actions Footer */}
+        <div className="p-3 border-t border-[var(--line-soft)] bg-[var(--bg-canvas)]/60 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarOpen(false);
+              setSupportModalOpen(true);
+            }}
+            className="flex items-center justify-between w-full px-3 py-2 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-strong)] hover:border-[var(--green-600)] transition-colors shadow-2xs"
+          >
+            <span className="flex items-center gap-2">
+              <HelpCircle size={14} className="text-[var(--green-700)]" />
+              Help & Support
+            </span>
+            <span className="text-[10px] text-[var(--green-700)] font-bold">24/7 Desk</span>
+          </button>
+
+          <div className="bg-white p-2.5 rounded-[var(--r-tile)] border border-[var(--line-soft)] text-[11px] space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-muted)] flex items-center gap-1">
+                <PhoneCall size={11} className="text-[var(--green-700)]" /> Helpline:
+              </span>
+              <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
+                8123649448
+              </a>
+            </div>
+            <p className="text-[9px] text-[var(--text-faint)]">Calling Hours: 9:00 PM – 10:00 PM Night</p>
+          </div>
+
+          <button
+            onClick={signOut}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-[var(--r-tile)] text-xs text-[var(--danger)] bg-red-50 hover:bg-red-100 font-semibold transition-colors mt-1"
+          >
+            <LogOut size={14} />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* ── Main Content with Role Access Guard ── */}
@@ -331,17 +369,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span>· All Rights Reserved</span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] bg-[var(--bg-card)] px-3.5 py-1.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] shadow-xs">
-            <span className="font-semibold text-[var(--text-strong)] flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] bg-[var(--bg-card)] p-2.5 sm:px-3.5 sm:py-1.5 rounded-[var(--r-tile)] sm:rounded-[var(--r-pill)] border border-[var(--line-soft)] shadow-xs text-center">
+            <span className="font-semibold text-[var(--text-strong)] flex items-center justify-center gap-1">
               <PhoneCall size={12} className="text-[var(--green-700)]" /> Support:
             </span>
             <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
               8123649448
             </a>
             <span className="text-[10px] text-[var(--text-muted)]">(Calling: 9:00 PM – 10:00 PM Night)</span>
-            <span>·</span>
-            <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline flex items-center gap-1">
-              <Mail size={12} /> shariffmudasirshariff@gmail.com
+            <span className="hidden sm:inline">·</span>
+            <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline flex items-center justify-center gap-1 break-all">
+              <Mail size={12} className="shrink-0" /> shariffmudasirshariff@gmail.com
             </a>
           </div>
 
