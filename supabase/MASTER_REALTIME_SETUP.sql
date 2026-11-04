@@ -764,7 +764,7 @@ CREATE INDEX IF NOT EXISTS idx_prescription_items_rx_id ON public.prescription_i
 CREATE INDEX IF NOT EXISTS idx_prescription_items_drug_id ON public.prescription_items (drug_id);
 
 CREATE INDEX IF NOT EXISTS idx_dispensings_rx_id ON public.dispensings (prescription_id);
-CREATE INDEX IF NOT EXISTS idx_dispensings_visit_id ON public.dispensings (visit_id);
+CREATE INDEX IF NOT EXISTS idx_dispensings_patient_id ON public.dispensings (patient_id);
 CREATE INDEX IF NOT EXISTS idx_dispensings_created_at ON public.dispensings (created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_patients_uhid ON public.patients (uhid);
