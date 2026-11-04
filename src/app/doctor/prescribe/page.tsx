@@ -457,10 +457,11 @@ function PrescribeContent() {
     }));
 
     const validPatientId = patientId || activePatient?.id || activeVisit?.patient_id || generateUUID();
+    const targetVisitId = visitId || activeVisit?.id || (validPatientId && visits.find((v) => v.patient_id === validPatientId)?.id) || generateUUID();
 
     const rxPayload: Prescription = {
       id: rxId,
-      visit_id: visitId || generateUUID(),
+      visit_id: targetVisitId,
       doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
       patient_id: validPatientId,
       notes: instructions,
@@ -474,41 +475,28 @@ function PrescribeContent() {
     // 1. Immediately save into local store and query cache (zero latency)
     try {
       HMSStore.savePrescription(rxPayload);
-      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+      queryClient.setQueriesData<Prescription[]>({ queryKey: ['prescriptions'] }, (old) =>
         old ? [rxPayload, ...old.filter((p) => p.id !== rxId)] : [rxPayload]
       );
-      if (visitId) {
-        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
-          old
-            ? old.map((v) =>
-                v.id === visitId
-                  ? { ...v, status: 'prescribed' as const, updated_at: new Date().toISOString() }
-                  : v
-              )
-            : []
-        );
-      }
     } catch (e) {
       console.warn('HMSStore savePrescription warning:', e);
     }
 
-    // 2. Ensure visit record is strictly moved to 'prescribed' in BOTH store and Supabase
-    if (visitId) {
-      try {
-        const allVisits = HMSStore.getVisits();
-        const existing = allVisits.find((v) => v.id === visitId);
-        if (existing) {
-          const updatedVisit = {
+    // 2. Ensure visit record is strictly moved to 'prescribed' in BOTH store and query cache
+    let finalVisitId = targetVisitId;
+    try {
+      const allVisits = HMSStore.getVisits();
+      const existing = allVisits.find((v) => v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId));
+      const updatedVisit: Visit = existing
+        ? {
             ...existing,
             status: 'prescribed' as const,
-            follow_up_date: followUp || undefined,
-            instructions: instructions,
+            follow_up_date: followUp || existing.follow_up_date,
+            instructions: instructions || existing.instructions,
             updated_at: new Date().toISOString(),
-          };
-          HMSStore.saveVisit(updatedVisit);
-        } else {
-          HMSStore.saveVisit({
-            id: visitId,
+          }
+        : {
+            id: targetVisitId,
             visit_number: `V-${token}`,
             patient_id: validPatientId,
             doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
@@ -518,33 +506,58 @@ function PrescribeContent() {
             instructions: instructions,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
-        }
+          };
+      finalVisitId = updatedVisit.id;
+      HMSStore.saveVisit(updatedVisit);
 
-      } catch (vErr) {
-        console.warn('Local visit status update warning:', vErr);
-      }
+      queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+        old
+          ? old.map((v) =>
+              v.id === updatedVisit.id || v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId)
+                ? updatedVisit
+                : v
+            )
+          : [updatedVisit]
+      );
+    } catch (vErr) {
+      console.warn('Local visit status update warning:', vErr);
     }
 
     // 3. Push visit update & prescription payload to Supabase concurrently with fast timeout
     try {
       const syncPromises: Promise<any>[] = [pushPrescriptionToSupabase(rxPayload)];
 
-      if (visitId && isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(visitId)) {
+      if (isSupabaseConfigured()) {
         const supabase = createClient();
-        syncPromises.push(
-          Promise.resolve(
-            supabase
-              .from('visits')
-              .update({
-                status: 'prescribed',
-                follow_up_date: followUp || null,
-                instructions: instructions || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', visitId)
-          )
-        );
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
+          syncPromises.push(
+            Promise.resolve(
+              supabase
+                .from('visits')
+                .update({
+                  status: 'prescribed',
+                  follow_up_date: followUp || null,
+                  instructions: instructions || null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', finalVisitId)
+            )
+          );
+        } else if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
+          syncPromises.push(
+            Promise.resolve(
+              supabase
+                .from('visits')
+                .update({
+                  status: 'prescribed',
+                  follow_up_date: followUp || null,
+                  instructions: instructions || null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('patient_id', validPatientId)
+            )
+          );
+        }
       }
 
       await Promise.race([
@@ -557,8 +570,8 @@ function PrescribeContent() {
 
     // 4. Invalidate query caches for instant UI update across pages
     try {
-      queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['visits'] });
     } catch {}
 
     setSavedRxId(rxId);

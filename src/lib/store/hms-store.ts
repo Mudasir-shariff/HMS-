@@ -504,11 +504,28 @@ export const HMSStore = {
     if (this._onSavePrescription) this._onSavePrescription(rx);
 
     // Update visit status to 'prescribed' so it enters Pharmacy queue
-    const visit = this.getVisits().find((v) => v.id === rx.visit_id);
+    const visits = this.getVisits();
+    let visit = visits.find((v) => v.id === rx.visit_id);
+    if (!visit && rx.patient_id) {
+      visit = visits.find((v) => v.patient_id === rx.patient_id);
+    }
     if (visit) {
       visit.status = 'prescribed';
       visit.updated_at = new Date().toISOString();
       this.saveVisit(visit);
+    } else if (rx.patient_id) {
+      // Auto-create visit record so queues can track it
+      const newVisit: Visit = {
+        id: rx.visit_id || generateUUID(),
+        visit_number: `V-${Date.now().toString().slice(-4)}`,
+        patient_id: rx.patient_id,
+        doctor_id: rx.doctor_id,
+        token_number: visits.length + 1,
+        status: 'prescribed',
+        created_at: rx.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.saveVisit(newVisit);
     }
   },
 

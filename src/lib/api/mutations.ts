@@ -23,10 +23,16 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms = 3500): Promise<T | n
     timer = setTimeout(() => resolve(null), ms);
   });
   return Promise.race([
-    promise.then((res) => {
-      clearTimeout(timer);
-      return res;
-    }),
+    Promise.resolve(promise)
+      .then((res) => {
+        clearTimeout(timer);
+        return res;
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        console.debug('Mutation timeout/network error caught:', err?.message || err);
+        return null;
+      }),
     timeoutPromise,
   ]);
 }

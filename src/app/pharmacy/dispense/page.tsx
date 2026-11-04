@@ -83,9 +83,29 @@ function DispenseContent() {
   const rxIdParam = searchParams.get('rxId') || '';
 
   const visit = visits.find((v) => v.id === visitId);
-  const rx = prescriptions.find((p) => p.id === rxIdParam || p.visit_id === visitId);
-  const patient = patients.find((p) => p.id === visit?.patient_id || p.id === rx?.patient_id);
-  const doctor = doctors.find((d) => d.id === visit?.doctor_id || d.id === rx?.doctor_id);
+
+  // Match rx by rxIdParam, visitId, or patient_id, with fallback to local store
+  const cachedRx = prescriptions.find(
+    (p) =>
+      (rxIdParam && p.id === rxIdParam) ||
+      (visitId && (p.visit_id === visitId || p.id === visitId)) ||
+      (visit?.patient_id && p.patient_id === visit.patient_id)
+  );
+
+  const localRx = !cachedRx
+    ? HMSStore.getPrescriptions().find(
+        (p) =>
+          (rxIdParam && p.id === rxIdParam) ||
+          (visitId && (p.visit_id === visitId || p.id === visitId)) ||
+          (visit?.patient_id && p.patient_id === visit.patient_id)
+      )
+    : null;
+
+  const rx = cachedRx || localRx;
+  const patient = patients.find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id);
+  const doctor = doctors.find(
+    (d) => d.id === rx?.doctor_id || d.id === visit?.doctor_id || (d as any).user_id === rx?.doctor_id
+  );
 
   // Initialize medicine checklist with PRD v1.1 Smart Quantity Rules
   const [items, setItems] = useState<DispenseItemState[]>(() => {
@@ -132,43 +152,45 @@ function DispenseContent() {
   const initializedRxRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (rx && rx.id !== initializedRxRef.current && rx.items && rx.items.length > 0) {
-      initializedRxRef.current = rx.id;
-      setItems(
-        rx.items.map((i) => {
-          const drug = drugs.find((d) => d.id === i.drug_id);
-          const drugType = (i.item_type || drug?.drug_type || 'tablet') as DrugType;
-          const smartQty = HMSStore.calculateSmartQuantity(
-            drugType,
-            i.dose_morning,
-            i.dose_afternoon,
-            i.dose_night,
-            i.num_days,
-            i.quantity
-          );
-          const price = drug?.selling_price || 5.0;
-          return {
-            id: i.id,
-            drugId: i.drug_id,
-            name: i.drug_name,
-            drugType,
-            dosage: `${i.dose_morning ? 'M ' : ''}${i.dose_afternoon ? 'A ' : ''}${
-              i.dose_night ? 'N' : ''
-            } · ${i.dose_relation === 'before_food' ? 'Before food' : 'After food'} · ${i.num_days} days`,
-            qty: smartQty,
-            unitPrice: price,
-            included: true,
-            isCustom: i.is_custom || !drug,
-            stockAvailable: drug?.stock_quantity ?? 999,
-            isScheduleH: Boolean(drug?.schedule_h || drug?.schedule_h1),
-            isExpired: drug ? new Date(drug.expiry_date) < new Date() : false,
-            addedByPharmacist: Boolean(i.added_by_pharmacist),
-            pharmacistNotes: i.pharmacist_notes,
-          };
-        })
-      );
+    if (rx && rx.items && rx.items.length > 0) {
+      if (rx.id !== initializedRxRef.current || items.length === 0) {
+        initializedRxRef.current = rx.id;
+        setItems(
+          rx.items.map((i) => {
+            const drug = drugs.find((d) => d.id === i.drug_id);
+            const drugType = (i.item_type || drug?.drug_type || 'tablet') as DrugType;
+            const smartQty = HMSStore.calculateSmartQuantity(
+              drugType,
+              i.dose_morning,
+              i.dose_afternoon,
+              i.dose_night,
+              i.num_days,
+              i.quantity
+            );
+            const price = drug?.selling_price || 5.0;
+            return {
+              id: i.id,
+              drugId: i.drug_id,
+              name: i.drug_name,
+              drugType,
+              dosage: `${i.dose_morning ? 'M ' : ''}${i.dose_afternoon ? 'A ' : ''}${
+                i.dose_night ? 'N' : ''
+              } · ${i.dose_relation === 'before_food' ? 'Before food' : 'After food'} · ${i.num_days} days`,
+              qty: smartQty,
+              unitPrice: price,
+              included: true,
+              isCustom: i.is_custom || !drug,
+              stockAvailable: drug?.stock_quantity ?? 999,
+              isScheduleH: Boolean(drug?.schedule_h || drug?.schedule_h1),
+              isExpired: drug ? new Date(drug.expiry_date) < new Date() : false,
+              addedByPharmacist: Boolean(i.added_by_pharmacist),
+              pharmacistNotes: i.pharmacist_notes,
+            };
+          })
+        );
+      }
     }
-  }, [rx?.id, drugs]);
+  }, [rx, drugs, items.length]);
 
   // Modals state for editing item and adding new item
   const [editingItem, setEditingItem] = useState<DispenseItemState | null>(null);

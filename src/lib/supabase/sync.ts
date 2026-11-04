@@ -139,13 +139,16 @@ export async function syncFromSupabase(): Promise<boolean> {
     }
 
     // 5. Fetch Prescriptions & Items
-    const [rxRes, itemsRes] = await Promise.all([
+    const [rxSettled, itemsSettled] = await Promise.allSettled([
       supabase.from('prescriptions').select('*'),
       supabase.from('prescription_items').select('*'),
     ]);
 
-    if (!rxRes.error && rxRes.data) {
-      const allItems = itemsRes.data || [];
+    const rxRes = rxSettled.status === 'fulfilled' ? rxSettled.value : null;
+    const itemsRes = itemsSettled.status === 'fulfilled' ? itemsSettled.value : null;
+
+    if (rxRes && !rxRes.error && rxRes.data) {
+      const allItems = itemsRes?.data || [];
       const syncedRx: Prescription[] = rxRes.data.map((r: any) => {
         const items: PrescriptionItem[] = allItems
           .filter((it: any) => it.prescription_id === r.id)
@@ -160,6 +163,11 @@ export async function syncFromSupabase(): Promise<boolean> {
             dose_relation: it.dose_relation,
             num_days: Number(it.num_days) || 1,
             quantity: Number(it.quantity) || 1,
+            is_custom: Boolean(it.is_custom),
+            item_type: it.item_type || undefined,
+            custom_unit: it.custom_unit || undefined,
+            added_by_pharmacist: Boolean(it.added_by_pharmacist),
+            pharmacist_notes: it.pharmacist_notes || undefined,
             created_at: it.created_at,
           }));
 
@@ -169,12 +177,27 @@ export async function syncFromSupabase(): Promise<boolean> {
           doctor_id: r.doctor_id,
           patient_id: r.patient_id,
           notes: r.notes || undefined,
+          uaid: r.uaid || undefined,
+          stay_day_number: r.stay_day_number || undefined,
           created_at: r.created_at,
           items,
         };
       });
 
-      HMSStore.setPrescriptions(syncedRx);
+      // Merge with local store to ensure newly prescribed medicines are never wiped
+      const local = HMSStore.getPrescriptions();
+      const rxMap = new Map<string, Prescription>();
+      syncedRx.forEach((r) => rxMap.set(r.id, r));
+      local.forEach((lr) => {
+        const existing = rxMap.get(lr.id);
+        if (!existing) {
+          rxMap.set(lr.id, lr);
+        } else if ((!existing.items || existing.items.length === 0) && lr.items && lr.items.length > 0) {
+          rxMap.set(lr.id, { ...existing, items: lr.items });
+        }
+      });
+
+      HMSStore.setPrescriptions(Array.from(rxMap.values()));
     }
 
     // 6. Fetch Dispensings & Items
@@ -617,8 +640,39 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
           quantity: Number(it.quantity) || 1,
         }));
         const { error: coreItemsErr } = await supabase.from('prescription_items').upsert(coreItems);
-        if (coreItemsErr) console.error('Core items upsert failed:', coreItemsErr);
+        if (coreItemsErr) {
+          console.warn('Core items retry failed, attempting without drug_id:', coreItemsErr.message);
+          const safeItems = rx.items.map((it) => ({
+            id: isValidUUID(it.id) ? it.id : generateUUID(),
+            prescription_id: rxId,
+            drug_id: null,
+            drug_name: it.drug_name,
+            dose_morning: Boolean(it.dose_morning),
+            dose_afternoon: Boolean(it.dose_afternoon),
+            dose_night: Boolean(it.dose_night),
+            dose_relation: it.dose_relation || 'after_food',
+            num_days: Number(it.num_days) || 1,
+            quantity: Number(it.quantity) || 1,
+          }));
+          const { error: safeErr } = await supabase.from('prescription_items').upsert(safeItems);
+          if (safeErr) console.error('Safe items upsert failed:', safeErr);
+        }
       }
+    }
+
+    // Keep visit in Supabase strictly in lockstep with status = 'prescribed'
+    if (isValidUUID(rx.visit_id)) {
+      await supabase
+        .from('visits')
+        .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+        .eq('id', rx.visit_id);
+    } else if (isValidUUID(rx.patient_id)) {
+      await supabase
+        .from('visits')
+        .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+        .eq('patient_id', rx.patient_id)
+        .neq('status', 'dispensed')
+        .neq('status', 'completed');
     }
 
     if (rx.lab_tests && rx.lab_tests.length > 0) {
