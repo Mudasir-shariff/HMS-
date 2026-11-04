@@ -17,6 +17,20 @@ export interface RegisterPatientParams {
   uhid?: string;
 }
 
+async function withTimeout<T>(promise: PromiseLike<T>, ms = 3500): Promise<T | null> {
+  let timer: any;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise,
+  ]);
+}
+
 export interface RegisterResult {
   patient: Patient;
   visit: Visit;
@@ -33,21 +47,27 @@ export async function registerPatientAndVisitAtomic(
   const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.doctorId);
   const doctorId = isValidUUID ? params.doctorId : null;
 
-  const { data, error } = await supabase.rpc('register_patient_and_visit_atomic', {
-    p_name: params.name,
-    p_age: params.age,
-    p_phone: params.phone,
-    p_doctor_id: doctorId,
-    p_blood_group: params.bloodGroup || null,
-    p_has_bp: Boolean(params.hasBP),
-    p_has_sugar: Boolean(params.hasSugar),
-    p_other_conditions: params.otherConditions || null,
-    p_uhid: params.uhid || null,
-  });
+  const res = await withTimeout(
+    supabase.rpc('register_patient_and_visit_atomic', {
+      p_name: params.name,
+      p_age: params.age,
+      p_phone: params.phone,
+      p_doctor_id: doctorId,
+      p_blood_group: params.bloodGroup || null,
+      p_has_bp: Boolean(params.hasBP),
+      p_has_sugar: Boolean(params.hasSugar),
+      p_other_conditions: params.otherConditions || null,
+      p_uhid: params.uhid || null,
+    }),
+    3500
+  );
 
-  if (error) {
-    console.warn('RPC register_patient_and_visit_atomic failed, using fallback:', error.message);
-    throw new Error(error.message);
+  const data = res?.data;
+  const error = res?.error;
+
+  if (!res || error) {
+    console.warn('RPC register_patient_and_visit_atomic failed or timed out, using fallback:', error?.message);
+    throw new Error(error?.message || 'Network timeout');
   }
 
   const patient = data.patient as Patient;
@@ -115,24 +135,30 @@ export async function dispensePrescriptionAtomic(
     is_custom: Boolean(i.isCustom),
   }));
 
-  const { data, error } = await supabase.rpc('dispense_prescription_atomic', {
-    p_prescription_id: params.prescriptionId || null,
-    p_pharmacist_id: params.pharmacistId || null,
-    p_pharmacist_name: params.pharmacistName || 'Pharmacist on Duty',
-    p_items: formattedItems,
-    p_override_reason: params.overrideReason || null,
-    p_total_amount: params.totalAmount,
-    p_is_walk_in: Boolean(params.isWalkIn),
-    p_patient_id: params.patientId || null,
-    p_patient_name: params.patientName || null,
-    p_patient_phone: params.patientPhone || null,
-    p_patient_uhid: params.patientUhid || null,
-    p_uaid: params.uaid || null,
-    p_stay_day_number: params.stayDayNumber || null,
-  });
+  const res = await withTimeout(
+    supabase.rpc('dispense_prescription_atomic', {
+      p_prescription_id: params.prescriptionId || null,
+      p_pharmacist_id: params.pharmacistId || null,
+      p_pharmacist_name: params.pharmacistName || 'Pharmacist on Duty',
+      p_items: formattedItems,
+      p_override_reason: params.overrideReason || null,
+      p_total_amount: params.totalAmount,
+      p_is_walk_in: Boolean(params.isWalkIn),
+      p_patient_id: params.patientId || null,
+      p_patient_name: params.patientName || null,
+      p_patient_phone: params.patientPhone || null,
+      p_patient_uhid: params.patientUhid || null,
+      p_uaid: params.uaid || null,
+      p_stay_day_number: params.stayDayNumber || null,
+    }),
+    3500
+  );
 
-  if (error) {
-    throw new Error(error.message);
+  const data = res?.data;
+  const error = res?.error;
+
+  if (!res || error) {
+    throw new Error(error?.message || 'Dispense network timeout');
   }
 
   // Invalidate queries so that inventory and visit queues sync across devices

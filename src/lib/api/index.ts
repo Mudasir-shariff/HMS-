@@ -16,12 +16,35 @@ import type {
   HospitalSettings,
 } from '@/lib/types/database';
 
+/**
+ * Fast network timeout helper for low network / offline areas.
+ * Guarantees that slow or dropped network requests never freeze the UI.
+ */
+async function withTimeout<T>(promise: PromiseLike<T>, ms = 3000): Promise<T | null> {
+  let timer: any;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise,
+  ]);
+}
+
 export async function fetchUserProfiles(): Promise<User[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const res = await withTimeout(
+    supabase
+      .from('user_profiles')
+      .select('*')
+      .order('created_at', { ascending: false }),
+    3000
+  );
+  const data = res?.data;
+  const error = res?.error;
 
   if (error || !data || data.length === 0) {
     const local = HMSStore.getUsers();
@@ -47,13 +70,16 @@ export async function fetchUserProfiles(): Promise<User[]> {
 
 export async function fetchDoctors(): Promise<Doctor[]> {
   const supabase = createClient();
-  const [docsRes, profilesRes] = await Promise.all([
-    supabase.from('doctors').select('*').order('created_at', { ascending: true }),
-    supabase.from('user_profiles').select('*').eq('role', 'doctor'),
-  ]);
+  const res = await withTimeout(
+    Promise.all([
+      supabase.from('doctors').select('*').order('created_at', { ascending: true }),
+      supabase.from('user_profiles').select('*').eq('role', 'doctor'),
+    ]),
+    3000
+  );
 
-  const docs = docsRes.data || [];
-  const profiles = profilesRes.data || [];
+  const docs = res?.[0]?.data || [];
+  const profiles = res?.[1]?.data || [];
 
   const doctorMap = new Map<string, Doctor>();
 
@@ -151,7 +177,9 @@ export async function fetchPatients(search?: string): Promise<Patient[]> {
     query = query.or(`name.ilike.%${s}%,phone.ilike.%${s}%,uhid.ilike.%${s}%`);
   }
 
-  const { data, error } = await query;
+  const res = await withTimeout(query, 3000);
+  const data = res?.data;
+  const error = res?.error;
   if (error || !data || data.length === 0) {
     const local = HMSStore.getPatients();
     if (search && search.trim()) {
@@ -193,7 +221,9 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
     query = query.eq('status', filters.status);
   }
 
-  const { data, error } = await query;
+  const res = await withTimeout(query, 3000);
+  const data = res?.data;
+  const error = res?.error;
   const dbVisits: Visit[] = (!error && data) ? data.map((v: any) => ({
     id: v.id,
     visit_number: v.visit_number,
@@ -241,11 +271,20 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     rxQuery = rxQuery.eq('visit_id', visitId);
   }
 
-  const [rxRes, itemsRes, labsRes] = await Promise.all([
-    rxQuery,
-    supabase.from('prescription_items').select('*'),
-    supabase.from('lab_test_orders').select('*'),
-  ]);
+  const res = await withTimeout(
+    Promise.all([
+      rxQuery,
+      supabase.from('prescription_items').select('*'),
+      supabase.from('lab_test_orders').select('*'),
+    ]),
+    3000
+  );
+
+  const [rxRes, itemsRes, labsRes] = res || [
+    { data: null, error: true },
+    { data: null, error: true },
+    { data: null, error: true },
+  ];
 
   const allItems = itemsRes.data || [];
   const allLabs = labsRes.data || [];
@@ -311,10 +350,12 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
 
 export async function fetchDrugs(): Promise<Drug[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('drugs')
-    .select('*')
-    .order('name', { ascending: true });
+  const res = await withTimeout(
+    supabase.from('drugs').select('*').order('name', { ascending: true }),
+    3000
+  );
+  const data = res?.data;
+  const error = res?.error;
 
   if (error || !data || data.length === 0) {
     const local = HMSStore.getDrugs();
@@ -347,10 +388,15 @@ export async function fetchDrugs(): Promise<Drug[]> {
 
 export async function fetchDispensings(): Promise<Dispensing[]> {
   const supabase = createClient();
-  const [dispRes, itemsRes] = await Promise.all([
-    supabase.from('dispensings').select('*').order('created_at', { ascending: false }),
-    supabase.from('dispensing_items').select('*'),
-  ]);
+  const res = await withTimeout(
+    Promise.all([
+      supabase.from('dispensings').select('*').order('created_at', { ascending: false }),
+      supabase.from('dispensing_items').select('*'),
+    ]),
+    3000
+  );
+
+  const [dispRes, itemsRes] = res || [{ data: null, error: true }, { data: null, error: true }];
 
   if (dispRes.error || !dispRes.data || dispRes.data.length === 0) {
     return HMSStore.getDispensings() || [];
@@ -389,14 +435,18 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
 
 export async function fetchWards(): Promise<Ward[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('wards').select('*').order('name', { ascending: true });
+  const res = await withTimeout(supabase.from('wards').select('*').order('name', { ascending: true }), 3000);
+  const data = res?.data;
+  const error = res?.error;
   if (error || !data || data.length === 0) return HMSStore.getWards() || [];
   return data;
 }
 
 export async function fetchBeds(): Promise<Bed[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('beds').select('*').order('bed_number', { ascending: true });
+  const res = await withTimeout(supabase.from('beds').select('*').order('bed_number', { ascending: true }), 3000);
+  const data = res?.data;
+  const error = res?.error;
   if (error || !data || data.length === 0) return HMSStore.getBeds() || [];
   return data.map((b: any) => ({
     id: b.id,
@@ -410,14 +460,18 @@ export async function fetchBeds(): Promise<Bed[]> {
 
 export async function fetchAdmissions(): Promise<Admission[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('admissions').select('*').order('created_at', { ascending: false });
+  const res = await withTimeout(supabase.from('admissions').select('*').order('created_at', { ascending: false }), 3000);
+  const data = res?.data;
+  const error = res?.error;
   if (error || !data || data.length === 0) return HMSStore.getAdmissions() || [];
   return data;
 }
 
 export async function fetchSettings(): Promise<HospitalSettings | null> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('hospital_settings').select('*').limit(1).maybeSingle();
+  const res = await withTimeout(supabase.from('hospital_settings').select('*').limit(1).maybeSingle(), 3000);
+  const data = res?.data;
+  const error = res?.error;
   if (error || !data) {
     const s = HMSStore.getSettings();
     return {

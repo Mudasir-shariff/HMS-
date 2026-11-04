@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout';
 import { AuthProvider } from '@/lib/auth/context';
 import { QueryProvider } from '@/lib/query/provider';
 import { RealtimeProvider } from '@/lib/realtime/realtime-provider';
+import { PwaRegister } from '@/components/pwa-register';
 
 export const metadata: Metadata = {
   title: 'Hospital Management System',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <PwaRegister />
         <QueryProvider>
           <AuthProvider>
             <RealtimeProvider>

@@ -507,29 +507,38 @@ function PrescribeContent() {
           });
         }
 
-        // Direct update to Supabase visits table
-        if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(visitId)) {
-          const supabase = createClient();
-          await supabase
-            .from('visits')
-            .update({
-              status: 'prescribed',
-              follow_up_date: followUp || null,
-              instructions: instructions || null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', visitId);
-        }
       } catch (vErr) {
-        console.warn('Direct visit status update warning:', vErr);
+        console.warn('Local visit status update warning:', vErr);
       }
     }
 
-    // 3. Push prescription payload to Supabase
+    // 3. Push visit update & prescription payload to Supabase concurrently with fast timeout
     try {
-      await pushPrescriptionToSupabase(rxPayload);
+      const syncPromises: Promise<any>[] = [pushPrescriptionToSupabase(rxPayload)];
+
+      if (visitId && isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(visitId)) {
+        const supabase = createClient();
+        syncPromises.push(
+          Promise.resolve(
+            supabase
+              .from('visits')
+              .update({
+                status: 'prescribed',
+                follow_up_date: followUp || null,
+                instructions: instructions || null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', visitId)
+          )
+        );
+      }
+
+      await Promise.race([
+        Promise.allSettled(syncPromises),
+        new Promise((resolve) => setTimeout(resolve, 3500)),
+      ]);
     } catch (pErr) {
-      console.warn('pushPrescriptionToSupabase warning:', pErr);
+      console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
     }
 
     // 4. Invalidate query caches for instant UI update across pages
