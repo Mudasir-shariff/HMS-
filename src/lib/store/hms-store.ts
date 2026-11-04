@@ -899,8 +899,16 @@ export const HMSStore = {
     return getStorage<Ward[]>('wards', DEFAULT_WARDS);
   },
 
+  setWards(wards: Ward[]) {
+    setStorage('wards', wards);
+  },
+
   getBeds(): Bed[] {
     return getStorage<Bed[]>('beds', DEFAULT_BEDS);
+  },
+
+  setBeds(beds: Bed[]) {
+    setStorage('beds', beds);
   },
 
   getAdmissions(): Admission[] {

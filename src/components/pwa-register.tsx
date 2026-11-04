@@ -5,19 +5,17 @@ import { useEffect } from 'react';
 export function PwaRegister() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      const registerSW = () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .catch((err) => {
-            console.debug('ServiceWorker registration notice:', err);
-          });
-      };
-
-      if (document.readyState === 'complete') {
-        registerSW();
-      } else {
-        window.addEventListener('load', registerSW);
-        return () => window.removeEventListener('load', registerSW);
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister().catch(() => {});
+        }
+      });
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          for (const key of keys) {
+            caches.delete(key).catch(() => {});
+          }
+        });
       }
     }
   }, []);

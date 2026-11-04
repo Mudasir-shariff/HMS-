@@ -159,6 +159,12 @@ export default function AdminPage() {
     if (!deletingUser) return;
     const uid = deletingUser.id;
     HMSStore.deleteUser(uid);
+    queryClient.setQueriesData<any[]>({ queryKey: queryKeys.users.all }, (old) =>
+      old ? old.filter((u) => u.id !== uid) : []
+    );
+    queryClient.setQueriesData<any[]>({ queryKey: queryKeys.doctors.all }, (old) =>
+      old ? old.filter((d) => d.id !== uid && d.user_id !== uid) : []
+    );
     await deleteUserFromSupabase(uid);
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
@@ -179,8 +185,15 @@ export default function AdminPage() {
     if (!deletingPatient) return;
     const pid = deletingPatient.id;
     HMSStore.deletePatient(pid);
+    queryClient.setQueriesData<Patient[]>({ queryKey: queryKeys.patients.all }, (old) =>
+      old ? old.filter((p) => p.id !== pid) : []
+    );
+    queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+      old ? old.filter((v) => v.patient_id !== pid) : []
+    );
     await deletePatientFromSupabase(pid);
     queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     setDeletingPatient(null);
   }
 
@@ -188,6 +201,9 @@ export default function AdminPage() {
   async function handleDeleteVisit(v: Visit) {
     if (confirm(`Delete visit ${v.visit_number}?`)) {
       HMSStore.deleteVisit(v.id);
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+        old ? old.filter((x) => x.id !== v.id) : []
+      );
       await deleteVisitFromSupabase(v.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     }
@@ -197,6 +213,9 @@ export default function AdminPage() {
   async function handleDeleteRx(rxId: string) {
     if (confirm('Permanently delete this prescription?')) {
       HMSStore.deletePrescription(rxId);
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+        old ? old.filter((x) => x.id !== rxId) : []
+      );
       await deletePrescriptionFromSupabase(rxId);
       queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
@@ -207,6 +226,9 @@ export default function AdminPage() {
   async function handleDeleteDrug(d: Drug) {
     if (confirm(`Delete drug ${d.name} from inventory?`)) {
       HMSStore.deleteDrug(d.id);
+      queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
+        old ? old.filter((x) => x.id !== d.id) : []
+      );
       await deleteDrugFromSupabase(d.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
     }
@@ -216,6 +238,10 @@ export default function AdminPage() {
   async function handlePurgeAll() {
     if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
       HMSStore.resetAllData();
+      queryClient.setQueriesData({ queryKey: queryKeys.patients.all }, () => []);
+      queryClient.setQueriesData({ queryKey: queryKeys.visits.all }, () => []);
+      queryClient.setQueriesData({ queryKey: queryKeys.prescriptions.all }, () => []);
+      queryClient.setQueriesData({ queryKey: queryKeys.dispensings.all }, () => []);
       await purgeAllRecordsFromSupabase();
       queryClient.invalidateQueries();
     }

@@ -7,16 +7,16 @@ export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 1000 * 30, // 30 seconds fresh
+        staleTime: 1000 * 2, // 2 seconds fresh (ready to update within seconds)
         gcTime: 1000 * 60 * 60, // 1 hour retention in memory
-        refetchOnWindowFocus: false, // Save bandwidth & prevent chokes in low network
+        refetchOnWindowFocus: true, // Instantly refetch when user switches tabs or focuses window
         refetchOnReconnect: true,
-        networkMode: 'offlineFirst', // Always execute immediately offline or in low network
-        retry: 1, // Only 1 quick retry so failing requests don't queue up
-        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 3000),
+        networkMode: 'always', // Always query immediately
+        retry: 1, // Only 1 quick retry
+        retryDelay: 1000,
       },
       mutations: {
-        networkMode: 'offlineFirst',
+        networkMode: 'always',
         retry: 1,
       },
     },

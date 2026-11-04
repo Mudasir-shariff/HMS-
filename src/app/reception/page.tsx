@@ -24,7 +24,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { HMSStore } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth/context';
-import type { VisitStatus } from '@/lib/types/database';
+import type { VisitStatus, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 type StageFilter = 'all' | 'with_doctor' | 'waiting' | 'in_consultation' | 'prescribed' | 'dispensed';
@@ -112,6 +112,9 @@ export default function ReceptionPage() {
     if (current) {
       HMSStore.saveVisit({ ...current, status: 'in_consultation', updated_at });
     }
+    queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
+    );
     await supabase.from('visits').update({ status: 'in_consultation', updated_at }).eq('id', visitId);
     await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
@@ -124,6 +127,9 @@ export default function ReceptionPage() {
     if (current) {
       HMSStore.saveVisit({ ...current, status: 'prescribed', updated_at });
     }
+    queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
+    );
     await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
     await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
@@ -136,6 +142,9 @@ export default function ReceptionPage() {
     if (current) {
       HMSStore.saveVisit({ ...current, status: 'dispensed', updated_at });
     }
+    queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
+    );
     await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
     await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);

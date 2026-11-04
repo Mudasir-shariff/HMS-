@@ -105,6 +105,9 @@ export default function PharmacyPage() {
     setIsDeletingDrugId(drug.id);
     try {
       HMSStore.deleteDrug(drug.id);
+      queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
+        old ? old.filter((d) => d.id !== drug.id) : []
+      );
       await deleteDrugFromSupabase(drug.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
     } catch (err) {

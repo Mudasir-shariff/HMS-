@@ -89,11 +89,7 @@ export async function syncFromSupabase(): Promise<boolean> {
         updated_at: p.updated_at || p.created_at,
       }));
 
-      const existingP = HMSStore.getPatients();
-      const pMap = new Map<string, Patient>();
-      existingP.forEach((p) => pMap.set(p.id, p));
-      syncedPatients.forEach((p) => pMap.set(p.id, p));
-      HMSStore.setPatients(Array.from(pMap.values()));
+      HMSStore.setPatients(syncedPatients);
     }
 
     // 3. Fetch Visits
@@ -112,11 +108,7 @@ export async function syncFromSupabase(): Promise<boolean> {
         updated_at: v.updated_at || v.created_at,
       }));
 
-      const existingV = HMSStore.getVisits();
-      const vMap = new Map<string, Visit>();
-      existingV.forEach((v) => vMap.set(v.id, v));
-      syncedVisits.forEach((v) => vMap.set(v.id, v));
-      HMSStore.setVisits(Array.from(vMap.values()));
+      HMSStore.setVisits(syncedVisits);
     }
 
     // 4. Fetch Drugs
@@ -143,11 +135,7 @@ export async function syncFromSupabase(): Promise<boolean> {
         updated_at: d.updated_at || d.created_at,
       }));
 
-      const existingD = HMSStore.getDrugs();
-      const dMap = new Map<string, Drug>();
-      existingD.forEach((d) => dMap.set(d.id, d));
-      syncedDrugs.forEach((d) => dMap.set(d.id, d));
-      HMSStore.setDrugs(Array.from(dMap.values()));
+      HMSStore.setDrugs(syncedDrugs);
     }
 
     // 5. Fetch Prescriptions & Items
@@ -186,11 +174,7 @@ export async function syncFromSupabase(): Promise<boolean> {
         };
       });
 
-      const existingRx = HMSStore.getPrescriptions();
-      const rMap = new Map<string, Prescription>();
-      existingRx.forEach((r) => rMap.set(r.id, r));
-      syncedRx.forEach((r) => rMap.set(r.id, r));
-      HMSStore.setPrescriptions(Array.from(rMap.values()));
+      HMSStore.setPrescriptions(syncedRx);
     }
 
     // 6. Fetch Dispensings & Items
@@ -229,11 +213,7 @@ export async function syncFromSupabase(): Promise<boolean> {
         };
       });
 
-      const existingDisp = HMSStore.getDispensings();
-      const dispMap = new Map<string, Dispensing>();
-      existingDisp.forEach((d) => dispMap.set(d.id, d));
-      syncedDisp.forEach((d) => dispMap.set(d.id, d));
-      HMSStore.setDispensings(Array.from(dispMap.values()));
+      HMSStore.setDispensings(syncedDisp);
     }
 
     // 7. Fetch Settings

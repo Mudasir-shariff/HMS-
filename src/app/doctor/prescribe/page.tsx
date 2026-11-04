@@ -43,7 +43,7 @@ import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
 import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured } from '@/lib/supabase/sync';
-import type { PrescriptionItem, LabTestOrder, DrugType, Prescription } from '@/lib/types/database';
+import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 const LAB_TEST_SUGGESTIONS = [
@@ -471,9 +471,23 @@ function PrescribeContent() {
       created_at: new Date().toISOString(),
     };
 
-    // 1. Immediately save into local store (zero latency, works offline)
+    // 1. Immediately save into local store and query cache (zero latency)
     try {
       HMSStore.savePrescription(rxPayload);
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+        old ? [rxPayload, ...old.filter((p) => p.id !== rxId)] : [rxPayload]
+      );
+      if (visitId) {
+        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+          old
+            ? old.map((v) =>
+                v.id === visitId
+                  ? { ...v, status: 'prescribed' as const, updated_at: new Date().toISOString() }
+                  : v
+              )
+            : []
+        );
+      }
     } catch (e) {
       console.warn('HMSStore savePrescription warning:', e);
     }

@@ -7,7 +7,6 @@ import type {
   PrescriptionItem,
   Drug,
   Dispensing,
-  DispensingItem,
   Doctor,
   User,
   Ward,
@@ -17,7 +16,7 @@ import type {
 } from '@/lib/types/database';
 
 /**
- * Fast network timeout helper for low network / offline areas.
+ * Fast network timeout helper (3 seconds).
  * Guarantees that slow or dropped network requests never freeze the UI.
  */
 async function withTimeout<T>(promise: PromiseLike<T>, ms = 3000): Promise<T | null> {
@@ -46,25 +45,25 @@ export async function fetchUserProfiles(): Promise<User[]> {
   const data = res?.data;
   const error = res?.error;
 
-  if (error || !data || data.length === 0) {
+  if (error || !data) {
     const local = HMSStore.getUsers();
-    if (local && local.length > 0) {
-      return local.map((u) => ({
-        id: u.id,
-        email: u.email,
-        full_name: u.full_name,
-        role: u.role,
-        phone: u.phone,
-        specialization: u.specialization,
-        consultation_room: u.consultation_room,
-        consultation_fee: u.consultation_fee,
-        opd_timings: u.opd_timings,
-        is_active: u.is_active,
-        created_at: u.created_at,
-      }));
-    }
-    return [];
+    return (local || []).map((u) => ({
+      id: u.id,
+      email: u.email,
+      full_name: u.full_name,
+      role: u.role,
+      phone: u.phone,
+      specialization: u.specialization,
+      consultation_room: u.consultation_room,
+      consultation_fee: u.consultation_fee,
+      opd_timings: u.opd_timings,
+      is_active: u.is_active,
+      created_at: u.created_at,
+    }));
   }
+
+  // Sync to local store so deletions & additions stay in sync immediately
+  HMSStore.setUsers(data as any);
   return data;
 }
 
@@ -78,14 +77,30 @@ export async function fetchDoctors(): Promise<Doctor[]> {
     3000
   );
 
-  const docs = res?.[0]?.data || [];
-  const profiles = res?.[1]?.data || [];
+  const docs = res?.[0]?.data;
+  const profiles = res?.[1]?.data;
+
+  if (!docs && !profiles) {
+    // Only fall back to local store if network failed
+    const localDocs = HMSStore.getDoctors();
+    return (localDocs || []).map((d) => ({
+      id: d.id,
+      user_id: d.id,
+      full_name: d.full_name,
+      specialization: d.specialization,
+      consultation_room: d.consultation_room,
+      consultation_fee: d.consultation_fee ?? 500,
+      opd_timings: d.opd_timings,
+      is_available: (d as any).is_available ?? d.is_active ?? true,
+      created_at: d.created_at,
+    }));
+  }
 
   const doctorMap = new Map<string, Doctor>();
 
   // 1. Process records in public.doctors table
-  for (const doc of docs) {
-    const user = profiles.find((p: any) => p.id === doc.user_id || p.id === doc.id);
+  for (const doc of docs || []) {
+    const user = (profiles || []).find((p: any) => p.id === doc.user_id || p.id === doc.id);
     const key = doc.id || doc.user_id;
     doctorMap.set(key, {
       id: doc.id,
@@ -116,7 +131,7 @@ export async function fetchDoctors(): Promise<Doctor[]> {
   }
 
   // 2. Also ensure any doctor profile in user_profiles is included
-  for (const prof of profiles) {
+  for (const prof of profiles || []) {
     if (!doctorMap.has(prof.id)) {
       doctorMap.set(prof.id, {
         id: prof.id,
@@ -145,27 +160,7 @@ export async function fetchDoctors(): Promise<Doctor[]> {
     }
   }
 
-  if (doctorMap.size > 0) {
-    return Array.from(doctorMap.values());
-  }
-
-  // Fallback to local store doctors if database is temporarily empty
-  const localDocs = HMSStore.getDoctors();
-  if (localDocs && localDocs.length > 0) {
-    return localDocs.map((d) => ({
-      id: d.id,
-      user_id: d.id,
-      full_name: d.full_name,
-      specialization: d.specialization,
-      consultation_room: d.consultation_room,
-      consultation_fee: d.consultation_fee ?? 500,
-      opd_timings: d.opd_timings,
-      is_available: (d as any).is_available ?? d.is_active ?? true,
-      created_at: d.created_at,
-    }));
-  }
-
-  return [];
+  return Array.from(doctorMap.values());
 }
 
 export async function fetchPatients(search?: string): Promise<Patient[]> {
@@ -180,7 +175,8 @@ export async function fetchPatients(search?: string): Promise<Patient[]> {
   const res = await withTimeout(query, 3000);
   const data = res?.data;
   const error = res?.error;
-  if (error || !data || data.length === 0) {
+
+  if (error || !data) {
     const local = HMSStore.getPatients();
     if (search && search.trim()) {
       const s = search.trim().toLowerCase();
@@ -193,6 +189,12 @@ export async function fetchPatients(search?: string): Promise<Patient[]> {
     }
     return local || [];
   }
+
+  // If full list returned without filter, update local store so deletions match reality
+  if (!search) {
+    HMSStore.setPatients(data);
+  }
+
   return data;
 }
 
@@ -224,7 +226,15 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
   const res = await withTimeout(query, 3000);
   const data = res?.data;
   const error = res?.error;
-  const dbVisits: Visit[] = (!error && data) ? data.map((v: any) => ({
+
+  if (error || !data) {
+    let local = HMSStore.getVisits();
+    if (filters?.doctorId) local = local.filter((v) => v.doctor_id === filters.doctorId);
+    if (filters?.status) local = local.filter((v) => v.status === filters.status);
+    return local;
+  }
+
+  const dbVisits: Visit[] = data.map((v: any) => ({
     id: v.id,
     visit_number: v.visit_number,
     patient_id: v.patient_id,
@@ -235,33 +245,14 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
     instructions: v.instructions || undefined,
     created_at: v.created_at,
     updated_at: v.updated_at || v.created_at,
-  })) : [];
+  }));
 
-  const localVisits = HMSStore.getVisits();
-  const visitMap = new Map<string, Visit>();
-  dbVisits.forEach((v) => visitMap.set(v.id, v));
-
-  localVisits.forEach((lv) => {
-    const existing = visitMap.get(lv.id);
-    if (!existing) {
-      visitMap.set(lv.id, lv);
-    } else {
-      const localTime = new Date(lv.updated_at || lv.created_at).getTime();
-      const dbTime = new Date(existing.updated_at || existing.created_at).getTime();
-      if (localTime > dbTime || (lv.status === 'prescribed' && existing.status !== 'prescribed')) {
-        visitMap.set(lv.id, { ...existing, ...lv });
-      }
-    }
-  });
-
-  let results = Array.from(visitMap.values()).sort((a, b) => a.token_number - b.token_number);
-  if (filters?.doctorId) {
-    results = results.filter((v) => v.doctor_id === filters.doctorId);
+  // Update local store with true remote state
+  if (!filters?.doctorId && !filters?.status) {
+    HMSStore.setVisits(dbVisits);
   }
-  if (filters?.status) {
-    results = results.filter((v) => v.status === filters.status);
-  }
-  return results;
+
+  return dbVisits;
 }
 
 export async function fetchPrescriptions(visitId?: string): Promise<Prescription[]> {
@@ -286,66 +277,60 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     { data: null, error: true },
   ];
 
+  if (rxRes.error || !rxRes.data) {
+    let local = HMSStore.getPrescriptions();
+    if (visitId) local = local.filter((p) => p.visit_id === visitId);
+    return local;
+  }
+
   const allItems = itemsRes.data || [];
   const allLabs = labsRes.data || [];
 
-  const dbPrescriptions: Prescription[] = (!rxRes.error && rxRes.data)
-    ? rxRes.data.map((r: any) => ({
-        id: r.id,
-        visit_id: r.visit_id,
-        doctor_id: r.doctor_id,
-        patient_id: r.patient_id,
-        notes: r.notes || undefined,
-        uaid: r.uaid || undefined,
-        stay_day_number: r.stay_day_number || undefined,
-        created_at: r.created_at,
-        items: allItems
-          .filter((it: any) => it.prescription_id === r.id)
-          .map((it: any) => ({
-            id: it.id,
-            prescription_id: it.prescription_id,
-            drug_id: it.drug_id || '',
-            drug_name: it.drug_name,
-            dose_morning: Boolean(it.dose_morning),
-            dose_afternoon: Boolean(it.dose_afternoon),
-            dose_night: Boolean(it.dose_night),
-            dose_relation: it.dose_relation,
-            num_days: Number(it.num_days) || 1,
-            quantity: it.quantity ? Number(it.quantity) : undefined,
-            is_custom: Boolean(it.is_custom),
-            item_type: it.item_type || undefined,
-            custom_unit: it.custom_unit || undefined,
-            added_by_pharmacist: Boolean(it.added_by_pharmacist),
-            pharmacist_notes: it.pharmacist_notes || undefined,
-            created_at: it.created_at,
-          })),
-        lab_tests: allLabs
-          .filter((lt: any) => lt.prescription_id === r.id)
-          .map((lt: any) => ({
-            id: lt.id,
-            prescription_id: lt.prescription_id,
-            test_name: lt.test_name,
-            notes: lt.notes || undefined,
-            created_at: lt.created_at,
-          })),
-      }))
-    : [];
+  const dbPrescriptions: Prescription[] = rxRes.data.map((r: any) => ({
+    id: r.id,
+    visit_id: r.visit_id,
+    doctor_id: r.doctor_id,
+    patient_id: r.patient_id,
+    notes: r.notes || undefined,
+    uaid: r.uaid || undefined,
+    stay_day_number: r.stay_day_number || undefined,
+    created_at: r.created_at,
+    items: allItems
+      .filter((it: any) => it.prescription_id === r.id)
+      .map((it: any) => ({
+        id: it.id,
+        prescription_id: it.prescription_id,
+        drug_id: it.drug_id || '',
+        drug_name: it.drug_name,
+        dose_morning: Boolean(it.dose_morning),
+        dose_afternoon: Boolean(it.dose_afternoon),
+        dose_night: Boolean(it.dose_night),
+        dose_relation: it.dose_relation,
+        num_days: Number(it.num_days) || 1,
+        quantity: it.quantity ? Number(it.quantity) : undefined,
+        is_custom: Boolean(it.is_custom),
+        item_type: it.item_type || undefined,
+        custom_unit: it.custom_unit || undefined,
+        added_by_pharmacist: Boolean(it.added_by_pharmacist),
+        pharmacist_notes: it.pharmacist_notes || undefined,
+        created_at: it.created_at,
+      })),
+    lab_tests: allLabs
+      .filter((lt: any) => lt.prescription_id === r.id)
+      .map((lt: any) => ({
+        id: lt.id,
+        prescription_id: lt.prescription_id,
+        test_name: lt.test_name,
+        notes: lt.notes || undefined,
+        created_at: lt.created_at,
+      })),
+  }));
 
-  // Merge with local prescriptions to guarantee instant availability
-  let local = HMSStore.getPrescriptions();
-  if (visitId) {
-    local = local.filter((p) => p.visit_id === visitId);
+  if (!visitId) {
+    HMSStore.setPrescriptions(dbPrescriptions);
   }
 
-  const rxMap = new Map<string, Prescription>();
-  dbPrescriptions.forEach((r) => rxMap.set(r.id, r));
-  local.forEach((lr) => {
-    if (!rxMap.has(lr.id)) {
-      rxMap.set(lr.id, lr);
-    }
-  });
-
-  return Array.from(rxMap.values());
+  return dbPrescriptions;
 }
 
 export async function fetchDrugs(): Promise<Drug[]> {
@@ -357,12 +342,11 @@ export async function fetchDrugs(): Promise<Drug[]> {
   const data = res?.data;
   const error = res?.error;
 
-  if (error || !data || data.length === 0) {
-    const local = HMSStore.getDrugs();
-    return local || [];
+  if (error || !data) {
+    return HMSStore.getDrugs() || [];
   }
 
-  return data.map((d: any) => ({
+  const mappedDrugs: Drug[] = data.map((d: any) => ({
     id: d.id,
     name: d.name,
     drug_type: d.drug_type,
@@ -384,6 +368,9 @@ export async function fetchDrugs(): Promise<Drug[]> {
     created_at: d.created_at,
     updated_at: d.updated_at || d.created_at,
   }));
+
+  HMSStore.setDrugs(mappedDrugs);
+  return mappedDrugs;
 }
 
 export async function fetchDispensings(): Promise<Dispensing[]> {
@@ -398,12 +385,12 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
 
   const [dispRes, itemsRes] = res || [{ data: null, error: true }, { data: null, error: true }];
 
-  if (dispRes.error || !dispRes.data || dispRes.data.length === 0) {
+  if (dispRes.error || !dispRes.data) {
     return HMSStore.getDispensings() || [];
   }
 
   const allItems = itemsRes.data || [];
-  return dispRes.data.map((d: any) => ({
+  const mappedDisp = dispRes.data.map((d: any) => ({
     id: d.id,
     prescription_id: d.prescription_id || undefined,
     patient_id: d.patient_id || undefined,
@@ -431,6 +418,9 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
         created_at: it.created_at,
       })),
   }));
+
+  HMSStore.setDispensings(mappedDisp);
+  return mappedDisp;
 }
 
 export async function fetchWards(): Promise<Ward[]> {
@@ -438,7 +428,8 @@ export async function fetchWards(): Promise<Ward[]> {
   const res = await withTimeout(supabase.from('wards').select('*').order('name', { ascending: true }), 3000);
   const data = res?.data;
   const error = res?.error;
-  if (error || !data || data.length === 0) return HMSStore.getWards() || [];
+  if (error || !data) return HMSStore.getWards() || [];
+  HMSStore.setWards(data);
   return data;
 }
 
@@ -447,8 +438,8 @@ export async function fetchBeds(): Promise<Bed[]> {
   const res = await withTimeout(supabase.from('beds').select('*').order('bed_number', { ascending: true }), 3000);
   const data = res?.data;
   const error = res?.error;
-  if (error || !data || data.length === 0) return HMSStore.getBeds() || [];
-  return data.map((b: any) => ({
+  if (error || !data) return HMSStore.getBeds() || [];
+  const beds = data.map((b: any) => ({
     id: b.id,
     ward_id: b.ward_id,
     bed_number: b.bed_number,
@@ -456,6 +447,8 @@ export async function fetchBeds(): Promise<Bed[]> {
     is_occupied: Boolean(b.is_occupied),
     created_at: b.created_at,
   }));
+  HMSStore.setBeds(beds);
+  return beds;
 }
 
 export async function fetchAdmissions(): Promise<Admission[]> {
@@ -463,7 +456,8 @@ export async function fetchAdmissions(): Promise<Admission[]> {
   const res = await withTimeout(supabase.from('admissions').select('*').order('created_at', { ascending: false }), 3000);
   const data = res?.data;
   const error = res?.error;
-  if (error || !data || data.length === 0) return HMSStore.getAdmissions() || [];
+  if (error || !data) return HMSStore.getAdmissions() || [];
+  HMSStore.setAdmissions(data);
   return data;
 }
 
@@ -493,7 +487,7 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
       updated_at: new Date().toISOString(),
     };
   }
-  return {
+  const settings: HospitalSettings = {
     id: data.id,
     hospital_name: data.hospital_name || 'RADHAKRISHNA HOSPITAL',
     address: data.address || '',
@@ -511,4 +505,6 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
     expiry_days_warning: data.expiry_days_warning || [90, 60, 30],
     updated_at: data.updated_at || new Date().toISOString(),
   };
+  HMSStore.saveSettings(settings);
+  return settings;
 }
