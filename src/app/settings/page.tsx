@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, CheckCircle, Hospital, ShieldCheck, Printer, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Settings, Save, CheckCircle, Hospital, ShieldCheck, Printer, MessageSquare, AlertTriangle, PhoneCall, Mail } from 'lucide-react';
 import { Card, CardHeader, Button, Input, Select, Textarea, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { useHospitalSettings } from '@/lib/query/hooks';
@@ -258,6 +258,34 @@ export default function SettingsPage() {
                 <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
                   Parameters comply with India Digital Personal Data Protection Act, ABDM standards, and Pharmacy Schedule H safety policies.
                 </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border border-[var(--line-soft)] shadow-xs">
+            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[var(--line-soft)]">
+              <PhoneCall size={16} className="text-[var(--green-700)]" />
+              <p className="font-semibold text-xs text-[var(--text-strong)]">Technical Support (opti-x.in)</p>
+            </div>
+            <div className="space-y-2 text-[11px] text-[var(--text-muted)]">
+              <div>
+                <span className="font-medium text-[var(--text-strong)] block">Helpline / Call Support:</span>
+                <a href="tel:8123649448" className="text-sm font-bold text-[var(--green-800)] hover:underline">
+                  8123649448
+                </a>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Calling Hours: 9:00 PM – 10:00 PM (Night)</p>
+              </div>
+              <div className="pt-1.5 border-t border-[var(--line-soft)]">
+                <span className="font-medium text-[var(--text-strong)] block">Support Email:</span>
+                <a href="mailto:shariffmudasirshariff@gmail.com" className="text-[var(--green-800)] hover:underline font-medium break-all">
+                  shariffmudasirshariff@gmail.com
+                </a>
+              </div>
+              <div className="pt-1.5 border-t border-[var(--line-soft)] text-[10px]">
+                <span>Engineered by </span>
+                <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="font-bold text-[var(--green-800)] hover:underline">
+                  opti-x.in
+                </a>
               </div>
             </div>
           </Card>

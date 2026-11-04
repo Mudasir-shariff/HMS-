@@ -2,7 +2,7 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Activity, Eye, EyeOff, ShieldCheck, UserPlus, FileText } from 'lucide-react';
+import { Activity, Eye, EyeOff, ShieldCheck, UserPlus, FileText, PhoneCall, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
@@ -187,6 +187,32 @@ function LoginForm() {
             <Link href="/register" className="font-semibold text-[var(--green-700)] hover:underline">
               Register Staff / Doctor
             </Link>
+          </div>
+        </div>
+
+        {/* Support Helpdesk Box */}
+        <div className="bg-white rounded-[var(--r-card)] p-4 mt-5 border border-[var(--line-soft)] shadow-xs text-xs">
+          <p className="font-semibold text-[var(--green-900)] flex items-center gap-1.5 mb-1.5 text-xs">
+            <PhoneCall size={14} className="text-[var(--green-700)]" />
+            Support & Technical Helpdesk
+          </p>
+          <div className="space-y-1.5 text-[11px] text-[var(--text-muted)]">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-[var(--text-strong)]">Helpline:</span>
+              <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
+                8123649448
+              </a>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+              <span>Calling Hours:</span>
+              <span className="font-medium">9:00 PM – 10:00 PM (Night)</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-[var(--line-soft)] pt-1.5">
+              <span className="font-medium text-[var(--text-strong)]">Email:</span>
+              <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline">
+                shariffmudasirshariff@gmail.com
+              </a>
+            </div>
           </div>
         </div>
 

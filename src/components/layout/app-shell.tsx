@@ -19,6 +19,9 @@ import {
   User,
   ShieldAlert,
   ArrowRight,
+  PhoneCall,
+  Mail,
+  HelpCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
@@ -71,6 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
 
   // On auth pages, render children with no chrome
   if (AUTH_PATHS.some((p) => pathname.startsWith(p))) {
@@ -224,6 +228,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       Terms & Conditions
                     </Link>
 
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setSupportModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors text-left"
+                    >
+                      <HelpCircle size={14} className="text-[var(--green-700)]" />
+                      Help & Support
+                    </button>
+
                     <div className="border-t border-[var(--line-soft)] mt-1 pt-1">
                       <button
                         onClick={signOut}
@@ -307,13 +323,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Global Footer Branding */}
-        <footer className="mt-16 pt-6 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Global Footer Branding & Support Information */}
+        <footer className="mt-16 pt-6 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="Radha Krishna HMS" className="h-5 w-auto object-contain" />
             <span className="font-semibold text-[var(--text-strong)]">Radha Krishna HMS</span>
             <span>· All Rights Reserved</span>
           </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] bg-[var(--bg-card)] px-3.5 py-1.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] shadow-xs">
+            <span className="font-semibold text-[var(--text-strong)] flex items-center gap-1">
+              <PhoneCall size={12} className="text-[var(--green-700)]" /> Support:
+            </span>
+            <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
+              8123649448
+            </a>
+            <span className="text-[10px] text-[var(--text-muted)]">(Calling: 9:00 PM – 10:00 PM Night)</span>
+            <span>·</span>
+            <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline flex items-center gap-1">
+              <Mail size={12} /> shariffmudasirshariff@gmail.com
+            </a>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <span>Engineered & Powered by</span>
             <a
@@ -327,6 +358,81 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       </main>
+
+      {/* ── Help & Support Modal ── */}
+      {supportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[var(--r-card)] max-w-md w-full p-6 shadow-2xl border border-[var(--line-soft)] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft)]">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-full bg-[var(--green-100)] text-[var(--green-800)] flex items-center justify-center">
+                  <PhoneCall size={18} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-[var(--text-strong)]">Radha Krishna HMS Support</h3>
+                  <p className="text-[11px] text-[var(--text-muted)]">opti-x.in Technical Helpdesk</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(false)}
+                className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-tile)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] flex items-start gap-3">
+                <div className="h-7 w-7 rounded-full bg-[var(--green-800)] text-white flex items-center justify-center shrink-0 mt-0.5">
+                  <PhoneCall size={14} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-[var(--text-strong)]">Direct Helpline</p>
+                  <a href="tel:8123649448" className="text-base font-bold text-[var(--green-800)] hover:underline block mt-0.5">
+                    8123649448
+                  </a>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Calling Timings: <strong>9:00 PM – 10:00 PM (Night)</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] flex items-start gap-3">
+                <div className="h-7 w-7 rounded-full bg-[var(--green-800)] text-white flex items-center justify-center shrink-0 mt-0.5">
+                  <Mail size={14} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-[var(--text-strong)]">Email Support</p>
+                  <a href="mailto:shariffmudasirshariff@gmail.com" className="text-xs font-semibold text-[var(--green-800)] hover:underline break-all block mt-0.5">
+                    shariffmudasirshariff@gmail.com
+                  </a>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Available 24/7 for ticket queries, bug reports & feature requests
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] text-center text-[11px] text-[var(--text-muted)]">
+                Engineered with precision by{' '}
+                <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="font-bold text-[var(--green-800)] hover:underline">
+                  opti-x.in
+                </a>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(false)}
+                className="w-full h-9 rounded-[var(--r-control)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all"
+              >
+                Close Support
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
