@@ -823,23 +823,26 @@ function PrescribeContent() {
             >
               {/* 1. Header: Hospital Brand & Info */}
               <div className="flex justify-between items-start pb-2 border-b-2 border-[#134e4a]">
-                <div>
-                  <h1 className="font-serif text-2xl sm:text-[28px] font-bold tracking-wide text-[#134e4a] uppercase leading-tight">
-                    {settings.hospital_name || 'RADHAKRISHNA HOSPITAL'}
-                  </h1>
-                  <p className="font-serif text-[11px] sm:text-xs font-semibold tracking-[0.2em] text-gray-800 uppercase mt-0.5">
-                    {settings.prescription_header || 'MULTISPECIALITY CARE'}
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-gray-600 mt-1">
-                    {settings.address || 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka'}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <img src="/logo.png" alt="Radha Krishna HMS" className="h-12 w-auto object-contain" />
+                  <div>
+                    <h1 className="font-serif text-2xl sm:text-[28px] font-bold tracking-wide text-[#134e4a] uppercase leading-tight">
+                      {settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}
+                    </h1>
+                    <p className="font-serif text-[11px] sm:text-xs font-semibold tracking-[0.2em] text-gray-800 uppercase mt-0.5">
+                      {settings.prescription_header || 'MULTISPECIALITY CARE'}
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-gray-600 mt-1">
+                      {settings.address || 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka'}
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="font-serif text-sm sm:text-base font-bold text-[#b91c1c] uppercase tracking-wider">
                     PRESCRIPTION
                   </p>
                   <p className="italic text-[10px] sm:text-[11px] text-gray-500 mt-0.5">
-                    Software-generated copy
+                    Powered by opti-x.in
                   </p>
                 </div>
               </div>
@@ -964,8 +967,9 @@ function PrescribeContent() {
 
               {/* 9. Footer & Doctor Signature Block */}
               <div className="mt-8 pt-3 border-t border-gray-400 flex flex-col sm:flex-row justify-between items-end gap-4 text-xs font-mono">
-                <div className="text-[10px] sm:text-[11px] italic text-gray-600 max-w-sm">
-                  Please follow the doctor&apos;s advice. Consult the hospital if symptoms worsen.
+                <div className="text-[10px] sm:text-[11px] text-gray-600 max-w-sm space-y-0.5">
+                  <p className="italic">Please follow the doctor&apos;s advice. Consult the hospital if symptoms worsen.</p>
+                  <p className="text-[9px] text-gray-500 font-sans">Radha Krishna HMS · Engineered by opti-x.in</p>
                 </div>
                 <div className="text-right min-w-[220px]">
                   <p className="text-[11px] text-gray-700 mb-8 font-semibold">Doctor&apos;s Signature / Seal</p>

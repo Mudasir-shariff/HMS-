@@ -17,13 +17,13 @@ export default function SettingsPage() {
 
   const [form, setForm] = useState<HospitalSettings>({
     id: 'default',
-    hospital_name: 'RADHAKRISHNA HOSPITAL',
+    hospital_name: 'RADHA KRISHNA HOSPITAL',
     address: 'Main Road, Hospital Circle',
     phone: '+91 98765 43210',
     token_reset_hour: 0,
     ip_hours_per_day: 18,
     prescription_paper_size: 'A4',
-    prescription_header: 'RADHAKRISHNA MULTISPECIALITY CARE',
+    prescription_header: 'RADHA KRISHNA MULTISPECIALITY CARE',
     prescription_footer: "Please follow the doctor's instructions carefully.",
     default_printer: 'Hospital Reception LaserJet Pro',
     schedule_h_action: 'warn',

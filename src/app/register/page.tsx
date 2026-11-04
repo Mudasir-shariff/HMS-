@@ -288,10 +288,13 @@ export default function RegisterPage() {
           >
             <ArrowLeft size={18} />
           </Link>
+          <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs">
+            <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
+          </div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-strong)]">Register Staff / Doctor</h1>
             <p className="text-xs text-[var(--text-muted)]">
-              Create an official login for Radhakrishna Hospital Management System
+              Create an official login for Radha Krishna HMS · Powered by <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="text-[var(--green-700)] hover:underline font-semibold">opti-x.in</a>
             </p>
           </div>
         </div>

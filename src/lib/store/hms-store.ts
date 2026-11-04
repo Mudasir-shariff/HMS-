@@ -51,8 +51,8 @@ const DEFAULT_ADMISSIONS: Admission[] = [];
 
 const DEFAULT_SETTINGS: HospitalSettings = {
   id: 'settings-1',
-  hospital_name: 'RADHAKRISHNA HOSPITAL',
-  hospital_logo_url: '',
+  hospital_name: 'RADHA KRISHNA HOSPITAL',
+  hospital_logo_url: '/logo.png',
   address: 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka',
   phone: '+91 8154 252222',
   token_reset_hour: 0,

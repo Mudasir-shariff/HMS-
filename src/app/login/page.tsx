@@ -68,13 +68,21 @@ function LoginForm() {
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="flex flex-col items-center mb-6 text-center">
-          <div className="h-14 w-14 rounded-[var(--r-control)] bg-[var(--green-700)] flex items-center justify-center mb-3 shadow-[var(--shadow-float)]">
-            <Activity size={28} className="text-white" />
+          <div className="h-20 w-auto mb-3 flex items-center justify-center p-2 rounded-[var(--r-card)] bg-white border border-[var(--line-soft)] shadow-[var(--shadow-float)]">
+            <img src="/logo.png" alt="Radha Krishna HMS by opti-x.in" className="h-16 w-auto object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-[-0.02em]">RADHAKRISHNA HOSPITAL</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-[-0.02em]">RADHA KRISHNA HMS</h1>
           <p className="text-xs font-medium text-[var(--text-muted)] mt-1 tracking-wide uppercase">
             Healthcare Management System · Staff Portal
           </p>
+          <a
+            href="https://opti-x.in"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-semibold text-[var(--green-700)] hover:underline mt-1 inline-flex items-center gap-1"
+          >
+            Crafted by opti-x.in
+          </a>
         </div>
 
         {/* If no accounts registered yet, show setup guide */}
@@ -193,6 +201,19 @@ function LoginForm() {
             <ShieldCheck size={12} />
             Terms & Conditions
           </Link>
+        </div>
+
+        {/* Creator Attribution */}
+        <div className="text-center mt-5 text-[11px] text-[var(--text-muted)]">
+          Developed & Engineered by{' '}
+          <a
+            href="https://opti-x.in"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-[var(--green-800)] hover:underline"
+          >
+            opti-x.in
+          </a>
         </div>
       </div>
     </div>

@@ -124,15 +124,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
 
             <Link href={ROLE_HOME[user.role] || '/'} className="flex items-center gap-2.5">
-              <div className="h-10 w-10 rounded-[var(--r-control)] bg-[var(--green-600)] flex items-center justify-center shadow-sm">
-                <Activity size={20} className="text-white" />
+              <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs">
+                <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
               </div>
               <div>
-                <span className="text-sm font-semibold text-[var(--text-strong)] hidden sm:block leading-none">
-                  Hospital MS
+                <span className="text-sm font-bold text-[var(--text-strong)] hidden sm:block leading-none">
+                  Radha Krishna HMS
                 </span>
-                <span className="text-[10px] text-[var(--green-700)] font-medium hidden sm:block mt-0.5">
-                  {roleLabels[user.role]} Portal
+                <span className="text-[10px] text-[var(--text-muted)] font-medium hidden sm:block mt-0.5">
+                  {roleLabels[user.role]} Portal · <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="text-[var(--green-700)] hover:underline font-semibold">opti-x.in</a>
                 </span>
               </div>
             </Link>
@@ -283,27 +283,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── Main Content with Role Access Guard ── */}
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] mx-auto">
-        {!hasAccess ? (
-          <div className="py-16 text-center max-w-md mx-auto">
-            <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
-              <ShieldAlert size={32} />
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] mx-auto flex flex-col min-h-[calc(100vh-64px)] justify-between">
+        <div>
+          {!hasAccess ? (
+            <div className="py-16 text-center max-w-md mx-auto">
+              <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-semibold text-[var(--text-strong)] mb-1">Access Restricted</h2>
+              <p className="text-xs text-[var(--text-muted)] mb-5 leading-relaxed">
+                Your account role (<strong>{roleLabels[user.role]}</strong>) does not have permission to view this department.
+                Each department is strictly isolated in the Hospital Management System.
+              </p>
+              <Link href={ROLE_HOME[user.role]}>
+                <button className="h-10 px-5 rounded-[var(--r-control)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all inline-flex items-center gap-2">
+                  Return to {roleLabels[user.role]} Portal
+                  <ArrowRight size={14} />
+                </button>
+              </Link>
             </div>
-            <h2 className="text-xl font-semibold text-[var(--text-strong)] mb-1">Access Restricted</h2>
-            <p className="text-xs text-[var(--text-muted)] mb-5 leading-relaxed">
-              Your account role (<strong>{roleLabels[user.role]}</strong>) does not have permission to view this department.
-              Each department is strictly isolated in the Hospital Management System.
-            </p>
-            <Link href={ROLE_HOME[user.role]}>
-              <button className="h-10 px-5 rounded-[var(--r-control)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all inline-flex items-center gap-2">
-                Return to {roleLabels[user.role]} Portal
-                <ArrowRight size={14} />
-              </button>
-            </Link>
+          ) : (
+            children
+          )}
+        </div>
+
+        {/* Global Footer Branding */}
+        <footer className="mt-16 pt-6 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="Radha Krishna HMS" className="h-5 w-auto object-contain" />
+            <span className="font-semibold text-[var(--text-strong)]">Radha Krishna HMS</span>
+            <span>· All Rights Reserved</span>
           </div>
-        ) : (
-          children
-        )}
+          <div className="flex items-center gap-1.5">
+            <span>Engineered & Powered by</span>
+            <a
+              href="https://opti-x.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-[var(--green-800)] hover:underline"
+            >
+              opti-x.in
+            </a>
+          </div>
+        </footer>
       </main>
     </div>
   );

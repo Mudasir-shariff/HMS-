@@ -7,9 +7,13 @@ import { RealtimeProvider } from '@/lib/realtime/realtime-provider';
 import { PwaRegister } from '@/components/pwa-register';
 
 export const metadata: Metadata = {
-  title: 'Hospital Management System',
-  description: 'OPD, In-Patient, and Pharmacy management for hospitals',
+  title: 'Radha Krishna HMS - Hospital Management System',
+  description: 'Radha Krishna Hospital Management System (OPD, IP, Pharmacy) · Made by opti-x.in',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export const viewport: Viewport = {

@@ -48,7 +48,7 @@ export default function HomePage() {
         title={`Welcome, ${user.fullName}`}
         subtitle={`${user.role.toUpperCase()} PORTAL · ${
           user.specialization ? `${user.specialization} · ` : ''
-        }Hospital Management System`}
+        }Radha Krishna HMS · by opti-x.in`}
         action={
           isAdmin ? (
             <Link href="/register">

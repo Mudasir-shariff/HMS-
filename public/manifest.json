@@ -1,7 +1,7 @@
 {
-  "name": "Hospital Management System",
-  "short_name": "HMS",
-  "description": "OPD, Pharmacy and In-Patient management",
+  "name": "Radha Krishna HMS",
+  "short_name": "RK HMS",
+  "description": "Radha Krishna Hospital Management System (OPD, IP, Pharmacy) · Made by opti-x.in",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#EDEDEA",
@@ -9,14 +9,8 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/logo.png",
+      "sizes": "545x225",
       "type": "image/png",
       "purpose": "any maskable"
     }
