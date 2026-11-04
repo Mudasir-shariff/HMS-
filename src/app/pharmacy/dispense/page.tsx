@@ -33,6 +33,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
+import { createClient } from '@/lib/supabase/client';
 import type { DrugType, Drug, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 interface DispenseItemState {
@@ -206,6 +207,7 @@ function DispenseContent() {
   const [newDosage, setNewDosage] = useState('1 tablet daily');
 
   const [overrideReason, setOverrideReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [dispensedDone, setDispensedDone] = useState(false);
   const [deliveryResult, setDeliveryResult] = useState<{
     time: string;
@@ -369,6 +371,8 @@ function DispenseContent() {
   // DELIVERED BUTTON HANDLER (PRD v1.1 Rule: Only confirmation step. No bill needed)
   // ────────────────────────────────────────────────────────────────────────────
   async function handleMarkDelivered() {
+    if (isSubmitting) return;
+
     if (includedItems.length === 0) {
       alert('Please include at least one medicine to dispense.');
       return;
@@ -379,6 +383,7 @@ function DispenseContent() {
       return;
     }
 
+    setIsSubmitting(true);
     const pharmacistName = user?.fullName || 'Pharmacist on Duty';
     const pharmacistId = user?.id && user.id.length === 36 ? user.id : (HMSStore.getUsers().find(u => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID());
 
@@ -435,6 +440,7 @@ function DispenseContent() {
       console.warn('dispensePrescriptionAtomic error:', err?.message);
       if (err?.message?.includes('already been dispensed') || err?.message?.includes('Insufficient stock')) {
         alert(err.message);
+        setIsSubmitting(false);
         return;
       }
       // Fallback local store
@@ -461,6 +467,21 @@ function DispenseContent() {
         overrideReason: overrideReason.trim() || undefined,
         hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
       });
+
+      // Explicitly update visit status in Supabase so Reception and Doctor portals see completed status immediately
+      if (visit?.id) {
+        try {
+          const supabase = createClient();
+          await supabase
+            .from('visits')
+            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
+            .eq('id', visit.id);
+        } catch (dbErr) {
+          console.warn('Fallback visit update error:', dbErr);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
 
     queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
@@ -814,9 +835,11 @@ function DispenseContent() {
               size="lg"
               icon={<Check size={18} />}
               onClick={handleMarkDelivered}
+              disabled={isSubmitting}
+              loading={isSubmitting}
               className="bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] px-8 shadow-sm font-semibold"
             >
-              Delivered (₹{totalAmount.toFixed(2)})
+              {isSubmitting ? 'Delivering...' : `Delivered (₹${totalAmount.toFixed(2)})`}
             </Button>
           </div>
         </div>

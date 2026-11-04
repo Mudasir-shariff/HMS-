@@ -604,6 +604,22 @@ export const HMSStore = {
     setStorage('dispensings', dispensings);
   },
 
+  saveDispensing(disp: Dispensing) {
+    const list = this.getDispensings();
+    const idx = list.findIndex((d) => d.id === disp.id);
+    if (idx >= 0) {
+      list[idx] = disp;
+    } else {
+      list.unshift(disp);
+    }
+    setStorage('dispensings', list);
+  },
+
+  deleteDispensing(id: string) {
+    const list = this.getDispensings().filter((d) => d.id !== id);
+    setStorage('dispensings', list);
+  },
+
   dispensePrescription(data: {
     visitId?: string;
     prescriptionId?: string;

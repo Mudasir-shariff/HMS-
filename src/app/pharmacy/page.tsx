@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   ChevronRight,
@@ -145,15 +145,6 @@ export default function PharmacyPage() {
     }
   }
 
-  // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss
-  const dispensedRxIds = new Set(dispensings.map((d) => d.prescription_id).filter(Boolean));
-  const dispensedVisitIds = new Set(
-    visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id)
-  );
-
-  const matchedRxIds = new Set<string>();
-  const matchedVisitIds = new Set<string>();
-
   interface PharmacyQueueItem {
     id: string;
     visitId?: string;
@@ -169,81 +160,101 @@ export default function PharmacyPage() {
     created_at?: string;
   }
 
-  const pendingQueue: PharmacyQueueItem[] = [];
-
-  // Pass 1: Scan all visits
-  visits.forEach((v) => {
-    if (v.status === 'dispensed' || v.status === 'completed' || dispensedVisitIds.has(v.id)) {
-      return;
-    }
-
-    // Match prescription by visit_id or patient_id
-    const rx = prescriptions.find(
-      (p) =>
-        (p.visit_id && p.visit_id === v.id) ||
-        (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
+  // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
+  const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
+    const dispensedRxIds = new Set(dispensings.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedVisitIds = new Set(
+      visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id)
     );
 
-    const hasPrescription = Boolean(rx && !dispensedRxIds.has(rx.id) && rx.items && rx.items.length > 0);
+    const matchedRxIds = new Set<string>();
+    const matchedVisitIds = new Set<string>();
 
-    if (v.status === 'prescribed' || hasPrescription) {
-      if (rx) matchedRxIds.add(rx.id);
-      matchedVisitIds.add(v.id);
+    const patientMap = new Map<string, (typeof patients)[0]>();
+    patients.forEach((p) => patientMap.set(p.id, p));
 
-      const patient = patients.find((p) => p.id === v.patient_id || (rx && p.id === rx.patient_id));
-      const doctor = doctors.find(
-        (d) => d.id === v.doctor_id || (d as any).user_id === v.doctor_id || (rx && d.id === rx.doctor_id)
+    const doctorMap = new Map<string, (typeof doctors)[0]>();
+    doctors.forEach((d) => {
+      doctorMap.set(d.id, d);
+      if ((d as any).user_id) doctorMap.set((d as any).user_id, d);
+    });
+
+    const queue: PharmacyQueueItem[] = [];
+
+    // Pass 1: Scan all visits
+    visits.forEach((v) => {
+      if (v.status === 'dispensed' || v.status === 'completed' || dispensedVisitIds.has(v.id)) {
+        return;
+      }
+
+      // Match prescription by visit_id or patient_id
+      const rx = prescriptions.find(
+        (p) =>
+          (p.visit_id && p.visit_id === v.id) ||
+          (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
       );
 
-      pendingQueue.push({
-        id: v.id,
-        visitId: v.id,
-        token_number: Number(v.token_number) || 1,
+      const hasPrescription = Boolean(rx && !dispensedRxIds.has(rx.id) && rx.items && rx.items.length > 0);
+
+      if (v.status === 'prescribed' || hasPrescription) {
+        if (rx) matchedRxIds.add(rx.id);
+        matchedVisitIds.add(v.id);
+
+        const patient = (v.patient_id ? patientMap.get(v.patient_id) : undefined) || (rx ? patientMap.get(rx.patient_id) : undefined);
+        const doctor = (v.doctor_id ? doctorMap.get(v.doctor_id) : undefined) || (rx ? doctorMap.get(rx.doctor_id) : undefined);
+
+        queue.push({
+          id: v.id,
+          visitId: v.id,
+          token_number: Number(v.token_number) || 1,
+          patientName: patient?.name || 'Patient',
+          patientUhid: patient?.uhid || '—',
+          patientAge: patient?.age || 0,
+          doctorName: doctor?.full_name || 'Dr. Consultant',
+          medicineCount: rx?.items?.length || 0,
+          prescriptionId: rx?.id,
+          uaid: rx?.uaid,
+          stayDayNumber: rx?.stay_day_number,
+          created_at: v.created_at,
+        });
+      }
+    });
+
+    // Pass 2: Include any un-dispensed prescriptions (e.g. IP prescriptions or direct consultations)
+    prescriptions.forEach((rx) => {
+      if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
+      if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
+      if (!rx.items || rx.items.length === 0) return;
+
+      matchedRxIds.add(rx.id);
+      const patient = patientMap.get(rx.patient_id);
+      const doctor = doctorMap.get(rx.doctor_id);
+
+      queue.push({
+        id: rx.visit_id || rx.id,
+        visitId: rx.visit_id,
+        token_number: rx.uaid ? 0 : 99,
         patientName: patient?.name || 'Patient',
         patientUhid: patient?.uhid || '—',
         patientAge: patient?.age || 0,
         doctorName: doctor?.full_name || 'Dr. Consultant',
-        medicineCount: rx?.items?.length || 0,
-        prescriptionId: rx?.id,
-        uaid: rx?.uaid,
-        stayDayNumber: rx?.stay_day_number,
-        created_at: v.created_at,
+        medicineCount: rx.items?.length || 0,
+        prescriptionId: rx.id,
+        uaid: rx.uaid,
+        stayDayNumber: rx.stay_day_number,
+        created_at: rx.created_at,
       });
-    }
-  });
-
-  // Pass 2: Include any un-dispensed prescriptions (e.g. IP prescriptions or direct consultations)
-  prescriptions.forEach((rx) => {
-    if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
-    if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
-    if (!rx.items || rx.items.length === 0) return;
-
-    matchedRxIds.add(rx.id);
-    const patient = patients.find((p) => p.id === rx.patient_id);
-    const doctor = doctors.find((d) => d.id === rx.doctor_id || (d as any).user_id === rx.doctor_id);
-
-    pendingQueue.push({
-      id: rx.visit_id || rx.id,
-      visitId: rx.visit_id,
-      token_number: rx.uaid ? 0 : 99,
-      patientName: patient?.name || 'Patient',
-      patientUhid: patient?.uhid || '—',
-      patientAge: patient?.age || 0,
-      doctorName: doctor?.full_name || 'Dr. Consultant',
-      medicineCount: rx.items?.length || 0,
-      prescriptionId: rx.id,
-      uaid: rx.uaid,
-      stayDayNumber: rx.stay_day_number,
-      created_at: rx.created_at,
     });
-  });
 
-  pendingQueue.sort((a, b) => {
-    if (a.token_number !== b.token_number) {
-      return a.token_number - b.token_number;
-    }
-    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-  });
+    queue.sort((a, b) => {
+      if (a.token_number !== b.token_number) {
+        return a.token_number - b.token_number;
+      }
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+    return queue;
+  }, [visits, prescriptions, dispensings, patients, doctors]);
 
   // 2. Today's Dispensed Patients (PRD v1.1: Remains in today's patient list, editable with auto stock correction)
   const todayDispensed = dispensings.filter((d) => {

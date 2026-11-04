@@ -523,49 +523,45 @@ function PrescribeContent() {
       console.warn('Local visit status update warning:', vErr);
     }
 
-    // 3. Push visit update & prescription payload to Supabase concurrently with fast timeout
+    // 3. Push prescription payload FIRST, then update visit status to 'prescribed' to prevent race condition
     try {
-      const syncPromises: Promise<any>[] = [pushPrescriptionToSupabase(rxPayload)];
+      const executePushOperations = async () => {
+        // Step A: Ensure prescription and its items are fully committed in Supabase first
+        await pushPrescriptionToSupabase(rxPayload);
 
-      if (isSupabaseConfigured()) {
-        const supabase = createClient();
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
-          syncPromises.push(
-            Promise.resolve(
-              supabase
-                .from('visits')
-                .update({
-                  status: 'prescribed',
-                  follow_up_date: followUp || null,
-                  instructions: instructions || null,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', finalVisitId)
-            )
-          );
-        } else if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
-          syncPromises.push(
-            Promise.resolve(
-              supabase
-                .from('visits')
-                .update({
-                  status: 'prescribed',
-                  follow_up_date: followUp || null,
-                  instructions: instructions || null,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('patient_id', validPatientId)
-            )
-          );
+        // Step B: Now update visit to 'prescribed' so pharmacy receives the status only when items are in DB
+        if (isSupabaseConfigured()) {
+          const supabase = createClient();
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
+            await supabase
+              .from('visits')
+              .update({
+                status: 'prescribed',
+                follow_up_date: followUp || null,
+                instructions: instructions || null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', finalVisitId);
+          } else if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
+            await supabase
+              .from('visits')
+              .update({
+                status: 'prescribed',
+                follow_up_date: followUp || null,
+                instructions: instructions || null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('patient_id', validPatientId);
+          }
         }
-      }
+      };
 
       await Promise.race([
-        Promise.allSettled(syncPromises),
-        new Promise((resolve) => setTimeout(resolve, 3500)),
+        executePushOperations(),
+        new Promise((resolve) => setTimeout(resolve, 8000)),
       ]);
     } catch (pErr) {
-      console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
+      console.warn('Sequential pushPrescriptionToSupabase warning:', pErr);
     }
 
     // 4. Invalidate query caches for instant UI update across pages

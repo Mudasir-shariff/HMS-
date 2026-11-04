@@ -272,48 +272,12 @@ export async function syncFromSupabase(): Promise<boolean> {
 }
 
 /**
- * Setup Realtime channel to listen to changes on Supabase
+ * Setup Realtime channel to listen to changes on Supabase.
+ * Unified into RealtimeProvider to prevent duplicate WebSocket channels.
  */
 export function initSupabaseRealtime() {
-  if (typeof window === 'undefined' || !isSupabaseConfigured() || isRealtimeSubscribed) return;
-  isRealtimeSubscribed = true;
-
-  try {
-    const supabase = createClient();
-    supabase
-      .channel('hms-db-live-v2')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'drugs' }, () => {
-        syncFromSupabase();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispensings' }, () => {
-        syncFromSupabase();
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('⚡ Realtime connected to Supabase live channels');
-        }
-      });
-  } catch (e) {
-    console.warn('Realtime subscription not active', e);
-  }
+  // No-op: The single unified persistent WebSocket channel is managed by RealtimeProvider (src/lib/realtime/realtime-provider.tsx)
+  return;
 }
 
 // ── Background Push Helpers (Fire & Forget, Graceful offline fallback) ──

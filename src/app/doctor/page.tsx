@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Clock, ChevronRight, Stethoscope, CheckCircle, FileText, User } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, Avatar, EmptyState } from '@/components/ui';
@@ -40,42 +40,65 @@ export default function DoctorPage() {
   };
 
   // Collect all valid IDs belonging to this doctor (UUID unification)
-  const doctorIdSet = new Set<string>();
-  if (activeDoctorId) doctorIdSet.add(activeDoctorId);
-  if (user?.id) doctorIdSet.add(user.id);
-  if (user?.doctorId) doctorIdSet.add(user.doctorId);
-  if (currentDoctorObj?.id) doctorIdSet.add(currentDoctorObj.id);
-  if (currentDoctorObj?.user_id) doctorIdSet.add(currentDoctorObj.user_id);
+  const doctorIdSet = useMemo(() => {
+    const set = new Set<string>();
+    if (activeDoctorId) set.add(activeDoctorId);
+    if (user?.id) set.add(user.id);
+    if (user?.doctorId) set.add(user.doctorId);
+    if (currentDoctorObj?.id) set.add(currentDoctorObj.id);
+    if (currentDoctorObj?.user_id) set.add(currentDoctorObj.user_id);
+    return set;
+  }, [activeDoctorId, user?.id, user?.doctorId, currentDoctorObj?.id, currentDoctorObj?.user_id]);
 
-  // Filter visits: Check against any matched ID
-  const doctorVisits = visits.filter((v) => {
-    if (!v.doctor_id) return isDoctor && doctors.length <= 1;
-    return doctorIdSet.has(v.doctor_id);
-  });
+  // Memoized O(1) patient map and single-pass visit enrichment
+  const { waitingQueue, completedQueue } = useMemo(() => {
+    // 1. Precompute patient visit counts in O(V)
+    const patientVisitCountMap = new Map<string, number>();
+    visits.forEach((v) => {
+      patientVisitCountMap.set(v.patient_id, (patientVisitCountMap.get(v.patient_id) || 0) + 1);
+    });
 
-  const enrichedVisits = doctorVisits.map((v) => {
-    const patient = patients.find((p) => p.id === v.patient_id);
-    const pastCount = visits.filter((other) => other.patient_id === v.patient_id && other.id !== v.id).length;
-    return {
-      ...v,
-      patientName: patient?.name || 'Patient',
-      patientAge: patient?.age || 0,
-      patientUhid: patient?.uhid || '—',
-      patientPhone: patient?.phone || '—',
-      hasBP: patient?.has_bp || false,
-      hasSugar: patient?.has_sugar || false,
-      otherConditions: patient?.other_conditions || '',
-      pastVisits: pastCount,
-    };
-  });
+    // 2. Precompute patient lookup map in O(P)
+    const patientMap = new Map<string, (typeof patients)[0]>();
+    patients.forEach((p) => patientMap.set(p.id, p));
 
-  const waitingQueue = enrichedVisits
-    .filter((v) => v.status === 'waiting' || v.status === 'in_consultation')
-    .sort((a, b) => a.token_number - b.token_number);
+    // 3. Filter visits belonging to doctor
+    const doctorVisits = visits.filter((v) => {
+      if (!v.doctor_id) return isDoctor && doctors.length <= 1;
+      return doctorIdSet.has(v.doctor_id);
+    });
 
-  const completedQueue = enrichedVisits
-    .filter((v) => v.status === 'prescribed' || v.status === 'dispensed' || v.status === 'completed')
-    .sort((a, b) => a.token_number - b.token_number);
+    const waiting: any[] = [];
+    const completed: any[] = [];
+
+    doctorVisits.forEach((v) => {
+      const patient = patientMap.get(v.patient_id);
+      const totalVisits = patientVisitCountMap.get(v.patient_id) || 1;
+      const pastCount = Math.max(0, totalVisits - 1);
+      const enriched = {
+        ...v,
+        patientName: patient?.name || 'Patient',
+        patientAge: patient?.age || 0,
+        patientUhid: patient?.uhid || '—',
+        patientPhone: patient?.phone || '—',
+        hasBP: patient?.has_bp || false,
+        hasSugar: patient?.has_sugar || false,
+        otherConditions: patient?.other_conditions || '',
+        pastVisits: pastCount,
+      };
+
+      if (v.status === 'waiting' || v.status === 'in_consultation') {
+        waiting.push(enriched);
+      } else if (v.status === 'prescribed' || v.status === 'dispensed' || v.status === 'completed') {
+        completed.push(enriched);
+      }
+    });
+
+    waiting.sort((a, b) => a.token_number - b.token_number);
+    completed.sort((a, b) => a.token_number - b.token_number);
+
+    return { waitingQueue: waiting, completedQueue: completed };
+  }, [visits, patients, doctorIdSet, isDoctor, doctors.length]);
 
   const activeList = tab === 'queue' ? waitingQueue : completedQueue;
 

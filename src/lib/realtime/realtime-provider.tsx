@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/query/keys';
 import { HMSStore } from '@/lib/store/hms-store';
 import { syncFromSupabase } from '@/lib/supabase/sync';
-import type { Visit, Patient, Drug } from '@/lib/types/database';
+import type { Visit, Patient, Drug, Dispensing } from '@/lib/types/database';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
 
@@ -209,15 +209,24 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // Debounce prescription invalidation by 150ms so multi-item batches settle before pharmacy refetches
+    let rxDebounceTimer: any = null;
+    const triggerRxInvalidation = () => {
+      if (rxDebounceTimer) clearTimeout(rxDebounceTimer);
+      rxDebounceTimer = setTimeout(() => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        syncFromSupabase().catch(() => {});
+      }, 150);
+    };
+
     // ── 4. PRESCRIPTIONS (Doctor finalize -> Instant Pharmacy queue) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescriptions' },
       () => {
-        setLastSyncedAt(new Date());
-        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-        syncFromSupabase().catch(() => {});
+        triggerRxInvalidation();
       }
     );
 
@@ -225,8 +234,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescription_items' },
       () => {
-        setLastSyncedAt(new Date());
-        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+        triggerRxInvalidation();
+      }
+    );
+
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'lab_test_orders' },
+      () => {
+        triggerRxInvalidation();
       }
     );
 
@@ -234,12 +250,44 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'dispensings' },
-      () => {
+      (payload) => {
         setLastSyncedAt(new Date());
+
+        queryClient.setQueriesData<Dispensing[]>(
+          { queryKey: ['dispensings'] },
+          (oldDisp) => {
+            if (!oldDisp) return oldDisp;
+
+            if (payload.eventType === 'INSERT') {
+              const newDisp = payload.new as Dispensing;
+              if (oldDisp.some((d) => d.id === newDisp.id)) return oldDisp;
+              return [newDisp, ...oldDisp];
+            }
+
+            if (payload.eventType === 'UPDATE') {
+              const updated = payload.new as Dispensing;
+              return oldDisp.map((d) => (d.id === updated.id ? { ...d, ...updated } : d));
+            }
+
+            if (payload.eventType === 'DELETE') {
+              const deletedId = (payload.old as any)?.id;
+              if (!deletedId) return oldDisp;
+              return oldDisp.filter((d) => d.id !== deletedId);
+            }
+
+            return oldDisp;
+          }
+        );
+
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          HMSStore.saveDispensing(payload.new as any);
+        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
+          HMSStore.deleteDispensing((payload.old as any).id);
+        }
+
         queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -266,6 +314,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     );
 
     // ── 7. WARDS, BEDS & ADMISSIONS ──
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'wards' },
+      () => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
+      }
+    );
+
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'beds' },

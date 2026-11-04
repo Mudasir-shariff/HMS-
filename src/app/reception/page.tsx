@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus,
   Hash,
@@ -53,59 +53,86 @@ export default function ReceptionPage() {
     setTimeout(() => setToastMessage(null), 4500);
   }
 
-  // Today's visits mapped with patient and doctor details (strictly sorted by Token ascending)
-  const todayVisits = visits
-    .map((v) => {
-      const patient = patients.find((p) => p.id === v.patient_id);
-      const doc = doctors.find((d) => d.id === v.doctor_id || (d as any).user_id === v.doctor_id);
-      return {
-        ...v,
-        patientName: patient?.name || 'Unknown Patient',
-        patientUhid: patient?.uhid || '—',
-        patientPhone: patient?.phone || '—',
-        patientAge: patient?.age || 0,
-        hasBP: patient?.has_bp || false,
-        hasSugar: patient?.has_sugar || false,
-        doctorName: doc?.full_name || 'Dr. Assigned',
-        doctorSpec: doc?.specialization || 'OPD',
-        doctorRoom: doc?.consultation_room || 'Room 1',
-      };
-    })
-    .sort((a, b) => a.token_number - b.token_number);
+  const [updatingVisitId, setUpdatingVisitId] = useState<string | null>(null);
 
-  const waitingOnly = todayVisits.filter((v) => v.status === 'waiting').length;
-  const consultingOnly = todayVisits.filter((v) => v.status === 'in_consultation').length;
-  const pharmacyOnly = todayVisits.filter((v) => v.status === 'prescribed').length;
-  const dispensedOnly = todayVisits.filter((v) => v.status === 'dispensed' || v.status === 'completed').length;
-  const countWaitingTotal = waitingOnly + consultingOnly;
+  // Optimized O(1) map lookups and memoized todayVisits
+  const { todayVisits, waitingOnly, consultingOnly, pharmacyOnly, dispensedOnly, countWaitingTotal } = useMemo(() => {
+    const patientMap = new Map<string, (typeof patients)[0]>();
+    patients.forEach((p) => patientMap.set(p.id, p));
 
-  const filtered = todayVisits
-    .filter((v) => {
-      const matchesSearch =
-        v.patientName.toLowerCase().includes(search.toLowerCase()) ||
-        v.patientPhone.includes(search) ||
-        v.patientUhid.toLowerCase().includes(search.toLowerCase()) ||
-        v.visit_number.toLowerCase().includes(search.toLowerCase());
+    const doctorMap = new Map<string, (typeof doctors)[0]>();
+    doctors.forEach((d) => {
+      doctorMap.set(d.id, d);
+      if (d.user_id) doctorMap.set(d.user_id, d);
+    });
 
-      const selectedDoc = doctors.find((d) => d.id === doctorFilter || d.user_id === doctorFilter);
-      const matchesDoc =
-        doctorFilter === 'all' ||
-        v.doctor_id === doctorFilter ||
-        Boolean(selectedDoc && (v.doctor_id === selectedDoc.id || v.doctor_id === selectedDoc.user_id));
+    const tv = visits
+      .map((v) => {
+        const patient = patientMap.get(v.patient_id);
+        const doc = doctorMap.get(v.doctor_id);
+        return {
+          ...v,
+          patientName: patient?.name || 'Unknown Patient',
+          patientUhid: patient?.uhid || '—',
+          patientPhone: patient?.phone || '—',
+          patientAge: patient?.age || 0,
+          hasBP: patient?.has_bp || false,
+          hasSugar: patient?.has_sugar || false,
+          doctorName: doc?.full_name || 'Dr. Assigned',
+          doctorSpec: doc?.specialization || 'OPD',
+          doctorRoom: doc?.consultation_room || 'Room 1',
+        };
+      })
+      .sort((a, b) => a.token_number - b.token_number);
 
-      let matchesStage = true;
-      if (stageFilter === 'with_doctor') matchesStage = v.status === 'waiting' || v.status === 'in_consultation';
-      else if (stageFilter === 'waiting') matchesStage = v.status === 'waiting';
-      else if (stageFilter === 'in_consultation') matchesStage = v.status === 'in_consultation';
-      else if (stageFilter === 'prescribed') matchesStage = v.status === 'prescribed';
-      else if (stageFilter === 'dispensed') matchesStage = v.status === 'dispensed' || v.status === 'completed';
+    let w = 0, c = 0, p = 0, d = 0;
+    tv.forEach((v) => {
+      if (v.status === 'waiting') w++;
+      else if (v.status === 'in_consultation') c++;
+      else if (v.status === 'prescribed') p++;
+      else if (v.status === 'dispensed' || v.status === 'completed') d++;
+    });
 
-      return matchesSearch && matchesDoc && matchesStage;
-    })
-    .sort((a, b) => a.token_number - b.token_number);
+    return {
+      todayVisits: tv,
+      waitingOnly: w,
+      consultingOnly: c,
+      pharmacyOnly: p,
+      dispensedOnly: d,
+      countWaitingTotal: w + c,
+    };
+  }, [visits, patients, doctors]);
 
-  // Action: Direct status transition on a specific row
+  const filtered = useMemo(() => {
+    return todayVisits
+      .filter((v) => {
+        const matchesSearch =
+          !search.trim() ||
+          v.patientName.toLowerCase().includes(search.toLowerCase()) ||
+          v.patientPhone.includes(search) ||
+          v.patientUhid.toLowerCase().includes(search.toLowerCase()) ||
+          v.visit_number.toLowerCase().includes(search.toLowerCase());
+
+        const matchesDoc =
+          doctorFilter === 'all' ||
+          v.doctor_id === doctorFilter;
+
+        let matchesStage = true;
+        if (stageFilter === 'with_doctor') matchesStage = v.status === 'waiting' || v.status === 'in_consultation';
+        else if (stageFilter === 'waiting') matchesStage = v.status === 'waiting';
+        else if (stageFilter === 'in_consultation') matchesStage = v.status === 'in_consultation';
+        else if (stageFilter === 'prescribed') matchesStage = v.status === 'prescribed';
+        else if (stageFilter === 'dispensed') matchesStage = v.status === 'dispensed' || v.status === 'completed';
+
+        return matchesSearch && matchesDoc && matchesStage;
+      })
+      .sort((a, b) => a.token_number - b.token_number);
+  }, [todayVisits, search, doctorFilter, stageFilter]);
+
+  // Action: Direct status transition on a specific row with double-click guard
   async function handleMoveToCabin(visitId: string, token: number) {
+    if (updatingVisitId === visitId) return;
+    setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
@@ -115,12 +142,23 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
     );
-    await supabase.from('visits').update({ status: 'in_consultation', updated_at }).eq('id', visitId);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
+    try {
+      const { error } = await supabase.from('visits').update({ status: 'in_consultation', updated_at }).eq('id', visitId);
+      if (error) {
+        console.warn('Supabase update error (local updated):', error.message);
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
+    } catch (err) {
+      console.warn('handleMoveToCabin error:', err);
+    } finally {
+      setUpdatingVisitId(null);
+    }
   }
 
   async function handleSendToPharmacy(visitId: string, token: number) {
+    if (updatingVisitId === visitId) return;
+    setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
@@ -130,12 +168,23 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
     );
-    await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
+    try {
+      const { error } = await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
+      if (error) {
+        console.warn('Supabase update error (local updated):', error.message);
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
+    } catch (err) {
+      console.warn('handleSendToPharmacy error:', err);
+    } finally {
+      setUpdatingVisitId(null);
+    }
   }
 
   async function handleQuickDeliver(visitId: string, token: number) {
+    if (updatingVisitId === visitId) return;
+    setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
@@ -145,9 +194,18 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
     );
-    await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
+    try {
+      const { error } = await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
+      if (error) {
+        console.warn('Supabase update error (local updated):', error.message);
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
+    } catch (err) {
+      console.warn('handleQuickDeliver error:', err);
+    } finally {
+      setUpdatingVisitId(null);
+    }
   }
 
   return (

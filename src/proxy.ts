@@ -46,17 +46,41 @@ export async function proxy(request: NextRequest) {
     } = await supabase.auth.getSession();
 
     if (session) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role, is_active')
-        .eq('id', session.user.id)
-        .single();
+      // Check cached verified role cookie first (0ms DB roundtrip)
+      const cachedRole = request.cookies.get('hms_verified_role')?.value as UserRole | undefined;
+      const cachedUid = request.cookies.get('hms_verified_uid')?.value;
 
-      if (!profile || !profile.is_active) {
-        return NextResponse.redirect(new URL('/login?error=account_inactive', request.url));
+      let role: UserRole | undefined;
+
+      if (cachedUid === session.user.id && cachedRole) {
+        role = cachedRole;
+      } else {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role, is_active')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!profile || !profile.is_active) {
+          return NextResponse.redirect(new URL('/login?error=account_inactive', request.url));
+        }
+
+        role = profile.role as UserRole;
+
+        // Cache verified role for 5 minutes (300 seconds)
+        response.cookies.set('hms_verified_role', role, {
+          maxAge: 300,
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax',
+        });
+        response.cookies.set('hms_verified_uid', session.user.id, {
+          maxAge: 300,
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax',
+        });
       }
-
-      const role = profile.role as UserRole;
 
       if (pathname !== '/' && !canAccess(role, pathname)) {
         return NextResponse.redirect(new URL(ROLE_HOME[role], request.url));

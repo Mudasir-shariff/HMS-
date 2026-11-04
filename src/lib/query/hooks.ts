@@ -26,7 +26,8 @@ export function useVisits(filters?: { doctorId?: string; status?: string; date?:
       return v;
     },
     initialDataUpdatedAt: 0,
-    refetchInterval: 3000, // Sync visits & live OPD queues within 3 seconds
+    staleTime: 10000,
+    refetchInterval: 30000, // 30s fallback safety net; Realtime handles instant <50ms updates
   });
 }
 
@@ -48,7 +49,8 @@ export function usePatients(search?: string) {
       return p;
     },
     initialDataUpdatedAt: 0,
-    refetchInterval: 4000, // Sync registered/updated patients within 4 seconds
+    staleTime: 10000,
+    refetchInterval: 60000, // 60s fallback; Realtime handles immediate registration
   });
 }
 
@@ -61,7 +63,8 @@ export function usePrescriptions(visitId?: string) {
       return visitId ? rx.filter((p) => p.visit_id === visitId) : rx;
     },
     initialDataUpdatedAt: 0,
-    refetchInterval: 3000, // Doctor prescription arrives at Pharmacy within 3 seconds
+    staleTime: 10000,
+    refetchInterval: 30000, // 30s fallback safety net; Realtime handles instant arrival
   });
 }
 
@@ -71,7 +74,8 @@ export function useDrugs() {
     queryFn: fetchDrugs,
     initialData: () => HMSStore.getDrugs(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 4000, // Inventory stock, additions, deletions sync within 4 seconds
+    staleTime: 10000,
+    refetchInterval: 60000, // 60s fallback; Realtime patches inventory stock changes
   });
 }
 
@@ -94,7 +98,8 @@ export function useDoctors() {
       }));
     },
     initialDataUpdatedAt: 0,
-    refetchInterval: 5000, // Doctor availability & schedule sync within 5 seconds
+    staleTime: 10000,
+    refetchInterval: false, // Event-driven via Realtime + window focus
   });
 }
 
@@ -104,7 +109,8 @@ export function useUserProfiles() {
     queryFn: fetchUserProfiles,
     initialData: () => HMSStore.getUsers(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 5000, // Staff accounts & roles sync within 5 seconds
+    staleTime: 10000,
+    refetchInterval: false, // Event-driven via Realtime
   });
 }
 
@@ -114,7 +120,8 @@ export function useDispensings() {
     queryFn: fetchDispensings,
     initialData: () => HMSStore.getDispensings(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 4000, // Dispensed logs sync within 4 seconds
+    staleTime: 10000,
+    refetchInterval: 30000, // 30s fallback; Realtime patches dispensed records immediately
   });
 }
 
@@ -124,7 +131,8 @@ export function useWards() {
     queryFn: fetchWards,
     initialData: () => HMSStore.getWards(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 6000,
+    staleTime: 10000,
+    refetchInterval: false,
   });
 }
 
@@ -134,7 +142,8 @@ export function useBeds() {
     queryFn: fetchBeds,
     initialData: () => HMSStore.getBeds(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 4000, // Bed occupancy changes sync within 4 seconds
+    staleTime: 10000,
+    refetchInterval: 60000,
   });
 }
 
@@ -144,7 +153,8 @@ export function useAdmissions() {
     queryFn: fetchAdmissions,
     initialData: () => HMSStore.getAdmissions(),
     initialDataUpdatedAt: 0,
-    refetchInterval: 4000,
+    staleTime: 10000,
+    refetchInterval: 60000,
   });
 }
 
@@ -174,6 +184,7 @@ export function useHospitalSettings() {
       };
     },
     initialDataUpdatedAt: 0,
-    refetchInterval: 6000,
+    staleTime: 10000,
+    refetchInterval: false,
   });
 }

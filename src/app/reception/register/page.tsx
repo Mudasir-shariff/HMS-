@@ -66,6 +66,7 @@ export default function RegisterPatientPage() {
   const [matchedPatient, setMatchedPatient] = useState<Patient | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [createdResult, setCreatedResult] = useState<{ patient: Patient; visit: Visit } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-search existing patient when typing phone (10 digits) or UHID
   useEffect(() => {
@@ -134,7 +135,8 @@ export default function RegisterPatientPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    if (isSubmitting || !validate()) return;
+    setIsSubmitting(true);
 
     try {
       // 1. Attempt atomic DB registration with advisory locking & sequences (Phase 2)
@@ -172,13 +174,18 @@ export default function RegisterPatientPage() {
         doctorId: form.doctorId,
       });
 
-      await pushPatientToSupabase(res.patient);
-      await pushVisitToSupabase(res.visit);
+      // Push concurrently to avoid cascading delays
+      await Promise.allSettled([
+        pushPatientToSupabase(res.patient),
+        pushVisitToSupabase(res.visit),
+      ]);
 
       queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
 
       setCreatedResult(res);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -479,8 +486,8 @@ export default function RegisterPatientPage() {
               </div>
 
               <div className="mt-6 pt-4 border-t border-[var(--line-soft)] flex flex-col gap-2">
-                <Button type="submit" size="lg" className="w-full">
-                  Save & Generate Token
+                <Button type="submit" size="lg" className="w-full" loading={isSubmitting} disabled={isSubmitting}>
+                  {isSubmitting ? 'Registering...' : 'Save & Generate Token'}
                 </Button>
                 <a
                   href="/reception"
