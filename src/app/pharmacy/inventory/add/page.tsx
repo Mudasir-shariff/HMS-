@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Calculator, Package } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Input, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { pushDrugToSupabase } from '@/lib/supabase/sync';
+import { saveDrugMutation } from '@/lib/api/mutations';
 import type { DrugType, Drug } from '@/lib/types/database';
 
 const DEFAULT_SUPPLIERS = [
@@ -57,6 +59,8 @@ interface AddDrugFormState {
 
 export default function AddDrugPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [submitting, setSubmitting] = useState(false);
 
   // PRD v1.1 Rule: All number fields start at 0 instead of blank
   const [form, setForm] = useState<AddDrugFormState>({
@@ -152,10 +156,11 @@ export default function AddDrugPage() {
       return next;
     });
 
-    if (errors[key as string]) {
+    if (errors[key as string] || errors.form) {
       setErrors((e) => {
         const n = { ...e };
         delete n[key as string];
+        delete n.form;
         return n;
       });
     }
@@ -163,10 +168,22 @@ export default function AddDrugPage() {
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = 'Drug name is required.';
-    if (!form.expiryDate) errs.expiryDate = 'Expiry date is required.';
-    if (form.sellingPrice < 0) errs.sellingPrice = 'Selling price cannot be negative.';
-    if (form.stockQuantity < 0) errs.stockQuantity = 'Stock cannot be negative.';
+    if (!form.name.trim()) {
+      errs.name = 'Drug name is required.';
+      errs.form = 'Please enter a medicine / drug name.';
+    }
+    if (!form.expiryDate) {
+      errs.expiryDate = 'Expiry date is required.';
+      if (!errs.form) errs.form = 'Please select an expiry date for this medicine.';
+    }
+    if (form.sellingPrice < 0) {
+      errs.sellingPrice = 'Selling price cannot be negative.';
+      if (!errs.form) errs.form = 'Selling price cannot be negative.';
+    }
+    if (form.stockQuantity < 0) {
+      errs.stockQuantity = 'Stock cannot be negative.';
+      if (!errs.form) errs.form = 'Stock quantity cannot be negative.';
+    }
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -175,6 +192,8 @@ export default function AddDrugPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
+    setSubmitting(true);
+    setErrors({});
 
     const normalizedType: DrugType = ['tablet', 'capsule', 'syrup', 'injection'].includes(form.drugType.toLowerCase())
       ? (form.drugType.toLowerCase() as DrugType)
@@ -204,9 +223,15 @@ export default function AddDrugPage() {
       updated_at: new Date().toISOString(),
     };
 
-    HMSStore.saveDrug(newDrug);
-    await pushDrugToSupabase(newDrug);
-    setSavedDrug(newDrug);
+    const res = await saveDrugMutation(newDrug, queryClient);
+    setSubmitting(false);
+
+    if (!res.success) {
+      setErrors({ form: 'Database error saving drug: ' + (res.error || 'Could not save to catalog') });
+      return;
+    }
+
+    setSavedDrug(res.data || newDrug);
   }
 
   const isOralSolid = form.drugType === 'tablet' || form.drugType === 'capsule';
@@ -314,6 +339,11 @@ export default function AddDrugPage() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate>
+        {errors.form && (
+          <div className="bg-[var(--danger-bg)] border border-[var(--danger)] text-xs text-[#C03028] rounded-[var(--r-tile)] px-4 py-3 mb-5 font-semibold leading-relaxed shadow-xs">
+            {errors.form}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Main Form (Left 2 cols) */}
           <div className="lg:col-span-2 flex flex-col gap-5">
@@ -638,8 +668,8 @@ export default function AddDrugPage() {
                 </div>
               </div>
 
-              <Button type="submit" size="lg" className="w-full">
-                Save Drug to Catalog
+              <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+                {submitting ? 'Saving to Catalog...' : 'Save Drug to Catalog'}
               </Button>
             </Card>
           </div>

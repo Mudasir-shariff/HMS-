@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/client';
 import { getQueryClient } from '@/lib/query/provider';
 import { queryKeys } from '@/lib/query/keys';
+import { HMSStore } from '@/lib/store/hms-store';
+import type { QueryClient } from '@tanstack/react-query';
 import type { Patient, Visit, Dispensing, DispensingItem, Drug } from '@/lib/types/database';
 
 export interface RegisterPatientParams {
@@ -192,4 +194,71 @@ export async function softDeleteRecord(table: string, id: string): Promise<void>
   if (error) {
     throw new Error(error.message);
   }
+}
+
+/**
+ * Save / Create / Update a Drug in Supabase with instant QueryClient cache invalidation.
+ */
+export async function saveDrugMutation(
+  drug: Drug,
+  client?: QueryClient
+): Promise<{ success: boolean; data?: Drug; error?: string }> {
+  const supabase = createClient();
+  const isValidId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(drug.id);
+  const drugId = isValidId ? drug.id : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : drug.id);
+
+  const payload: any = {
+    id: drugId,
+    name: drug.name.trim(),
+    drug_type: drug.drug_type || 'tablet',
+    custom_type_name: drug.custom_type_name || null,
+    unit_price: Number(drug.selling_price) || 0,
+    selling_price: Number(drug.selling_price) || 0,
+    purchase_price: Number(drug.purchase_price) || 0,
+    stock_quantity: Math.max(0, Number(drug.stock_quantity) || 0),
+    low_stock_limit: Math.max(0, Number(drug.low_stock_limit) || 10),
+    reorder_level: Math.max(0, Number(drug.low_stock_limit) || 20),
+    boxes: drug.boxes ? Number(drug.boxes) : null,
+    tablets_per_sheet: drug.tablets_per_sheet ? Number(drug.tablets_per_sheet) : null,
+    price_per_sheet: drug.selling_price_per_sheet ? Number(drug.selling_price_per_sheet) : (drug.price_per_sheet ? Number(drug.price_per_sheet) : null),
+    supplier: drug.supplier || null,
+    unit: drug.unit || 'unit',
+    batch_number: drug.batch_number?.trim() || null,
+    expiry_date: drug.expiry_date || null,
+    schedule_h: Boolean(drug.schedule_h),
+    schedule_h1: Boolean(drug.schedule_h1),
+    is_active: drug.is_active ?? true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('drugs')
+    .upsert(payload)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Supabase saveDrug error:', error);
+    return { success: false, error: error.message };
+  }
+
+  const savedDrug: Drug = {
+    ...drug,
+    id: data.id,
+    selling_price: Number(data.selling_price) || Number(data.unit_price) || 0,
+    purchase_price: Number(data.purchase_price) || 0,
+    stock_quantity: Number(data.stock_quantity) || 0,
+    low_stock_limit: Number(data.low_stock_limit) || 10,
+    expiry_date: data.expiry_date,
+    updated_at: data.updated_at,
+  };
+
+  // Update in-memory HMSStore
+  HMSStore.saveDrug(savedDrug);
+
+  // Invalidate TanStack Query cache so /pharmacy and /admin refresh immediately
+  const qClient = client || getQueryClient();
+  qClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+
+  return { success: true, data: savedDrug };
 }
