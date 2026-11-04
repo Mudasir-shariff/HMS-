@@ -194,18 +194,7 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
   }
 
   const { data, error } = await query;
-  if (error || !data || data.length === 0) {
-    let local = HMSStore.getVisits();
-    if (filters?.doctorId) {
-      local = local.filter((v) => v.doctor_id === filters.doctorId);
-    }
-    if (filters?.status) {
-      local = local.filter((v) => v.status === filters.status);
-    }
-    return local || [];
-  }
-
-  return data.map((v: any) => ({
+  const dbVisits: Visit[] = (!error && data) ? data.map((v: any) => ({
     id: v.id,
     visit_number: v.visit_number,
     patient_id: v.patient_id,
@@ -216,7 +205,33 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
     instructions: v.instructions || undefined,
     created_at: v.created_at,
     updated_at: v.updated_at || v.created_at,
-  }));
+  })) : [];
+
+  const localVisits = HMSStore.getVisits();
+  const visitMap = new Map<string, Visit>();
+  dbVisits.forEach((v) => visitMap.set(v.id, v));
+
+  localVisits.forEach((lv) => {
+    const existing = visitMap.get(lv.id);
+    if (!existing) {
+      visitMap.set(lv.id, lv);
+    } else {
+      const localTime = new Date(lv.updated_at || lv.created_at).getTime();
+      const dbTime = new Date(existing.updated_at || existing.created_at).getTime();
+      if (localTime > dbTime || (lv.status === 'prescribed' && existing.status !== 'prescribed')) {
+        visitMap.set(lv.id, { ...existing, ...lv });
+      }
+    }
+  });
+
+  let results = Array.from(visitMap.values()).sort((a, b) => a.token_number - b.token_number);
+  if (filters?.doctorId) {
+    results = results.filter((v) => v.doctor_id === filters.doctorId);
+  }
+  if (filters?.status) {
+    results = results.filter((v) => v.status === filters.status);
+  }
+  return results;
 }
 
 export async function fetchPrescriptions(visitId?: string): Promise<Prescription[]> {
@@ -226,50 +241,72 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     rxQuery = rxQuery.eq('visit_id', visitId);
   }
 
-  const [rxRes, itemsRes] = await Promise.all([
+  const [rxRes, itemsRes, labsRes] = await Promise.all([
     rxQuery,
     supabase.from('prescription_items').select('*'),
+    supabase.from('lab_test_orders').select('*'),
   ]);
 
-  if (rxRes.error || !rxRes.data || rxRes.data.length === 0) {
-    let local = HMSStore.getPrescriptions();
-    if (visitId) {
-      local = local.filter((p) => p.visit_id === visitId);
-    }
-    return local || [];
+  const allItems = itemsRes.data || [];
+  const allLabs = labsRes.data || [];
+
+  const dbPrescriptions: Prescription[] = (!rxRes.error && rxRes.data)
+    ? rxRes.data.map((r: any) => ({
+        id: r.id,
+        visit_id: r.visit_id,
+        doctor_id: r.doctor_id,
+        patient_id: r.patient_id,
+        notes: r.notes || undefined,
+        uaid: r.uaid || undefined,
+        stay_day_number: r.stay_day_number || undefined,
+        created_at: r.created_at,
+        items: allItems
+          .filter((it: any) => it.prescription_id === r.id)
+          .map((it: any) => ({
+            id: it.id,
+            prescription_id: it.prescription_id,
+            drug_id: it.drug_id || '',
+            drug_name: it.drug_name,
+            dose_morning: Boolean(it.dose_morning),
+            dose_afternoon: Boolean(it.dose_afternoon),
+            dose_night: Boolean(it.dose_night),
+            dose_relation: it.dose_relation,
+            num_days: Number(it.num_days) || 1,
+            quantity: it.quantity ? Number(it.quantity) : undefined,
+            is_custom: Boolean(it.is_custom),
+            item_type: it.item_type || undefined,
+            custom_unit: it.custom_unit || undefined,
+            added_by_pharmacist: Boolean(it.added_by_pharmacist),
+            pharmacist_notes: it.pharmacist_notes || undefined,
+            created_at: it.created_at,
+          })),
+        lab_tests: allLabs
+          .filter((lt: any) => lt.prescription_id === r.id)
+          .map((lt: any) => ({
+            id: lt.id,
+            prescription_id: lt.prescription_id,
+            test_name: lt.test_name,
+            notes: lt.notes || undefined,
+            created_at: lt.created_at,
+          })),
+      }))
+    : [];
+
+  // Merge with local prescriptions to guarantee instant availability
+  let local = HMSStore.getPrescriptions();
+  if (visitId) {
+    local = local.filter((p) => p.visit_id === visitId);
   }
 
-  const allItems = itemsRes.data || [];
-  return rxRes.data.map((r: any) => ({
-    id: r.id,
-    visit_id: r.visit_id,
-    doctor_id: r.doctor_id,
-    patient_id: r.patient_id,
-    notes: r.notes || undefined,
-    uaid: r.uaid || undefined,
-    stay_day_number: r.stay_day_number || undefined,
-    created_at: r.created_at,
-    items: allItems
-      .filter((it: any) => it.prescription_id === r.id)
-      .map((it: any) => ({
-        id: it.id,
-        prescription_id: it.prescription_id,
-        drug_id: it.drug_id || '',
-        drug_name: it.drug_name,
-        dose_morning: Boolean(it.dose_morning),
-        dose_afternoon: Boolean(it.dose_afternoon),
-        dose_night: Boolean(it.dose_night),
-        dose_relation: it.dose_relation,
-        num_days: Number(it.num_days) || 1,
-        quantity: it.quantity ? Number(it.quantity) : undefined,
-        is_custom: Boolean(it.is_custom),
-        item_type: it.item_type || undefined,
-        custom_unit: it.custom_unit || undefined,
-        added_by_pharmacist: Boolean(it.added_by_pharmacist),
-        pharmacist_notes: it.pharmacist_notes || undefined,
-        created_at: it.created_at,
-      })),
-  }));
+  const rxMap = new Map<string, Prescription>();
+  dbPrescriptions.forEach((r) => rxMap.set(r.id, r));
+  local.forEach((lr) => {
+    if (!rxMap.has(lr.id)) {
+      rxMap.set(lr.id, lr);
+    }
+  });
+
+  return Array.from(rxMap.values());
 }
 
 export async function fetchDrugs(): Promise<Drug[]> {

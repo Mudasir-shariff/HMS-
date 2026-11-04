@@ -9,6 +9,8 @@ import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { syncFromSupabase, pushUserToSupabase } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import { ROLE_HOME } from '@/lib/auth/roles';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query/keys';
 import type { UserRole } from '@/lib/types/database';
 
 const ROLES = [
@@ -49,6 +51,7 @@ interface FormState {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { switchUser } = useAuth();
 
   const [form, setForm] = useState<FormState>({
@@ -214,6 +217,8 @@ export default function RegisterPage() {
     // Save into HMSStore cache and trigger global sync
     HMSStore.saveUser(newAccount);
     await syncFromSupabase().catch(() => {});
+    queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
 
     setLoading(false);
     setRegisteredAccount(newAccount);

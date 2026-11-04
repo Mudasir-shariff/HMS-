@@ -37,6 +37,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
+import { pushDrugToSupabase, deleteDrugFromSupabase } from '@/lib/supabase/sync';
 import type { Dispensing, Drug } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -91,6 +92,55 @@ export default function PharmacyPage() {
 
   // Edit Dispensed Record State
   const [editingDispensing, setEditingDispensing] = useState<Dispensing | null>(null);
+
+  // Edit / Delete Drug Inventory State
+  const [editingDrug, setEditingDrug] = useState<Drug | null>(null);
+  const [isSavingDrug, setIsSavingDrug] = useState(false);
+  const [isDeletingDrugId, setIsDeletingDrugId] = useState<string | null>(null);
+
+  async function handleDeleteDrug(drug: Drug) {
+    if (!confirm(`Are you sure you want to delete "${drug.name}" from inventory? This cannot be undone.`)) {
+      return;
+    }
+    setIsDeletingDrugId(drug.id);
+    try {
+      HMSStore.deleteDrug(drug.id);
+      await deleteDrugFromSupabase(drug.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+    } catch (err) {
+      console.error('Failed to delete drug:', err);
+      alert('Failed to delete drug from inventory.');
+    } finally {
+      setIsDeletingDrugId(null);
+    }
+  }
+
+  async function handleSaveEditedDrug(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingDrug || !editingDrug.name.trim()) return;
+    setIsSavingDrug(true);
+    try {
+      const updated: Drug = {
+        ...editingDrug,
+        name: editingDrug.name.trim(),
+        stock_quantity: Math.max(0, Number(editingDrug.stock_quantity) || 0),
+        selling_price: Math.max(0, Number(editingDrug.selling_price) || 0),
+        selling_price_per_sheet: editingDrug.selling_price_per_sheet ? Number(editingDrug.selling_price_per_sheet) : undefined,
+        purchase_price: Math.max(0, Number(editingDrug.purchase_price) || 0),
+        low_stock_limit: Math.max(0, Number(editingDrug.low_stock_limit) || 10),
+        updated_at: new Date().toISOString(),
+      };
+      HMSStore.saveDrug(updated);
+      await pushDrugToSupabase(updated);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+      setEditingDrug(null);
+    } catch (err) {
+      console.error('Failed to save edited drug:', err);
+      alert('Failed to save changes to medicine.');
+    } finally {
+      setIsSavingDrug(false);
+    }
+  }
 
   // 1. Pending Prescriptions Queue (OPD & IP) - strictly sorted by Token ascending
   const pendingQueue = visits
@@ -672,6 +722,27 @@ export default function PharmacyPage() {
                       ) : (
                         <StatusPill variant="success" label="In Stock" />
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => setEditingDrug({ ...drug })}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-colors shadow-2xs"
+                        title="Edit medicine details & stock"
+                      >
+                        <Edit2 size={13} className="text-[var(--green-700)]" />
+                        <span className="hidden sm:inline">Edit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isDeletingDrugId === drug.id}
+                        onClick={() => handleDeleteDrug(drug)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors shadow-2xs disabled:opacity-50"
+                        title="Delete medicine from inventory"
+                      >
+                        <Trash2 size={13} />
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -1238,6 +1309,186 @@ export default function PharmacyPage() {
             <Button variant="secondary" className="w-full" onClick={() => setEditingDispensing(null)}>
               Done
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────────
+          EDIT DRUG INVENTORY MODAL
+         ──────────────────────────────────────────────────────────────────────── */}
+      {editingDrug && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-[var(--r-card)] shadow-2xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto border border-[var(--line-soft)]">
+            <div className="flex items-center justify-between pb-4 border-b border-[var(--line-soft)] mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-full bg-[var(--green-50)] text-[var(--green-800)] flex items-center justify-center font-bold">
+                  <Pill size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-[var(--text-strong)]">Edit Medicine in Inventory</h3>
+                  <p className="text-xs text-[var(--text-muted)]">Update stock quantity, batch, expiry, or pricing</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDrug(null)}
+                className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedDrug} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-[var(--text-strong)] mb-1">Medicine Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingDrug.name}
+                  onChange={(e) => setEditingDrug({ ...editingDrug, name: e.target.value })}
+                  className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Drug Type</label>
+                  <select
+                    value={editingDrug.drug_type}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, drug_type: e.target.value as any })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] bg-white"
+                  >
+                    <option value="tablet">Tablet</option>
+                    <option value="capsule">Capsule</option>
+                    <option value="syrup">Syrup</option>
+                    <option value="injection">Injection</option>
+                    <option value="ointment">Ointment</option>
+                    <option value="drops">Drops</option>
+                    <option value="inhaler">Inhaler</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Batch Number</label>
+                  <input
+                    type="text"
+                    value={editingDrug.batch_number || ''}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, batch_number: e.target.value })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Stock Quantity *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={editingDrug.stock_quantity}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, stock_quantity: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono font-bold text-[var(--text-strong)]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Low Stock Limit</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editingDrug.low_stock_limit}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, low_stock_limit: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={editingDrug.expiry_date ? editingDrug.expiry_date.slice(0, 10) : ''}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, expiry_date: e.target.value })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">MRP / Unit (₹) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={editingDrug.selling_price}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, selling_price: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">MRP / Sheet (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingDrug.selling_price_per_sheet ?? ''}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, selling_price_per_sheet: e.target.value ? Number(e.target.value) : undefined })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[var(--text-strong)] mb-1">Purchase Price (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingDrug.purchase_price}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, purchase_price: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-[var(--r-control)] border border-[var(--line-soft)] text-sm focus:outline-none focus:border-[var(--green-600)] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingDrug.schedule_h)}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, schedule_h: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-[var(--green-700)] focus:ring-[var(--green-600)]"
+                  />
+                  <span className="font-medium text-[var(--text-strong)]">Schedule H Drug</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingDrug.schedule_h1)}
+                    onChange={(e) => setEditingDrug({ ...editingDrug, schedule_h1: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-[var(--green-700)] focus:ring-[var(--green-600)]"
+                  />
+                  <span className="font-medium text-[var(--text-strong)]">Schedule H1 Drug</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--line-soft)] mt-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditingDrug(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSavingDrug}
+                  icon={<Check size={14} />}
+                >
+                  {isSavingDrug ? 'Saving Changes...' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

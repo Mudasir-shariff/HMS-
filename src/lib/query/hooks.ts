@@ -18,6 +18,7 @@ export function useVisits(filters?: { doctorId?: string; status?: string; date?:
   return useQuery({
     queryKey: queryKeys.visits.list(filters),
     queryFn: () => fetchVisits(filters),
+    refetchInterval: 4000,
   });
 }
 
@@ -32,6 +33,7 @@ export function usePrescriptions(visitId?: string) {
   return useQuery({
     queryKey: visitId ? queryKeys.prescriptions.byVisit(visitId) : queryKeys.prescriptions.all,
     queryFn: () => fetchPrescriptions(visitId),
+    refetchInterval: 4000,
   });
 }
 

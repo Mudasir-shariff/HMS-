@@ -29,7 +29,8 @@ import {
 } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
-import { HMSStore } from '@/lib/store/hms-store';
+import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { pushWardToSupabase, pushBedToSupabase } from '@/lib/supabase/sync';
 import type { Admission, Bed, Ward } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -131,10 +132,10 @@ export default function InPatientPage() {
     return { totalHours, billingDays };
   }
 
-  function handleAddWard() {
+  async function handleAddWard() {
     if (!newWardName.trim()) return;
     const newWard: Ward = {
-      id: `w-${Date.now()}`,
+      id: generateUUID(),
       name: newWardName.trim(),
       is_active: true,
       created_at: new Date().toISOString(),
@@ -144,15 +145,16 @@ export default function InPatientPage() {
     HMSStore.saveSettings(settings); // triggers event
     localStorage.setItem('hms_data_wards', JSON.stringify(currentWards));
     window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'wards' } }));
+    await pushWardToSupabase(newWard);
     queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
     setNewWardName('');
     setShowAddWardModal(false);
   }
 
-  function handleAddBed() {
+  async function handleAddBed() {
     if (!newBedNumber.trim() || !newBedWardId) return;
     const newBed: Bed = {
-      id: `b-${Date.now()}`,
+      id: generateUUID(),
       ward_id: newBedWardId,
       bed_number: newBedNumber.trim(),
       price_per_day: newBedPrice || 1200,
@@ -163,12 +165,13 @@ export default function InPatientPage() {
     currentBeds.push(newBed);
     localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
     window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
+    await pushBedToSupabase(newBed);
     queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setNewBedNumber('');
     setShowAddBedModal(false);
   }
 
-  function handleUpdateBedPrice() {
+  async function handleUpdateBedPrice() {
     if (!editingBed) return;
     const currentBeds = HMSStore.getBeds();
     const bed = currentBeds.find((b) => b.id === editingBed.id);
@@ -176,6 +179,7 @@ export default function InPatientPage() {
       bed.price_per_day = editBedPrice;
       localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
       window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
+      await pushBedToSupabase(bed);
       queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     }
     setEditingBed(null);

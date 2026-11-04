@@ -154,6 +154,9 @@ export default function RegisterPatientPage() {
       HMSStore.savePatient(res.patient);
       HMSStore.saveVisit(res.visit);
 
+      queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+
       setCreatedResult(res);
     } catch (err: any) {
       console.warn('Atomic DB registration fell back to client generator:', err?.message);

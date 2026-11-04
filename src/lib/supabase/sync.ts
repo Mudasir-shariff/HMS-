@@ -11,6 +11,8 @@ import type {
   Admission,
   HospitalSettings,
   UserRole,
+  Ward,
+  Bed,
 } from '../types/database';
 
 export function isSupabaseConfigured(): boolean {
@@ -458,6 +460,25 @@ export async function pushVisitToSupabase(visit: Visit) {
     const supabase = createClient();
     const visitId = isValidUUID(visit.id) ? visit.id : generateUUID();
 
+    // Quick direct status update if record already exists
+    if (isValidUUID(visit.id)) {
+      const { data: updated, error: uErr } = await supabase
+        .from('visits')
+        .update({
+          status: visit.status,
+          follow_up_date: visit.follow_up_date || null,
+          instructions: visit.instructions || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', visitId)
+        .select('id')
+        .maybeSingle();
+
+      if (!uErr && updated) {
+        return;
+      }
+    }
+
     // Resolve doctor: Ensure the doctor exists in public.doctors so foreign key never fails
     let doctorIdToUse = visit.doctor_id;
     if (isValidUUID(visit.doctor_id)) {
@@ -562,10 +583,13 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
 
     const { error: rxErr } = await supabase.from('prescriptions').upsert({
       id: rxId,
-      visit_id: rx.visit_id,
-      doctor_id: doctorIdToUse,
-      patient_id: rx.patient_id,
+      visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
+      doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
+      patient_id: isValidUUID(rx.patient_id) ? rx.patient_id : null,
       notes: rx.notes || null,
+      uaid: rx.uaid || null,
+      stay_day_number: rx.stay_day_number || null,
+      updated_at: new Date().toISOString(),
     });
     if (rxErr) console.error('Error pushing prescription to Supabase:', rxErr);
 
@@ -578,12 +602,29 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
         dose_morning: Boolean(it.dose_morning),
         dose_afternoon: Boolean(it.dose_afternoon),
         dose_night: Boolean(it.dose_night),
-        dose_relation: it.dose_relation,
-        num_days: it.num_days,
-        quantity: it.quantity,
+        dose_relation: it.dose_relation || 'after_food',
+        num_days: Number(it.num_days) || 1,
+        quantity: Number(it.quantity) || 1,
+        is_custom: Boolean(it.is_custom),
+        item_type: it.item_type || null,
+        custom_unit: it.custom_unit || null,
+        added_by_pharmacist: Boolean(it.added_by_pharmacist),
+        pharmacist_notes: it.pharmacist_notes || null,
       }));
       const { error: itemsErr } = await supabase.from('prescription_items').upsert(itemsPayload);
       if (itemsErr) console.error('Error pushing prescription_items to Supabase:', itemsErr);
+    }
+
+    if (rx.lab_tests && rx.lab_tests.length > 0) {
+      const labPayload = rx.lab_tests.map((lt) => ({
+        id: isValidUUID(lt.id) ? lt.id : generateUUID(),
+        prescription_id: rxId,
+        test_name: lt.test_name,
+        notes: lt.notes || null,
+        created_at: lt.created_at || new Date().toISOString(),
+      }));
+      const { error: labErr } = await supabase.from('lab_test_orders').upsert(labPayload);
+      if (labErr) console.error('Error pushing lab_test_orders to Supabase:', labErr);
     }
   } catch (e) {
     console.warn('Failed to push prescription to Supabase:', e);
@@ -660,6 +701,62 @@ export async function pushAdmissionToSupabase(adm: Admission) {
     });
   } catch (e) {
     console.warn('Failed to push admission to Supabase:', e);
+  }
+}
+
+export async function pushWardToSupabase(ward: Ward) {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const supabase = createClient();
+    const wardId = isValidUUID(ward.id) ? ward.id : generateUUID();
+    const { error } = await supabase.from('wards').upsert({
+      id: wardId,
+      name: ward.name.trim(),
+      is_active: ward.is_active ?? true,
+      created_at: ward.created_at || new Date().toISOString(),
+    });
+    if (error) console.error('Error pushing ward to Supabase:', error);
+  } catch (e) {
+    console.warn('Failed to push ward to Supabase:', e);
+  }
+}
+
+export async function deleteWardFromSupabase(wardId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(wardId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('wards').delete().eq('id', wardId);
+  } catch (err) {
+    console.warn('Failed to delete ward from Supabase:', err);
+  }
+}
+
+export async function pushBedToSupabase(bed: Bed) {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const supabase = createClient();
+    const bedId = isValidUUID(bed.id) ? bed.id : generateUUID();
+    const { error } = await supabase.from('beds').upsert({
+      id: bedId,
+      ward_id: bed.ward_id,
+      bed_number: bed.bed_number.trim(),
+      price_per_day: Number(bed.price_per_day) || 500,
+      is_occupied: Boolean(bed.is_occupied),
+      created_at: bed.created_at || new Date().toISOString(),
+    });
+    if (error) console.error('Error pushing bed to Supabase:', error);
+  } catch (e) {
+    console.warn('Failed to push bed to Supabase:', e);
+  }
+}
+
+export async function deleteBedFromSupabase(bedId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(bedId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('beds').delete().eq('id', bedId);
+  } catch (err) {
+    console.warn('Failed to delete bed from Supabase:', err);
   }
 }
 
