@@ -34,7 +34,7 @@ import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { createClient } from '@/lib/supabase/client';
-import type { DrugType, Drug, Prescription, PrescriptionItem } from '@/lib/types/database';
+import type { DrugType, Drug, Prescription, PrescriptionItem, Visit, Dispensing } from '@/lib/types/database';
 
 interface DispenseItemState {
   id: string;
@@ -436,6 +436,19 @@ function DispenseContent() {
         overrideReason: overrideReason.trim() || undefined,
         hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
       });
+
+      // Explicitly update visit status in Supabase so Reception and Doctor portals see completed status immediately
+      if (visit?.id) {
+        try {
+          const supabase = createClient();
+          await supabase
+            .from('visits')
+            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
+            .eq('id', visit.id);
+        } catch (dbErr) {
+          console.warn('Direct visit update error:', dbErr);
+        }
+      }
     } catch (err: any) {
       console.warn('dispensePrescriptionAtomic error:', err?.message);
       if (err?.message?.includes('already been dispensed') || err?.message?.includes('Insufficient stock')) {
@@ -483,6 +496,32 @@ function DispenseContent() {
     } finally {
       setIsSubmitting(false);
     }
+
+    // Immediately patch React Query cache optimistically so the patient disappears from queue instantly (<10ms)
+    if (visit?.id) {
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+        old ? old.map((v) => (v.id === visit.id ? { ...v, status: 'dispensed', updated_at: new Date().toISOString() } : v)) : []
+      );
+    }
+    const newDispItem: Dispensing = {
+      id: generateUUID(),
+      prescription_id: rx?.id,
+      patient_id: patient?.id,
+      pharmacist_id: pharmacistId,
+      pharmacist_name: pharmacistName,
+      patient_name: patient?.name,
+      patient_phone: patient?.phone,
+      patient_uhid: patient?.uhid,
+      is_walk_in: false,
+      total_amount: totalAmount,
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    queryClient.setQueriesData<Dispensing[]>({ queryKey: queryKeys.dispensings.all }, (old) =>
+      old ? [newDispItem, ...old] : [newDispItem]
+    );
 
     queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });

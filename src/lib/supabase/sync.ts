@@ -530,22 +530,31 @@ export async function pushDrugToSupabase(drug: Drug) {
   }
 }
 
+const doctorResolutionCache = new Map<string, string>();
+
 export async function pushPrescriptionToSupabase(rx: Prescription) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
     const rxId = isValidUUID(rx.id) ? rx.id : generateUUID();
 
-    // Resolve doctor_id to ensure foreign key passes
+    // Resolve doctor_id to ensure foreign key passes (cached in-memory for instant lookups)
     let doctorIdToUse = rx.doctor_id;
     if (isValidUUID(rx.doctor_id)) {
-      const { data: existingDoc } = await supabase
-        .from('doctors')
-        .select('id, user_id')
-        .or(`id.eq.${rx.doctor_id},user_id.eq.${rx.doctor_id}`)
-        .limit(1)
-        .maybeSingle();
-      if (existingDoc) doctorIdToUse = existingDoc.id;
+      if (doctorResolutionCache.has(rx.doctor_id)) {
+        doctorIdToUse = doctorResolutionCache.get(rx.doctor_id)!;
+      } else {
+        const { data: existingDoc } = await supabase
+          .from('doctors')
+          .select('id, user_id')
+          .or(`id.eq.${rx.doctor_id},user_id.eq.${rx.doctor_id}`)
+          .limit(1)
+          .maybeSingle();
+        if (existingDoc) {
+          doctorIdToUse = existingDoc.id;
+          doctorResolutionCache.set(rx.doctor_id, existingDoc.id);
+        }
+      }
     }
 
     let { error: rxErr } = await supabase.from('prescriptions').upsert({

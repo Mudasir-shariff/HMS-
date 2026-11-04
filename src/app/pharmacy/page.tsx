@@ -162,10 +162,16 @@ export default function PharmacyPage() {
 
   // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
   const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
-    const dispensedRxIds = new Set(dispensings.map((d) => d.prescription_id).filter(Boolean));
-    const dispensedVisitIds = new Set(
-      visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id)
-    );
+    // Combine server dispensings with local store to eliminate any sync lag
+    const localDispensings = HMSStore.getDispensings();
+    const allDispensings = [...dispensings, ...localDispensings];
+
+    const dispensedRxIds = new Set(allDispensings.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedVisitIds = new Set([
+      ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+      ...allDispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
+      ...HMSStore.getVisits().filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+    ]);
 
     const matchedRxIds = new Set<string>();
     const matchedVisitIds = new Set<string>();
@@ -194,9 +200,14 @@ export default function PharmacyPage() {
           (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
       );
 
+      // If prescription was already dispensed, NEVER include in pending queue
+      if (rx && dispensedRxIds.has(rx.id)) {
+        return;
+      }
+
       const hasPrescription = Boolean(rx && !dispensedRxIds.has(rx.id) && rx.items && rx.items.length > 0);
 
-      if (v.status === 'prescribed' || hasPrescription) {
+      if ((v.status === 'prescribed' || hasPrescription) && !dispensedVisitIds.has(v.id)) {
         if (rx) matchedRxIds.add(rx.id);
         matchedVisitIds.add(v.id);
 

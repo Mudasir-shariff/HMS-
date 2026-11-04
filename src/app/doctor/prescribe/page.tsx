@@ -510,6 +510,7 @@ function PrescribeContent() {
       finalVisitId = updatedVisit.id;
       HMSStore.saveVisit(updatedVisit);
 
+      // Optimistically update React Query cache for visits and prescriptions (<1ms)
       queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
         old
           ? old.map((v) =>
@@ -519,13 +520,16 @@ function PrescribeContent() {
             )
           : [updatedVisit]
       );
+      queryClient.setQueriesData<Prescription[]>({ queryKey: ['prescriptions'] }, (old) =>
+        old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
+      );
     } catch (vErr) {
       console.warn('Local visit status update warning:', vErr);
     }
 
-    // 3. Push prescription payload FIRST, then update visit status to 'prescribed' to prevent race condition
-    try {
-      const executePushOperations = async () => {
+    // 3. Sequential Push: Commit prescription & items FIRST, then visit 'prescribed' status (runs asynchronously in background for 0ms doctor response)
+    const executePushOperations = async () => {
+      try {
         // Step A: Ensure prescription and its items are fully committed in Supabase first
         await pushPrescriptionToSupabase(rxPayload);
 
@@ -554,21 +558,16 @@ function PrescribeContent() {
               .eq('patient_id', validPatientId);
           }
         }
-      };
+      } catch (pErr) {
+        console.warn('Sequential pushPrescriptionToSupabase warning:', pErr);
+      } finally {
+        queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
+        queryClient.invalidateQueries({ queryKey: ['visits'] });
+      }
+    };
 
-      await Promise.race([
-        executePushOperations(),
-        new Promise((resolve) => setTimeout(resolve, 8000)),
-      ]);
-    } catch (pErr) {
-      console.warn('Sequential pushPrescriptionToSupabase warning:', pErr);
-    }
-
-    // 4. Invalidate query caches for instant UI update across pages
-    try {
-      queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['visits'] });
-    } catch {}
+    // Kick off push in background without blocking Doctor UI
+    executePushOperations();
 
     setSavedRxId(rxId);
     return rxId;

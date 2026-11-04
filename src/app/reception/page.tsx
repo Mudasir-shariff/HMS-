@@ -142,17 +142,19 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
     );
+    // Instant UI feedback (<10ms)
+    triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
+    setUpdatingVisitId(null);
+
+    // Sync to Supabase in background
     try {
       const { error } = await supabase.from('visits').update({ status: 'in_consultation', updated_at }).eq('id', visitId);
       if (error) {
         console.warn('Supabase update error (local updated):', error.message);
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-      triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
       console.warn('handleMoveToCabin error:', err);
-    } finally {
-      setUpdatingVisitId(null);
     }
   }
 
@@ -168,17 +170,19 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
     );
+    // Instant UI feedback (<10ms)
+    triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
+    setUpdatingVisitId(null);
+
+    // Sync to Supabase in background
     try {
       const { error } = await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
       if (error) {
         console.warn('Supabase update error (local updated):', error.message);
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-      triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
       console.warn('handleSendToPharmacy error:', err);
-    } finally {
-      setUpdatingVisitId(null);
     }
   }
 
@@ -194,17 +198,19 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
     );
+    // Instant UI feedback (<10ms)
+    triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
+    setUpdatingVisitId(null);
+
+    // Sync to Supabase in background
     try {
       const { error } = await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
       if (error) {
         console.warn('Supabase update error (local updated):', error.message);
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-      triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
       console.warn('handleQuickDeliver error:', err);
-    } finally {
-      setUpdatingVisitId(null);
     }
   }
 
