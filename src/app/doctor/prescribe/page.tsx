@@ -41,8 +41,9 @@ import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
-import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
-import type { PrescriptionItem, LabTestOrder, DrugType } from '@/lib/types/database';
+import { createClient } from '@/lib/supabase/client';
+import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured } from '@/lib/supabase/sync';
+import type { PrescriptionItem, LabTestOrder, DrugType, Prescription } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 const LAB_TEST_SUGGESTIONS = [
@@ -228,6 +229,7 @@ function PrescribeContent() {
   const [savedRxId, setSavedRxId] = useState<string>('');
   const [printLayout, setPrintLayout] = useState<'A4' | 'A5'>(settings.prescription_paper_size || 'A4');
   const [queuedPrinterSuccess, setQueuedPrinterSuccess] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Drug inventory search & catalog state
   const [drugSearch, setDrugSearch] = useState('');
@@ -456,7 +458,7 @@ function PrescribeContent() {
 
     const validPatientId = patientId || activePatient?.id || activeVisit?.patient_id || generateUUID();
 
-    const rxPayload = {
+    const rxPayload: Prescription = {
       id: rxId,
       visit_id: visitId || generateUUID(),
       doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
@@ -469,56 +471,128 @@ function PrescribeContent() {
       created_at: new Date().toISOString(),
     };
 
-    HMSStore.savePrescription(rxPayload);
-    await pushPrescriptionToSupabase(rxPayload);
+    // 1. Immediately save into local store (zero latency, works offline)
+    try {
+      HMSStore.savePrescription(rxPayload);
+    } catch (e) {
+      console.warn('HMSStore savePrescription warning:', e);
+    }
 
-    // Ensure the visit record is strictly moved to 'prescribed' so it appears in the Pharmacy Dispensing Queue immediately
+    // 2. Ensure visit record is strictly moved to 'prescribed' in BOTH store and Supabase
     if (visitId) {
-      const currentVisit = visits.find((v) => v.id === visitId) || HMSStore.getVisits().find((v) => v.id === visitId);
-      if (currentVisit) {
-        const updatedVisit = {
-          ...currentVisit,
-          status: 'prescribed' as const,
-          follow_up_date: followUp || undefined,
-          instructions: instructions,
-          updated_at: new Date().toISOString(),
-        };
-        HMSStore.saveVisit(updatedVisit);
-        await pushVisitToSupabase(updatedVisit);
+      try {
+        const allVisits = HMSStore.getVisits();
+        const existing = allVisits.find((v) => v.id === visitId);
+        if (existing) {
+          const updatedVisit = {
+            ...existing,
+            status: 'prescribed' as const,
+            follow_up_date: followUp || undefined,
+            instructions: instructions,
+            updated_at: new Date().toISOString(),
+          };
+          HMSStore.saveVisit(updatedVisit);
+        } else {
+          HMSStore.saveVisit({
+            id: visitId,
+            visit_number: `V-${token}`,
+            patient_id: validPatientId,
+            doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
+            token_number: Number(token) || 1,
+            status: 'prescribed' as const,
+            follow_up_date: followUp || undefined,
+            instructions: instructions,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        // Direct update to Supabase visits table
+        if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(visitId)) {
+          const supabase = createClient();
+          await supabase
+            .from('visits')
+            .update({
+              status: 'prescribed',
+              follow_up_date: followUp || null,
+              instructions: instructions || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', visitId);
+        }
+      } catch (vErr) {
+        console.warn('Direct visit status update warning:', vErr);
       }
     }
 
-    queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    // 3. Push prescription payload to Supabase
+    try {
+      await pushPrescriptionToSupabase(rxPayload);
+    } catch (pErr) {
+      console.warn('pushPrescriptionToSupabase warning:', pErr);
+    }
+
+    // 4. Invalidate query caches for instant UI update across pages
+    try {
+      queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    } catch {}
 
     setSavedRxId(rxId);
     return rxId;
   }
 
   async function handleSaveAndPrint() {
-    await executeSavePrescription();
-    setShowPrintView(true);
-    setTimeout(() => {
-      window.print();
-    }, 400);
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await executeSavePrescription();
+      setShowPrintView(true);
+      setTimeout(() => {
+        window.print();
+      }, 350);
+    } catch (err) {
+      console.error('Save and print error:', err);
+      setShowPrintView(true);
+      setTimeout(() => {
+        window.print();
+      }, 350);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleSaveOnly() {
-    await executeSavePrescription();
-    setShowPrintView(true);
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await executeSavePrescription();
+      setShowPrintView(true);
+    } catch (err) {
+      console.error('Save only error:', err);
+      setShowPrintView(true);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleSendToHospitalPrinter() {
-    const rxId = await executeSavePrescription();
-    const job = HMSStore.sendToPrintQueue({
-      rxId,
-      patientName,
-      token,
-      doctorName: doctor.full_name || 'Dr. Consultant',
-      printerName: settings.default_printer,
-    });
-    setQueuedPrinterSuccess(`Prescription sent to ${job.printerName}. Printing now at Hospital reception.`);
-    setTimeout(() => setQueuedPrinterSuccess(null), 5000);
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const rxId = await executeSavePrescription();
+      const job = HMSStore.sendToPrintQueue({
+        rxId,
+        patientName,
+        token,
+        doctorName: doctor.full_name || 'Dr. Consultant',
+        printerName: settings.default_printer,
+      });
+      setQueuedPrinterSuccess(`Prescription sent to ${job.printerName}. Printing now at Hospital reception.`);
+      setTimeout(() => setQueuedPrinterSuccess(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   const [currentDateFormatted, setCurrentDateFormatted] = useState('');
@@ -883,24 +957,50 @@ function PrescribeContent() {
   return (
     <div className="pb-28 lg:pb-8">
       {/* Top Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <button
-          type="button"
-          onClick={() => router.push('/doctor')}
-          className="h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-all cursor-pointer shadow-xs shrink-0"
-          title="Back to Doctor Queue"
-          aria-label="Back to Doctor Queue"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <h1 className="text-2xl lg:text-[36px] font-medium text-[var(--text-strong)] tracking-[-0.02em] leading-tight">
-            Consultation · Token #{String(token).padStart(2, '0')}
-          </h1>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Patient: <strong>{patientName}</strong> ({age}y · UHID: {uhid}) · Consultant: <strong>{doctor.full_name}</strong>
-            {uaid ? ` · In-Patient UAID: ${uaid} (Stay Day ${stayDayNumber || 1})` : ''}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => router.push('/doctor')}
+            className="h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-all cursor-pointer shadow-xs shrink-0"
+            title="Back to Doctor Queue"
+            aria-label="Back to Doctor Queue"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 className="text-2xl lg:text-[36px] font-medium text-[var(--text-strong)] tracking-[-0.02em] leading-tight">
+              Consultation · Token #{String(token).padStart(2, '0')}
+            </h1>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              Patient: <strong>{patientName}</strong> ({age}y · UHID: {uhid}) · Consultant: <strong>{doctor.full_name}</strong>
+              {uaid ? ` · In-Patient UAID: ${uaid} (Stay Day ${stayDayNumber || 1})` : ''}
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Send size={14} />}
+            onClick={handleSaveOnly}
+            loading={isSaving}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Sending...' : 'Send to Pharmacy'}
+          </Button>
+
+          <Button
+            size="sm"
+            icon={<Printer size={14} />}
+            onClick={handleSaveAndPrint}
+            loading={isSaving}
+            disabled={isSaving}
+            className="bg-[var(--green-900)] text-white"
+          >
+            {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
+          </Button>
         </div>
       </div>
 
@@ -1557,17 +1657,21 @@ function PrescribeContent() {
               variant="secondary"
               icon={<Send size={16} />}
               onClick={handleSaveOnly}
+              loading={isSaving}
+              disabled={isSaving}
               className="flex-1 sm:flex-initial"
             >
-              Send to Pharmacy
+              {isSaving ? 'Sending...' : 'Send to Pharmacy'}
             </Button>
 
             <Button
               icon={<Printer size={16} />}
               onClick={handleSaveAndPrint}
+              loading={isSaving}
+              disabled={isSaving}
               className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white"
             >
-              Send to Pharmacy & Print
+              {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
             </Button>
           </div>
         </div>

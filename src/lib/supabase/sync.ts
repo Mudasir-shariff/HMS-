@@ -581,7 +581,7 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       if (existingDoc) doctorIdToUse = existingDoc.id;
     }
 
-    const { error: rxErr } = await supabase.from('prescriptions').upsert({
+    let { error: rxErr } = await supabase.from('prescriptions').upsert({
       id: rxId,
       visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
       doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
@@ -591,7 +591,17 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       stay_day_number: rx.stay_day_number || null,
       updated_at: new Date().toISOString(),
     });
-    if (rxErr) console.error('Error pushing prescription to Supabase:', rxErr);
+    if (rxErr) {
+      console.warn('Prescription full upsert warning, retrying core schema:', rxErr.message);
+      const { error: coreErr } = await supabase.from('prescriptions').upsert({
+        id: rxId,
+        visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
+        doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
+        patient_id: isValidUUID(rx.patient_id) ? rx.patient_id : null,
+        notes: rx.notes || null,
+      });
+      if (coreErr) console.error('Core prescription upsert failed:', coreErr);
+    }
 
     if (rx.items && rx.items.length > 0) {
       const itemsPayload = rx.items.map((it) => ({
@@ -611,20 +621,40 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
         added_by_pharmacist: Boolean(it.added_by_pharmacist),
         pharmacist_notes: it.pharmacist_notes || null,
       }));
-      const { error: itemsErr } = await supabase.from('prescription_items').upsert(itemsPayload);
-      if (itemsErr) console.error('Error pushing prescription_items to Supabase:', itemsErr);
+      let { error: itemsErr } = await supabase.from('prescription_items').upsert(itemsPayload);
+      if (itemsErr) {
+        console.warn('Items full upsert warning, retrying core schema:', itemsErr.message);
+        const coreItems = rx.items.map((it) => ({
+          id: isValidUUID(it.id) ? it.id : generateUUID(),
+          prescription_id: rxId,
+          drug_id: isValidUUID(it.drug_id) ? it.drug_id : null,
+          drug_name: it.drug_name,
+          dose_morning: Boolean(it.dose_morning),
+          dose_afternoon: Boolean(it.dose_afternoon),
+          dose_night: Boolean(it.dose_night),
+          dose_relation: it.dose_relation || 'after_food',
+          num_days: Number(it.num_days) || 1,
+          quantity: Number(it.quantity) || 1,
+        }));
+        const { error: coreItemsErr } = await supabase.from('prescription_items').upsert(coreItems);
+        if (coreItemsErr) console.error('Core items upsert failed:', coreItemsErr);
+      }
     }
 
     if (rx.lab_tests && rx.lab_tests.length > 0) {
-      const labPayload = rx.lab_tests.map((lt) => ({
-        id: isValidUUID(lt.id) ? lt.id : generateUUID(),
-        prescription_id: rxId,
-        test_name: lt.test_name,
-        notes: lt.notes || null,
-        created_at: lt.created_at || new Date().toISOString(),
-      }));
-      const { error: labErr } = await supabase.from('lab_test_orders').upsert(labPayload);
-      if (labErr) console.error('Error pushing lab_test_orders to Supabase:', labErr);
+      try {
+        const labPayload = rx.lab_tests.map((lt) => ({
+          id: isValidUUID(lt.id) ? lt.id : generateUUID(),
+          prescription_id: rxId,
+          test_name: lt.test_name,
+          notes: lt.notes || null,
+          created_at: lt.created_at || new Date().toISOString(),
+        }));
+        const { error: labErr } = await supabase.from('lab_test_orders').upsert(labPayload);
+        if (labErr) console.warn('lab_test_orders upsert:', labErr.message);
+      } catch (lErr) {
+        console.warn('lab_test_orders table skipped:', lErr);
+      }
     }
   } catch (e) {
     console.warn('Failed to push prescription to Supabase:', e);
