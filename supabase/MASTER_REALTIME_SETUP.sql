@@ -393,19 +393,24 @@ DECLARE
   v_uhid TEXT;
   v_visit_number TEXT;
   v_token_number INT;
-  v_patient_id UUID;
+  v_patient_id UUID := NULL;
   v_visit_id UUID;
 BEGIN
-  IF p_uhid IS NOT NULL AND p_uhid != '' THEN
+  IF p_uhid IS NOT NULL AND TRIM(p_uhid) != '' THEN
     SELECT * INTO v_patient FROM public.patients WHERE uhid = UPPER(TRIM(p_uhid)) AND deleted_at IS NULL LIMIT 1 FOR UPDATE;
+    IF FOUND THEN
+      v_patient_id := v_patient.id;
+    END IF;
   END IF;
 
-  IF v_patient.id IS NULL AND p_phone IS NOT NULL AND LENGTH(TRIM(p_phone)) >= 10 THEN
+  IF v_patient_id IS NULL AND p_phone IS NOT NULL AND LENGTH(TRIM(p_phone)) >= 10 THEN
     SELECT * INTO v_patient FROM public.patients WHERE phone = TRIM(p_phone) AND deleted_at IS NULL LIMIT 1 FOR UPDATE;
+    IF FOUND THEN
+      v_patient_id := v_patient.id;
+    END IF;
   END IF;
 
-  IF v_patient.id IS NOT NULL THEN
-    v_patient_id := v_patient.id;
+  IF v_patient_id IS NOT NULL THEN
     v_uhid := v_patient.uhid;
     UPDATE public.patients
     SET name = TRIM(p_name),

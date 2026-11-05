@@ -23,7 +23,7 @@ import {
   Mail,
   HelpCircle,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { canAccess, ROLE_HOME } from '@/lib/auth/roles';
 import { ConnectionIndicator } from './connection-indicator';
@@ -77,8 +77,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
 
+  const isAuthPage = AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+
+  useEffect(() => {
+    if (!loading && !user && !isAuthPage) {
+      router.push('/login');
+    }
+  }, [loading, user, isAuthPage, router]);
+
   // On auth pages, render children with no chrome
-  if (AUTH_PATHS.some((p) => pathname.startsWith(p))) {
+  if (isAuthPage) {
     return <>{children}</>;
   }
 
@@ -91,11 +99,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Not logged in -> redirect to login
+  // Not logged in -> return null while redirecting
   if (!user) {
-    if (typeof window !== 'undefined') {
-      router.push('/login');
-    }
     return null;
   }
 

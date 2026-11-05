@@ -8,8 +8,3 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim())
   );
 });
-
-self.addEventListener('fetch', () => {
-  // Pure online mode: no offline caching or interception
-  return;
-});

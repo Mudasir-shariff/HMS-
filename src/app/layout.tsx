@@ -51,13 +51,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
+    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="format-detection" content="telephone=no" />
       </head>
-      <body className="antialiased min-h-dvh flex flex-col">
+      <body className="antialiased min-h-dvh flex flex-col" suppressHydrationWarning>
         <PwaRegister />
         <QueryProvider>
           <AuthProvider>

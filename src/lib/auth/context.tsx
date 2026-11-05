@@ -69,34 +69,8 @@ function clearSessionCookie() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const cookieUser = getSessionCookie();
-      if (cookieUser?.id) {
-        return {
-          id: cookieUser.id,
-          email: cookieUser.email,
-          fullName: cookieUser.fullName,
-          role: cookieUser.role as UserRole,
-        };
-      }
-    } catch {
-      // fallback
-    }
-    return null;
-  });
-
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    try {
-      const cookieUser = getSessionCookie();
-      if (cookieUser?.id) return false;
-    } catch {
-      // fallback
-    }
-    return true;
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const loadUser = useCallback(async (uid?: string, email?: string) => {
     try {
@@ -165,19 +139,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      const cookieUser = getSessionCookie();
-      if (cookieUser?.id) {
-        setUser({
-          id: cookieUser.id,
-          email: cookieUser.email,
-          fullName: cookieUser.fullName,
-          role: cookieUser.role as UserRole,
-        });
-      } else {
-        setUser(null);
-      }
+    // 0. Immediate optimistic session recovery from cookie on client mount (<1ms)
+    const initialCookie = getSessionCookie();
+    if (initialCookie?.id) {
+      setUser({
+        id: initialCookie.id,
+        email: initialCookie.email,
+        fullName: initialCookie.fullName,
+        role: initialCookie.role as UserRole,
+      });
       setLoading(false);
+    }
+
+    if (!isSupabaseConfigured()) {
+      if (!initialCookie?.id) {
+        setUser(null);
+        setLoading(false);
+      }
       return;
     }
 
@@ -231,17 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const supabase = createClient();
-      // 1. Try standard Supabase Auth
-      const { data, error } = await (supabase.auth as any).signInWithPassword({
-        email: cleanEmail,
-        password: password || '',
-      });
-      if (!error && data?.session?.user) {
-        const profile = await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
-        return { success: true, role: profile?.role as UserRole };
-      }
 
-      // 2. Direct database profile verification (for hospital staff logins)
+      // 1. Direct database profile verification (for hospital staff logins)
       const { data: dbProfile, error: pErr } = await supabase
         .from('user_profiles')
         .select('*')
@@ -255,8 +224,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (dbProfile.password && password && dbProfile.password !== password) {
           return { success: false, error: 'Incorrect password. Please verify and try again.' };
         }
-        await loadUser(dbProfile.id, dbProfile.email || cleanEmail);
-        return { success: true, role: dbProfile.role as UserRole };
+        if (dbProfile.password && password && dbProfile.password === password) {
+          (supabase.auth as any).signInWithPassword({ email: cleanEmail, password }).catch(() => {});
+          await loadUser(dbProfile.id, dbProfile.email || cleanEmail);
+          return { success: true, role: dbProfile.role as UserRole };
+        }
+      }
+
+      // 2. Standard Supabase Auth session fallback
+      const { data, error } = await (supabase.auth as any).signInWithPassword({
+        email: cleanEmail,
+        password: password || '',
+      });
+      if (!error && data?.session?.user) {
+        const profile = await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
+        return { success: true, role: profile?.role as UserRole };
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
