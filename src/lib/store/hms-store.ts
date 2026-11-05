@@ -676,14 +676,27 @@ export const HMSStore = {
       }
     }
 
-    // 2. Mark OPD visit as dispensed
-    if (data.visitId) {
-      const visit = this.getVisits().find((v) => v.id === data.visitId);
-      if (visit) {
-        visit.status = 'dispensed';
-        visit.updated_at = new Date().toISOString();
-        this.saveVisit(visit);
+    // 2. Mark OPD visit as dispensed (by visitId or patientId)
+    let targetVisitId = data.visitId;
+    if (!targetVisitId && data.prescriptionId) {
+      const allRx = this.getPrescriptions();
+      const rx = allRx.find((p) => p.id === data.prescriptionId);
+      if (rx?.visit_id) targetVisitId = rx.visit_id;
+    }
+    const allVisits = this.getVisits();
+    let updatedAnyVisit = false;
+    for (const v of allVisits) {
+      if (
+        (targetVisitId && v.id === targetVisitId) ||
+        (data.patientId && v.patient_id === data.patientId && (v.status === 'prescribed' || v.status === 'in_consultation'))
+      ) {
+        v.status = 'dispensed';
+        v.updated_at = new Date().toISOString();
+        updatedAnyVisit = true;
       }
+    }
+    if (updatedAnyVisit) {
+      setStorage('visits', allVisits);
     }
 
     // 2b. Sync/Update Prescription so any tablet added or modified by pharmacist appears on doctor's prescription!
@@ -739,6 +752,7 @@ export const HMSStore = {
     const newDispensing: Dispensing = {
       id: dispId,
       prescription_id: data.prescriptionId,
+      visit_id: targetVisitId || data.visitId,
       patient_id: data.patientId,
       pharmacist_id: data.pharmacistId,
       pharmacist_name: data.pharmacistName || 'Pharmacist on Duty',

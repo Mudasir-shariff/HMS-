@@ -55,6 +55,15 @@ export default function PharmacyPage() {
   const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [tab, setTab] = useState<Tab>('queue');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab');
+      if (p && (['queue', 'dispensed', 'inventory', 'reorder'] as Tab[]).includes(p as Tab)) {
+        setTab(p as Tab);
+      }
+    }
+  }, []);
   const [invSearch, setInvSearch] = useState('');
   const [dispensedSearch, setDispensedSearch] = useState('');
 
@@ -160,16 +169,29 @@ export default function PharmacyPage() {
     created_at?: string;
   }
 
+  // Deduplicated merged dispensings (local store + React Query server cache)
+  const allDispensingsMerged = useMemo(() => {
+    const local = HMSStore.getDispensings();
+    const map = new Map<string, Dispensing>();
+    // First local
+    local.forEach((d) => map.set(d.id, d));
+    // Then server
+    dispensings.forEach((d) => map.set(d.id, d));
+    // Return sorted newest delivered/created first
+    return Array.from(map.values()).sort((a, b) => {
+      const timeA = new Date(a.delivered_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.delivered_at || b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [dispensings]);
+
   // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
   const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
-    // Combine server dispensings with local store to eliminate any sync lag
-    const localDispensings = HMSStore.getDispensings();
-    const allDispensings = [...dispensings, ...localDispensings];
-
-    const dispensedRxIds = new Set(allDispensings.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedRxIds = new Set(allDispensingsMerged.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedPatientIds = new Set(allDispensingsMerged.map((d) => d.patient_id).filter(Boolean));
     const dispensedVisitIds = new Set([
       ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
-      ...allDispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
+      ...allDispensingsMerged.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
       ...HMSStore.getVisits().filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
     ]);
 
@@ -189,7 +211,12 @@ export default function PharmacyPage() {
 
     // Pass 1: Scan all visits
     visits.forEach((v) => {
-      if (v.status === 'dispensed' || v.status === 'completed' || dispensedVisitIds.has(v.id)) {
+      if (
+        v.status === 'dispensed' ||
+        v.status === 'completed' ||
+        dispensedVisitIds.has(v.id) ||
+        (v.patient_id && dispensedPatientIds.has(v.patient_id))
+      ) {
         return;
       }
 
@@ -201,7 +228,7 @@ export default function PharmacyPage() {
       );
 
       // If prescription was already dispensed, NEVER include in pending queue
-      if (rx && dispensedRxIds.has(rx.id)) {
+      if (rx && (dispensedRxIds.has(rx.id) || (rx.patient_id && dispensedPatientIds.has(rx.patient_id)))) {
         return;
       }
 
@@ -234,6 +261,7 @@ export default function PharmacyPage() {
     // Pass 2: Include any un-dispensed prescriptions (e.g. IP prescriptions or direct consultations)
     prescriptions.forEach((rx) => {
       if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
+      if (rx.patient_id && dispensedPatientIds.has(rx.patient_id)) return;
       if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
       if (!rx.items || rx.items.length === 0) return;
 
@@ -265,16 +293,18 @@ export default function PharmacyPage() {
     });
 
     return queue;
-  }, [visits, prescriptions, dispensings, patients, doctors]);
+  }, [visits, prescriptions, allDispensingsMerged, patients, doctors]);
 
   // 2. Today's Dispensed Patients (PRD v1.1: Remains in today's patient list, editable with auto stock correction)
-  const todayDispensed = dispensings.filter((d) => {
-    const matchesSearch =
-      (d.patient_name || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||
-      (d.patient_uhid || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||
-      (d.patient_phone || '').includes(dispensedSearch);
-    return matchesSearch;
-  });
+  const todayDispensed = useMemo(() => {
+    return allDispensingsMerged.filter((d) => {
+      const matchesSearch =
+        (d.patient_name || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||
+        (d.patient_uhid || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||
+        (d.patient_phone || '').includes(dispensedSearch);
+      return matchesSearch;
+    });
+  }, [allDispensingsMerged, dispensedSearch]);
 
   // 3. Drug Inventory Filters & Alerts
   const filteredInventory = drugs.filter(

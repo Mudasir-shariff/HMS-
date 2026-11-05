@@ -160,6 +160,7 @@ export interface Drug {
 export interface Dispensing {
   id: string;
   prescription_id?: string;  // null for walk-in sales
+  visit_id?: string;
   patient_id?: string;
   pharmacist_id: string;
   pharmacist_name?: string;

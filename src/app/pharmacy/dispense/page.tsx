@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle,
   Package,
   ShieldCheck,
@@ -26,6 +27,7 @@ import {
   useDoctors,
   useDrugs,
   usePrescriptions,
+  useDispensings,
   useHospitalSettings,
 } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
@@ -77,6 +79,7 @@ function DispenseContent() {
   const { data: doctors = [] } = useDoctors();
   const { data: drugs = [] } = useDrugs();
   const { data: prescriptions = [] } = usePrescriptions();
+  const { data: dispensings = [] } = useDispensings();
   const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const visitId = searchParams.get('visitId') || '';
@@ -107,6 +110,104 @@ function DispenseContent() {
   const doctor = doctors.find(
     (d) => d.id === rx?.doctor_id || d.id === visit?.doctor_id || (d as any).user_id === rx?.doctor_id
   );
+
+  // Find next waiting patient in queue (excluding current patient/visit/prescription)
+  const nextPatient = useMemo(() => {
+    const localDispensings = HMSStore.getDispensings();
+    const allDispensings = [...dispensings, ...localDispensings];
+    const dispensedRxIds = new Set(allDispensings.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedPatientIds = new Set(allDispensings.map((d) => d.patient_id).filter(Boolean));
+    const dispensedVisitIds = new Set([
+      ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+      ...allDispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
+      ...HMSStore.getVisits().filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+    ]);
+
+    const currentVisitId = visitId || visit?.id;
+    const currentRxId = rx?.id || rxIdParam;
+    const currentPatientId = patient?.id || rx?.patient_id || visit?.patient_id;
+
+    const patientMap = new Map<string, (typeof patients)[0]>();
+    patients.forEach((p) => patientMap.set(p.id, p));
+
+    const candidates: Array<{
+      id: string;
+      visitId?: string;
+      prescriptionId?: string;
+      token_number: number;
+      patientName: string;
+      patientUhid?: string;
+      created_at?: string;
+    }> = [];
+
+    // Scan visits
+    visits.forEach((v) => {
+      if (v.id === currentVisitId) return;
+      if (currentPatientId && v.patient_id === currentPatientId) return;
+      if (
+        v.status === 'dispensed' ||
+        v.status === 'completed' ||
+        dispensedVisitIds.has(v.id) ||
+        (v.patient_id && dispensedPatientIds.has(v.patient_id))
+      ) {
+        return;
+      }
+
+      const matchingRx = prescriptions.find(
+        (p) =>
+          (p.visit_id && p.visit_id === v.id) ||
+          (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
+      );
+
+      if (matchingRx && (dispensedRxIds.has(matchingRx.id) || matchingRx.id === currentRxId)) {
+        return;
+      }
+
+      const hasPrescription = Boolean(matchingRx && matchingRx.items && matchingRx.items.length > 0);
+
+      if (v.status === 'prescribed' || hasPrescription) {
+        const p = (v.patient_id ? patientMap.get(v.patient_id) : undefined) || (matchingRx ? patientMap.get(matchingRx.patient_id) : undefined);
+        candidates.push({
+          id: v.id,
+          visitId: v.id,
+          prescriptionId: matchingRx?.id,
+          token_number: Number(v.token_number) || 1,
+          patientName: p?.name || 'Next Patient',
+          patientUhid: p?.uhid,
+          created_at: v.created_at,
+        });
+      }
+    });
+
+    // Scan unlinked prescriptions (e.g. IP prescriptions)
+    prescriptions.forEach((pRx) => {
+      if (pRx.id === currentRxId) return;
+      if (currentPatientId && pRx.patient_id === currentPatientId) return;
+      if (dispensedRxIds.has(pRx.id)) return;
+      if (pRx.patient_id && dispensedPatientIds.has(pRx.patient_id)) return;
+      if (pRx.visit_id && (dispensedVisitIds.has(pRx.visit_id) || pRx.visit_id === currentVisitId)) return;
+      if (!pRx.items || pRx.items.length === 0) return;
+      if (candidates.some((c) => c.prescriptionId === pRx.id || (pRx.visit_id && c.visitId === pRx.visit_id))) return;
+
+      const p = patientMap.get(pRx.patient_id);
+      candidates.push({
+        id: pRx.visit_id || pRx.id,
+        visitId: pRx.visit_id,
+        prescriptionId: pRx.id,
+        token_number: pRx.uaid ? 0 : 99,
+        patientName: p?.name || 'Next Patient',
+        patientUhid: p?.uhid,
+        created_at: pRx.created_at,
+      });
+    });
+
+    candidates.sort((a, b) => {
+      if (a.token_number !== b.token_number) return a.token_number - b.token_number;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+    return candidates[0] || null;
+  }, [visits, prescriptions, dispensings, patients, visitId, visit?.id, rx?.id, rxIdParam, patient?.id]);
 
   // Initialize medicine checklist with PRD v1.1 Smart Quantity Rules
   const [items, setItems] = useState<DispenseItemState[]>(() => {
@@ -215,6 +316,16 @@ function DispenseContent() {
     itemCount: number;
     items: DispenseItemState[];
   } | null>(null);
+
+  // Reset screen states whenever navigation changes patient
+  useEffect(() => {
+    setDispensedDone(false);
+    setDeliveryResult(null);
+    setOverrideReason('');
+    setIsSubmitting(false);
+    setEditingItem(null);
+    setShowAddModal(false);
+  }, [visitId, rxIdParam, token]);
 
   function toggleItem(id: string) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, included: !i.included } : i)));
@@ -368,7 +479,7 @@ function DispenseContent() {
   const requiresOverride = hasInsufficientStock || hasExpiredDrug || hasDuplicate;
 
   // ────────────────────────────────────────────────────────────────────────────
-  // DELIVERED BUTTON HANDLER (PRD v1.1 Rule: Only confirmation step. No bill needed)
+  // DELIVERED BUTTON HANDLER (PRD v1.1 Rule: Only confirmation step. Instant UI)
   // ────────────────────────────────────────────────────────────────────────────
   async function handleMarkDelivered() {
     if (isSubmitting) return;
@@ -385,149 +496,80 @@ function DispenseContent() {
 
     setIsSubmitting(true);
     const pharmacistName = user?.fullName || 'Pharmacist on Duty';
-    const pharmacistId = user?.id && user.id.length === 36 ? user.id : (HMSStore.getUsers().find(u => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID());
+    const pharmacistId =
+      user?.id && user.id.length === 36
+        ? user.id
+        : HMSStore.getUsers().find((u) => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID();
 
-    try {
-      // 1. Transactional RPC (Phase 2): Locks visit, checks stock, decrements stock atomically
-      await dispensePrescriptionAtomic({
-        prescriptionId: rx?.id,
-        pharmacistId,
-        pharmacistName,
-        items: includedItems.map((i) => ({
-          drugId: i.drugId,
-          drugName: i.name,
-          quantity: i.qty,
-          unitPrice: i.unitPrice,
-          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
-          isCustom: i.isCustom,
-        })),
-        totalAmount,
-        overrideReason: overrideReason.trim() || undefined,
-        isWalkIn: false,
-        patientId: patient?.id,
-        patientName: patient?.name,
-        patientPhone: patient?.phone,
-        patientUhid: patient?.uhid,
-        uaid: rx?.uaid,
-        stayDayNumber: rx?.stay_day_number,
-      });
+    const currentVisitId = visit?.id || visitId;
+    const currentPatientId = patient?.id;
+    const currentRxId = rx?.id || generateUUID();
 
-      // Also mirror local store for immediate UI reactivity
-      HMSStore.deliverPrescription({
-        visitId: visit?.id,
-        prescriptionId: rx?.id || generateUUID(),
-        pharmacistId,
-        pharmacistName,
-        patientId: patient?.id,
-        patientName: patient?.name,
-        patientPhone: patient?.phone,
-        patientUhid: patient?.uhid,
-        uaid: rx?.uaid,
-        stayDayNumber: rx?.stay_day_number,
-        items: includedItems.map((i) => ({
-          drugId: i.drugId,
-          drugName: i.name,
-          quantity: i.qty,
-          unitPrice: i.unitPrice,
-          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
-          isCustom: i.isCustom,
-        })),
-        totalAmount,
-        overrideReason: overrideReason.trim() || undefined,
-        hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
-      });
+    // 1. INSTANT OPTIMISTIC STORE UPDATE (<5ms)
+    // Synchronously reduce stock, mark visit as dispensed, and record in HMSStore
+    const deliveredDispensing = HMSStore.deliverPrescription({
+      visitId: currentVisitId,
+      prescriptionId: currentRxId,
+      pharmacistId,
+      pharmacistName,
+      patientId: currentPatientId,
+      patientName: patient?.name,
+      patientPhone: patient?.phone,
+      patientUhid: patient?.uhid,
+      uaid: rx?.uaid,
+      stayDayNumber: rx?.stay_day_number,
+      items: includedItems.map((i) => ({
+        drugId: i.drugId,
+        drugName: i.name,
+        quantity: i.qty,
+        unitPrice: i.unitPrice,
+        totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
+        isCustom: i.isCustom,
+      })),
+      totalAmount,
+      overrideReason: overrideReason.trim() || undefined,
+      hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
+    });
 
-      // Explicitly update visit status in Supabase so Reception and Doctor portals see completed status immediately
-      if (visit?.id) {
-        try {
-          const supabase = createClient();
-          await supabase
-            .from('visits')
-            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
-            .eq('id', visit.id);
-        } catch (dbErr) {
-          console.warn('Direct visit update error:', dbErr);
+    // 2. INSTANT OPTIMISTIC REACT QUERY CACHE UPDATE
+    // Mark visit as dispensed in React Query visits cache
+    queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) => {
+      if (!old) return [];
+      return old.map((v) => {
+        if (
+          (currentVisitId && v.id === currentVisitId) ||
+          (currentPatientId && v.patient_id === currentPatientId && (v.status === 'prescribed' || v.status === 'in_consultation'))
+        ) {
+          return { ...v, status: 'dispensed', updated_at: new Date().toISOString() };
         }
-      }
-    } catch (err: any) {
-      console.warn('dispensePrescriptionAtomic error:', err?.message);
-      if (err?.message?.includes('already been dispensed') || err?.message?.includes('Insufficient stock')) {
-        alert(err.message);
-        setIsSubmitting(false);
-        return;
-      }
-      // Fallback local store
-      HMSStore.deliverPrescription({
-        visitId: visit?.id,
-        prescriptionId: rx?.id || generateUUID(),
-        pharmacistId,
-        pharmacistName,
-        patientId: patient?.id,
-        patientName: patient?.name,
-        patientPhone: patient?.phone,
-        patientUhid: patient?.uhid,
-        uaid: rx?.uaid,
-        stayDayNumber: rx?.stay_day_number,
-        items: includedItems.map((i) => ({
-          drugId: i.drugId,
-          drugName: i.name,
-          quantity: i.qty,
-          unitPrice: i.unitPrice,
-          totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
-          isCustom: i.isCustom,
-        })),
-        totalAmount,
-        overrideReason: overrideReason.trim() || undefined,
-        hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
+        return v;
       });
+    });
 
-      // Explicitly update visit status in Supabase so Reception and Doctor portals see completed status immediately
-      if (visit?.id) {
-        try {
-          const supabase = createClient();
-          await supabase
-            .from('visits')
-            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
-            .eq('id', visit.id);
-        } catch (dbErr) {
-          console.warn('Fallback visit update error:', dbErr);
+    // Prepend new dispensing to React Query dispensings cache
+    queryClient.setQueriesData<Dispensing[]>({ queryKey: queryKeys.dispensings.all }, (old) => {
+      return old ? [deliveredDispensing, ...old.filter((d) => d.id !== deliveredDispensing.id)] : [deliveredDispensing];
+    });
+
+    // Optimistically deduct drug stock in React Query drugs cache
+    queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) => {
+      if (!old) return [];
+      const qtyMap = new Map<string, number>();
+      includedItems.forEach((i) => {
+        if (!i.isCustom && i.drugId) {
+          qtyMap.set(i.drugId, (qtyMap.get(i.drugId) || 0) + i.qty);
         }
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+      });
+      return old.map((d) => {
+        const deduct = qtyMap.get(d.id);
+        if (deduct) {
+          return { ...d, stock_quantity: Math.max(0, d.stock_quantity - deduct) };
+        }
+        return d;
+      });
+    });
 
-    // Immediately patch React Query cache optimistically so the patient disappears from queue instantly (<10ms)
-    if (visit?.id) {
-      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
-        old ? old.map((v) => (v.id === visit.id ? { ...v, status: 'dispensed', updated_at: new Date().toISOString() } : v)) : []
-      );
-    }
-    const newDispItem: Dispensing = {
-      id: generateUUID(),
-      prescription_id: rx?.id,
-      patient_id: patient?.id,
-      pharmacist_id: pharmacistId,
-      pharmacist_name: pharmacistName,
-      patient_name: patient?.name,
-      patient_phone: patient?.phone,
-      patient_uhid: patient?.uhid,
-      is_walk_in: false,
-      total_amount: totalAmount,
-      status: 'delivered',
-      delivered_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    queryClient.setQueriesData<Dispensing[]>({ queryKey: queryKeys.dispensings.all }, (old) =>
-      old ? [newDispItem, ...old] : [newDispItem]
-    );
-
-    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-
+    // 3. DISPLAY CONFIRMATION IMMEDIATELY (Zero spinner delay)
     setDeliveryResult({
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       pharmacistName,
@@ -535,6 +577,50 @@ function DispenseContent() {
       items: includedItems,
     });
     setDispensedDone(true);
+    setIsSubmitting(false);
+
+    // 4. FIRE-AND-FORGET BACKGROUND SYNC (Network RPC to Supabase without blocking UI)
+    (async () => {
+      try {
+        await dispensePrescriptionAtomic({
+          prescriptionId: rx?.id,
+          pharmacistId,
+          pharmacistName,
+          items: includedItems.map((i) => ({
+            drugId: i.drugId,
+            drugName: i.name,
+            quantity: i.qty,
+            unitPrice: i.unitPrice,
+            totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
+            isCustom: i.isCustom,
+          })),
+          totalAmount,
+          overrideReason: overrideReason.trim() || undefined,
+          isWalkIn: false,
+          patientId: currentPatientId,
+          patientName: patient?.name,
+          patientPhone: patient?.phone,
+          patientUhid: patient?.uhid,
+          uaid: rx?.uaid,
+          stayDayNumber: rx?.stay_day_number,
+        });
+
+        if (currentVisitId) {
+          const supabase = createClient();
+          await supabase
+            .from('visits')
+            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
+            .eq('id', currentVisitId);
+        }
+      } catch (bgErr: any) {
+        console.warn('Background sync note (safe offline/cached):', bgErr?.message || bgErr);
+      } finally {
+        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+      }
+    })();
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -542,12 +628,12 @@ function DispenseContent() {
   // ────────────────────────────────────────────────────────────────────────────
   if (dispensedDone && deliveryResult) {
     return (
-      <div className="py-8 max-w-lg mx-auto text-center">
-        <Card className="p-8 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
+      <div className="py-6 sm:py-8 max-w-lg mx-auto text-center px-3 sm:px-0">
+        <Card className="p-6 sm:p-8 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
           <div className="h-16 w-16 rounded-full bg-[var(--success-bg)] text-[var(--success)] flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} />
           </div>
-          <h2 className="text-2xl font-medium text-[var(--text-strong)] mb-1">Medicines Delivered!</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-strong)] mb-1">Medicines Delivered!</h2>
           <p className="text-xs text-[var(--text-muted)] mb-5">
             Stock quantities automatically reduced from catalog · Recorded by <strong>{deliveryResult.pharmacistName}</strong> at <strong>{deliveryResult.time}</strong>
           </p>
@@ -591,18 +677,38 @@ function DispenseContent() {
             ✓ <strong>PRD v1.1 Paperless Rule:</strong> No printed pharmacy bill needed. Record is logged in Today&apos;s Patient List where dispensed items can still be adjusted if the patient returns.
           </div>
 
-          <div className="flex gap-2">
+          {/* PRD v1.1 Fast Dispensing Workflow: Next Patient Button */}
+          {nextPatient ? (
+            <button
+              type="button"
+              onClick={() => {
+                const targetUrl = `/pharmacy/dispense?visitId=${encodeURIComponent(nextPatient.visitId || nextPatient.id)}&token=${encodeURIComponent(nextPatient.token_number)}&rxId=${encodeURIComponent(nextPatient.prescriptionId || '')}`;
+                router.push(targetUrl);
+              }}
+              className="w-full min-h-[48px] px-5 py-3 text-sm sm:text-base font-bold rounded-[var(--r-control)] bg-[var(--green-800)] text-white hover:bg-[var(--green-900)] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5 text-center shadow-md cursor-pointer mb-3 touch-manipulation"
+            >
+              <span>Dispense Next: Token #{String(nextPatient.token_number).padStart(2, '0')} ({nextPatient.patientName})</span>
+              <ArrowRight size={18} />
+            </button>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-[var(--r-control)] p-3 mb-3 font-medium flex items-center justify-center gap-2">
+              <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+              <span>Queue Cleared · All waiting patients have been dispensed!</span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
             <Link
               href="/pharmacy"
-              className="flex-1 h-11 px-4 text-sm font-semibold rounded-[var(--r-control)] bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+              className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
             >
               Back to Dispensing Queue
             </Link>
             <Link
-              href="/reception"
-              className="flex-1 h-11 px-4 text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+              href="/pharmacy?tab=dispensed"
+              className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-[var(--sage-100)] border border-[var(--green-600)]/30 text-[var(--green-900)] hover:bg-[var(--sage-200)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
             >
-              OPD Reception Desk
+              Today&apos;s Patient List
             </Link>
           </div>
         </Card>
@@ -612,20 +718,37 @@ function DispenseContent() {
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
-        <Link
-          href="/pharmacy"
-          className="inline-flex items-center gap-2 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-semibold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-all cursor-pointer shadow-xs shrink-0"
-          title="Back to Dispensing Queue"
-          aria-label="Back to Dispensing Queue"
-        >
-          <ArrowLeft size={16} />
-          Back to Dispensing Queue
-        </Link>
-        <PageHeader
-          title={`Dispense Prescription · Token #${String(token).padStart(2, '0')}`}
-          subtitle="Smart suggested quantities · Review, edit items, adjust quantities and mark Delivered"
-        />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/pharmacy"
+            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-semibold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-all cursor-pointer shadow-xs shrink-0 touch-manipulation"
+            title="Back to Dispensing Queue"
+            aria-label="Back to Dispensing Queue"
+          >
+            <ArrowLeft size={16} />
+            <span>Dispensing Queue</span>
+          </Link>
+          <PageHeader
+            title={`Dispense Prescription · Token #${String(token).padStart(2, '0')}`}
+            subtitle="Smart suggested quantities · Review, edit items, adjust quantities and mark Delivered"
+          />
+        </div>
+
+        {nextPatient && (
+          <button
+            type="button"
+            onClick={() => {
+              const targetUrl = `/pharmacy/dispense?visitId=${encodeURIComponent(nextPatient.visitId || nextPatient.id)}&token=${encodeURIComponent(nextPatient.token_number)}&rxId=${encodeURIComponent(nextPatient.prescriptionId || '')}`;
+              router.push(targetUrl);
+            }}
+            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-[var(--r-control)] bg-[var(--sage-100)] border border-[var(--green-600)]/40 text-xs font-bold text-[var(--green-900)] hover:bg-[var(--sage-200)] transition-all cursor-pointer shadow-xs shrink-0 self-start sm:self-auto touch-manipulation"
+            title={`Next: Token #${String(nextPatient.token_number).padStart(2, '0')} (${nextPatient.patientName})`}
+          >
+            <span>Next: #{String(nextPatient.token_number).padStart(2, '0')} ({nextPatient.patientName})</span>
+            <ArrowRight size={15} />
+          </button>
+        )}
       </div>
 
       {/* Safety Alerts Banner */}
