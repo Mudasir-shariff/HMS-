@@ -30,3 +30,4 @@ export function calculateSmartQuantity(
   }
   return 1;
 }
+
