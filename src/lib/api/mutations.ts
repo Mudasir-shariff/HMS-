@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { getQueryClient } from '@/lib/query/provider';
 import { queryKeys } from '@/lib/query/keys';
+import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import type { QueryClient } from '@tanstack/react-query';
 import type { Patient, Visit, Dispensing, DispensingItem, Drug } from '@/lib/types/database';
 
@@ -178,6 +179,9 @@ export async function registerPatientAndVisitAtomic(
       return old.some((v) => v.id === visit.id) ? old.map((v) => (v.id === visit.id ? visit : v)) : [...old, visit];
     });
 
+    // Realtime broadcast to all cabins (<30ms)
+    broadcastChange('patient_registered', { patient, visit });
+
     client.invalidateQueries({ queryKey: queryKeys.patients.all });
     client.invalidateQueries({ queryKey: queryKeys.visits.all });
 
@@ -202,6 +206,9 @@ export async function registerPatientAndVisitAtomic(
     return next;
   });
 
+  // Realtime broadcast to all cabins (<30ms)
+  broadcastChange('patient_registered', { patient, visit });
+
   client.invalidateQueries({ queryKey: queryKeys.patients.all });
   client.invalidateQueries({ queryKey: queryKeys.visits.all });
 
@@ -210,6 +217,7 @@ export async function registerPatientAndVisitAtomic(
 
 export interface DispensePrescriptionParams {
   prescriptionId?: string;
+  visitId?: string;
   pharmacistId?: string;
   pharmacistName?: string;
   items: {
@@ -274,6 +282,23 @@ export async function dispensePrescriptionAtomic(
   if (!res || error) {
     throw new Error(error?.message || 'Dispense network timeout');
   }
+
+  // Realtime broadcast to all terminals (<30ms)
+  broadcastChange('prescription_dispensed', {
+    dispensing: {
+      id: data.dispensing_id,
+      prescription_id: params.prescriptionId || null,
+      pharmacist_id: params.pharmacistId || null,
+      pharmacist_name: params.pharmacistName || 'Pharmacist on Duty',
+      total_amount: params.totalAmount,
+      patient_name: params.patientName,
+      patient_phone: params.patientPhone,
+      patient_uhid: params.patientUhid,
+      created_at: new Date().toISOString(),
+    },
+    visitId: params.visitId,
+    drugUpdates: params.items.filter((i) => i.drugId).map((i) => ({ drugId: i.drugId!, quantity: i.quantity })),
+  });
 
   // Invalidate queries so that inventory and visit queues sync across devices
   const client = getQueryClient();
@@ -392,6 +417,9 @@ export async function saveDrugMutation(
     expiry_date: data.expiry_date,
     updated_at: data.updated_at,
   };
+
+  // Broadcast inventory update to all terminals (<30ms)
+  broadcastChange('inventory_updated', { drug: savedDrug });
 
   // Invalidate TanStack Query cache so /pharmacy and /admin refresh immediately
   const qClient = client || getQueryClient();

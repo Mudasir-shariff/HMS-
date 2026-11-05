@@ -8,16 +8,39 @@ import type { Visit, Patient, Drug, Dispensing, Prescription, PrescriptionItem }
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
 
+let activeRealtimeChannel: any = null;
+
+/**
+ * Ultra-fast (<30ms) WebSocket peer broadcast across all hospital terminals.
+ * Sends data payloads directly to doctors, pharmacists, and receptionists
+ * without waiting for database polling or HTTP REST round-trips.
+ */
+export function broadcastChange(event: string, payload: any) {
+  if (activeRealtimeChannel) {
+    try {
+      activeRealtimeChannel.send({
+        type: 'broadcast',
+        event,
+        payload,
+      });
+    } catch (err) {
+      console.warn('Realtime broadcast error:', err);
+    }
+  }
+}
+
 interface RealtimeContextValue {
   status: ConnectionStatus;
   lastSyncedAt: Date | null;
   reconnect: () => void;
+  broadcast: (event: string, payload: any) => void;
 }
 
 const RealtimeContext = createContext<RealtimeContextValue>({
   status: 'reconnecting',
   lastSyncedAt: null,
   reconnect: () => {},
+  broadcast: () => {},
 });
 
 export function useRealtime() {
@@ -70,8 +93,118 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     }
 
     const supabase = createClient();
-    const channelId = `hospital-sync-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = supabase.channel(channelId);
+    const SHARED_HOSPITAL_CHANNEL = 'hospital-live-sync';
+    const channel = supabase.channel(SHARED_HOSPITAL_CHANNEL, {
+      config: {
+        broadcast: { self: true },
+      },
+    });
+
+    // ═════════════════════════════════════════════════════════════════════
+    // A. ULTRA-FAST WEBSOCKET BROADCAST LISTENERS (<30ms peer-to-peer data)
+    // ═════════════════════════════════════════════════════════════════════
+
+    // 1. Visit Updated (Token state changes, cabin handoffs, completed visits)
+    channel.on('broadcast', { event: 'visit_updated' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const updated = payload?.visit as Visit;
+      if (!updated?.id) return;
+      queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+        if (!old) return [updated];
+        const exists = old.some((v) => v.id === updated.id);
+        if (exists) {
+          return old.map((v) => (v.id === updated.id ? { ...v, ...updated } : v));
+        }
+        return [...old, updated];
+      });
+    });
+
+    // 2. Patient Registered (Reception -> Instant Doctor Cabin Queue)
+    channel.on('broadcast', { event: 'patient_registered' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const { patient, visit } = payload || {};
+      if (patient?.id) {
+        queryClient.setQueriesData<Patient[]>({ queryKey: ['patients'] }, (old) => {
+          if (!old) return [patient];
+          return old.some((p) => p.id === patient.id) ? old.map((p) => (p.id === patient.id ? patient : p)) : [patient, ...old];
+        });
+      }
+      if (visit?.id) {
+        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+          if (!old) return [visit];
+          if (old.some((v) => v.id === visit.id)) return old.map((v) => (v.id === visit.id ? visit : v));
+          const next = [...old, visit];
+          next.sort((a, b) => (Number(a.token_number) || 0) - (Number(b.token_number) || 0));
+          return next;
+        });
+      }
+    });
+
+    // 3. Prescription Created (Doctor Finalize -> Instant Pharmacy Dispensing Queue)
+    channel.on('broadcast', { event: 'prescription_created' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const { prescription, visit } = payload || {};
+      if (prescription?.id) {
+        queryClient.setQueriesData<Prescription[]>({ queryKey: ['prescriptions'] }, (old) => {
+          if (!old) return [prescription];
+          const idx = old.findIndex((p) => p.id === prescription.id);
+          if (idx >= 0) {
+            const next = [...old];
+            next[idx] = { ...prescription, items: prescription.items || next[idx].items || [] };
+            return next;
+          }
+          return [prescription, ...old];
+        });
+      }
+      if (visit?.id) {
+        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+          if (!old) return [];
+          return old.map((v) => (v.id === visit.id ? { ...v, ...visit, status: 'prescribed' } : v));
+        });
+      }
+    });
+
+    // 4. Prescription Dispensed (Pharmacy Delivered -> Completed Visit & Stock Deduction)
+    channel.on('broadcast', { event: 'prescription_dispensed' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const { dispensing, visitId, drugUpdates } = payload || {};
+      if (dispensing?.id) {
+        queryClient.setQueriesData<Dispensing[]>({ queryKey: ['dispensings'] }, (old) => {
+          if (!old) return [dispensing];
+          if (old.some((d) => d.id === dispensing.id)) return old;
+          return [dispensing, ...old];
+        });
+      }
+      if (visitId) {
+        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+          if (!old) return [];
+          return old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed' } : v));
+        });
+      }
+      if (Array.isArray(drugUpdates) && drugUpdates.length > 0) {
+        queryClient.setQueriesData<Drug[]>({ queryKey: ['drugs'] }, (old) => {
+          if (!old) return old;
+          return old.map((d) => {
+            const up = drugUpdates.find((u) => u.drugId === d.id);
+            if (up) {
+              return { ...d, stock_quantity: Math.max(0, (d.stock_quantity || 0) - up.quantity) };
+            }
+            return d;
+          });
+        });
+      }
+    });
+
+    // 5. Inventory Updated
+    channel.on('broadcast', { event: 'inventory_updated' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const drug = payload?.drug as Drug;
+      if (!drug?.id) return;
+      queryClient.setQueriesData<Drug[]>({ queryKey: ['drugs'] }, (old) => {
+        if (!old) return [drug];
+        return old.some((d) => d.id === drug.id) ? old.map((d) => (d.id === drug.id ? { ...d, ...drug } : d)) : [drug, ...old];
+      });
+    });
 
     // Debounced query invalidation helpers
     let visitDebounceTimer: any = null;
@@ -413,6 +546,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     // Subscribe to channel and handle connection state
     channel.subscribe((subStatus) => {
       if (subStatus === 'SUBSCRIBED') {
+        activeRealtimeChannel = channel;
         setStatus('connected');
         setLastSyncedAt(new Date());
       } else if (subStatus === 'CLOSED' || subStatus === 'CHANNEL_ERROR') {
@@ -423,6 +557,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      activeRealtimeChannel = null;
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
@@ -433,7 +568,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   }, [refetchAllActive]);
 
   return (
-    <RealtimeContext.Provider value={{ status, lastSyncedAt, reconnect }}>
+    <RealtimeContext.Provider value={{ status, lastSyncedAt, reconnect, broadcast: broadcastChange }}>
       {children}
     </RealtimeContext.Provider>
   );

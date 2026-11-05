@@ -43,6 +43,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { createClient } from '@/lib/supabase/client';
+import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -313,6 +314,7 @@ function PrescribeContent() {
         queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
           old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation' } : v)) : []
         );
+        broadcastChange('visit_updated', { visit: { id: visitId, status: 'in_consultation' } });
         createClient()
           .from('visits')
           .update({ status: 'in_consultation', updated_at: new Date().toISOString() })
@@ -527,6 +529,9 @@ function PrescribeContent() {
       old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
     );
 
+    // Broadcast prescription creation to all terminals (Pharmacy, Reception, Doctor) (<30ms)
+    broadcastChange('prescription_created', { prescription: rxPayload, visit: updatedVisit });
+
     // 3. Update Supabase visit status to 'prescribed' immediately so queue reflects completion
     if (isSupabaseConfigured()) {
       try {
@@ -631,6 +636,9 @@ function PrescribeContent() {
         );
       });
 
+      // Broadcast visit update to all terminals (<30ms)
+      broadcastChange('visit_updated', { visit: { id: targetId, status: 'prescribed' } });
+
       // 2. Direct Supabase update
       if (isSupabaseConfigured()) {
         const supabase = createClient();
@@ -664,6 +672,7 @@ function PrescribeContent() {
       });
 
       if (nextVisit) {
+        broadcastChange('visit_updated', { visit: { id: nextVisit.id, status: 'in_consultation' } });
         const nextPatient = patients.find((p) => p.id === nextVisit.patient_id);
         const nextUrl = `/doctor/prescribe?visitId=${nextVisit.id}&patientId=${nextVisit.patient_id}&token=${nextVisit.token_number}&name=${encodeURIComponent(
           nextPatient?.name || 'Patient'

@@ -11,6 +11,7 @@ import { useVisits, usePatients, useDoctors, usePrescriptions } from '@/lib/quer
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import type { Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -133,6 +134,9 @@ export default function DoctorPage() {
       queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
         old ? old.map((v) => (prevInConsultation.some((p) => p.id === v.id) ? { ...v, status: 'prescribed' } : v)) : []
       );
+      for (const prev of prevInConsultation) {
+        broadcastChange('visit_updated', { visit: { id: prev.id, status: 'prescribed' } });
+      }
       try {
         const supabase = createClient();
         for (const prev of prevInConsultation) {
@@ -146,6 +150,8 @@ export default function DoctorPage() {
         console.warn('Auto-completing previous visit warning:', err);
       }
     }
+
+    broadcastChange('visit_updated', { visit: { id: targetVisit.id, status: 'in_consultation' } });
 
     router.push(
       `/doctor/prescribe?visitId=${targetVisit.id}&patientId=${targetVisit.patient_id}&token=${targetVisit.token_number}&name=${encodeURIComponent(

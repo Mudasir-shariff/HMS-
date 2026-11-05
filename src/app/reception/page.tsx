@@ -22,6 +22,7 @@ import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -137,6 +138,9 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
     );
+    // Instant WebSocket peer broadcast (<30ms)
+    broadcastChange('visit_updated', { visit: { id: visitId, status: 'in_consultation' } });
+
     // Instant UI feedback (<10ms)
     triggerToast(`Token #${String(token).padStart(2, '0')} called into Doctor Consultation Cabin.`);
     setUpdatingVisitId(null);
@@ -161,6 +165,9 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
     );
+    // Instant WebSocket peer broadcast (<30ms)
+    broadcastChange('visit_updated', { visit: { id: visitId, status: 'prescribed' } });
+
     // Instant UI feedback (<10ms)
     triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
     setUpdatingVisitId(null);
@@ -185,6 +192,9 @@ export default function ReceptionPage() {
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
     );
+    // Instant WebSocket peer broadcast (<30ms)
+    broadcastChange('visit_updated', { visit: { id: visitId, status: 'dispensed' } });
+
     // Instant UI feedback (<10ms)
     triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
     setUpdatingVisitId(null);

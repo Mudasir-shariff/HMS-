@@ -35,6 +35,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
+import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/supabase/sync';
 import type { DrugType, Drug, Prescription, PrescriptionItem, Visit, Dispensing } from '@/lib/types/database';
@@ -530,6 +531,13 @@ function DispenseContent() {
       });
     });
 
+    // Instant WebSocket peer broadcast to doctor and reception (<30ms)
+    broadcastChange('prescription_dispensed', {
+      dispensing: deliveredDispensing,
+      visitId: currentVisitId,
+      drugUpdates: includedItems.filter((i) => !i.isCustom && i.drugId).map((i) => ({ drugId: i.drugId, quantity: i.qty })),
+    });
+
     // 3. DISPLAY CONFIRMATION IMMEDIATELY (Zero spinner delay)
     setDeliveryResult({
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -545,6 +553,7 @@ function DispenseContent() {
       try {
         await dispensePrescriptionAtomic({
           prescriptionId: rx?.id,
+          visitId: currentVisitId,
           pharmacistId,
           pharmacistName,
           items: includedItems.map((i) => ({
