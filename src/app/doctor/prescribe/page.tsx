@@ -120,9 +120,24 @@ export default function PrescribePage() {
         </div>
       }
     >
-      <PrescribeContent />
+      <PrescribeContentKeyed />
     </Suspense>
   );
+}
+
+/**
+ * Wrapper that forces a full remount of PrescribeContent whenever
+ * the URL search params change (visitId / patientId).
+ * Without this, router.push to the same /doctor/prescribe route
+ * preserves all React state — medicines, instructions, follow-up —
+ * from the previous patient, causing prescription bleed-through.
+ */
+function PrescribeContentKeyed() {
+  const searchParams = useSearchParams();
+  const visitId = searchParams.get('visitId') || '';
+  const patientId = searchParams.get('patientId') || '';
+  // The key guarantees React unmounts old state and creates fresh state
+  return <PrescribeContent key={`${visitId}-${patientId}`} />;
 }
 
 function PrescribeContent() {
