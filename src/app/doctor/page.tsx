@@ -1,21 +1,29 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Clock, ChevronRight, Stethoscope, CheckCircle, FileText, User } from 'lucide-react';
+import { Clock, ChevronRight, Stethoscope, CheckCircle, FileText, User, UserCheck } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, StatusPill, Avatar, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { useAuth } from '@/lib/auth/context';
-import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
+import { useVisits, usePatients, useDoctors, usePrescriptions } from '@/lib/query/hooks';
+import { queryKeys } from '@/lib/query/keys';
+import { useQueryClient } from '@tanstack/react-query';
+import { createClient } from '@/lib/supabase/client';
+import type { Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 type Tab = 'queue' | 'completed';
 
 export default function DoctorPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: visits = [] } = useVisits();
   const { data: patients = [] } = usePatients();
   const { data: doctors = [] } = useDoctors();
+  const { data: prescriptions = [] } = usePrescriptions();
   const [tab, setTab] = useState<Tab>('queue');
 
   // If logged in as Doctor, lock to current doctor id. If admin, allow switching doctor view.
@@ -62,7 +70,11 @@ export default function DoctorPage() {
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
 
-    // 3. Filter visits belonging to doctor
+    // 3. Precompute prescribed visit & patient IDs to guarantee zero ghost patients in waiting queue
+    const prescribedVisitIds = new Set(prescriptions.map((rx) => rx.visit_id).filter(Boolean));
+    const prescribedPatientIds = new Set(prescriptions.map((rx) => rx.patient_id).filter(Boolean));
+
+    // 4. Filter visits belonging to doctor
     const doctorVisits = visits.filter((v) => {
       if (!v.doctor_id) return isDoctor && doctors.length <= 1;
       return doctorIdSet.has(v.doctor_id);
@@ -87,10 +99,20 @@ export default function DoctorPage() {
         pastVisits: pastCount,
       };
 
-      if (v.status === 'waiting' || v.status === 'in_consultation') {
+      const isAlreadyPrescribed =
+        v.status === 'prescribed' ||
+        v.status === 'dispensed' ||
+        v.status === 'completed' ||
+        prescribedVisitIds.has(v.id) ||
+        (v.patient_id && prescribedPatientIds.has(v.patient_id));
+
+      if (isAlreadyPrescribed) {
+        completed.push({
+          ...enriched,
+          status: v.status === 'waiting' || v.status === 'in_consultation' ? 'prescribed' : v.status,
+        });
+      } else if (v.status === 'waiting' || v.status === 'in_consultation') {
         waiting.push(enriched);
-      } else if (v.status === 'prescribed' || v.status === 'dispensed' || v.status === 'completed') {
-        completed.push(enriched);
       }
     });
 
@@ -98,7 +120,39 @@ export default function DoctorPage() {
     completed.sort((a, b) => a.token_number - b.token_number);
 
     return { waitingQueue: waiting, completedQueue: completed };
-  }, [visits, patients, doctorIdSet, isDoctor, doctors.length]);
+  }, [visits, patients, prescriptions, doctorIdSet, isDoctor, doctors.length]);
+
+  // When doctor calls a new patient, auto-complete any previous in_consultation visit
+  const handleStartConsultation = async (targetVisit: any) => {
+    const activeDocId = isDoctor ? user?.doctorId || user?.id : selectedDoctorId;
+    const prevInConsultation = visits.filter(
+      (v) => (v.doctor_id === activeDocId || !v.doctor_id) && v.id !== targetVisit.id && v.status === 'in_consultation'
+    );
+
+    if (prevInConsultation.length > 0) {
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+        old ? old.map((v) => (prevInConsultation.some((p) => p.id === v.id) ? { ...v, status: 'prescribed' } : v)) : []
+      );
+      try {
+        const supabase = createClient();
+        for (const prev of prevInConsultation) {
+          supabase
+            .from('visits')
+            .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+            .eq('id', prev.id)
+            .then(() => {});
+        }
+      } catch (err) {
+        console.warn('Auto-completing previous visit warning:', err);
+      }
+    }
+
+    router.push(
+      `/doctor/prescribe?visitId=${targetVisit.id}&patientId=${targetVisit.patient_id}&token=${targetVisit.token_number}&name=${encodeURIComponent(
+        targetVisit.patientName
+      )}&uhid=${targetVisit.patientUhid}&age=${targetVisit.patientAge}&doctorId=${activeDoctorId}`
+    );
+  };
 
   const activeList = tab === 'queue' ? waitingQueue : completedQueue;
 
@@ -256,21 +310,15 @@ export default function DoctorPage() {
                             </span>
                           )}
                         </div>
-                        <Link
-                          href={`/doctor/prescribe?visitId=${p.id}&patientId=${p.patient_id}&token=${p.token_number}&name=${encodeURIComponent(
-                            p.patientName
-                          )}&uhid=${p.patientUhid}&age=${p.patientAge}&doctorId=${activeDoctorId}`}
-                          className="w-full sm:w-auto"
+                        <Button
+                          size="sm"
+                          onClick={() => handleStartConsultation(p)}
+                          className={`w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px] ${p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}`}
+                          icon={<ChevronRight size={14} />}
+                          iconPosition="right"
                         >
-                          <Button
-                            size="sm"
-                            className={`w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px] ${p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}`}
-                            icon={<ChevronRight size={14} />}
-                            iconPosition="right"
-                          >
-                            {p.status === 'in_consultation' ? 'Resume Consultation' : 'Start Consultation'}
-                          </Button>
-                        </Link>
+                          {p.status === 'in_consultation' ? 'Resume Consultation' : 'Start Consultation'}
+                        </Button>
                       </>
                     ) : (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">

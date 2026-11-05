@@ -527,45 +527,39 @@ function PrescribeContent() {
       old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
     );
 
-    // 3. Concurrent Push: Commit prescription & items and visit 'prescribed' status simultaneously (runs asynchronously in background for 0ms doctor response)
-    const executePushOperations = async () => {
+    // 3. Update Supabase visit status to 'prescribed' immediately so queue reflects completion
+    if (isSupabaseConfigured()) {
       try {
-        const updateVisitTask = async () => {
-          if (!isSupabaseConfigured()) return;
-          const supabase = createClient();
-          const updatePayload = {
-            status: 'prescribed' as const,
-            follow_up_date: followUp || null,
-            instructions: instructions || null,
-            updated_at: new Date().toISOString(),
-          };
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
-            await withTimeout(
-              supabase.from('visits').update(updatePayload).eq('id', finalVisitId),
-              4000
-            );
-          } else if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
-            await withTimeout(
-              supabase.from('visits').update(updatePayload).eq('patient_id', validPatientId),
-              4000
-            );
-          }
+        const supabase = createClient();
+        const updatePayload = {
+          status: 'prescribed' as const,
+          follow_up_date: followUp || null,
+          instructions: instructions || null,
+          updated_at: new Date().toISOString(),
         };
-
-        await Promise.allSettled([
-          pushPrescriptionToSupabase(rxPayload),
-          updateVisitTask(),
-        ]);
-      } catch (pErr) {
-        console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
-      } finally {
-        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
+          await supabase.from('visits').update(updatePayload).eq('id', finalVisitId);
+        }
+        if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
+          await supabase
+            .from('visits')
+            .update(updatePayload)
+            .eq('patient_id', validPatientId)
+            .neq('status', 'dispensed')
+            .neq('status', 'completed');
+        }
+      } catch (uErr) {
+        console.warn('Error updating visit status to prescribed:', uErr);
       }
-    };
+    }
 
-    // Kick off push in background without blocking Doctor UI
-    executePushOperations();
+    // Push prescription & items in background
+    pushPrescriptionToSupabase(rxPayload).catch((pErr) => {
+      console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
+    });
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
 
     setSavedRxId(rxId);
     return rxId;
@@ -615,6 +609,74 @@ function PrescribeContent() {
       setTimeout(() => setQueuedPrinterSuccess(null), 5000);
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  const [isNavigatingNext, setIsNavigatingNext] = useState(false);
+
+  async function handleNextPatient() {
+    setIsNavigatingNext(true);
+    try {
+      const activeDoctor = doctorId || user?.doctorId || user?.id;
+      const targetPatientId = patientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(patientId) ? patientId : (activePatient?.id || null);
+      const targetId = visitId || activeVisit?.id || (targetPatientId && visits.find((v) => v.patient_id === targetPatientId)?.id);
+
+      // 1. Force optimistic update in React Query cache so previous patient is immediately marked 'prescribed'
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) => {
+        if (!old) return [];
+        return old.map((v) =>
+          v.id === targetId || (targetPatientId && v.patient_id === targetPatientId)
+            ? { ...v, status: 'prescribed' as const, updated_at: new Date().toISOString() }
+            : v
+        );
+      });
+
+      // 2. Direct Supabase update
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        const updatePayload = {
+          status: 'prescribed' as const,
+          follow_up_date: followUp || null,
+          instructions: instructions || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+          await supabase.from('visits').update(updatePayload).eq('id', targetId);
+        }
+        if (targetPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetPatientId)) {
+          await supabase
+            .from('visits')
+            .update(updatePayload)
+            .eq('patient_id', targetPatientId)
+            .neq('status', 'dispensed')
+            .neq('status', 'completed');
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+
+      // 3. Find next waiting patient in the queue for this doctor
+      const nextVisit = visits.find((v) => {
+        const belongsToDoctor = !v.doctor_id || (activeDoctor && v.doctor_id === activeDoctor);
+        const isNotCurrent = v.id !== targetId && (!targetPatientId || v.patient_id !== targetPatientId);
+        return belongsToDoctor && isNotCurrent && v.status === 'waiting';
+      });
+
+      if (nextVisit) {
+        const nextPatient = patients.find((p) => p.id === nextVisit.patient_id);
+        const nextUrl = `/doctor/prescribe?visitId=${nextVisit.id}&patientId=${nextVisit.patient_id}&token=${nextVisit.token_number}&name=${encodeURIComponent(
+          nextPatient?.name || 'Patient'
+        )}&uhid=${nextPatient?.uhid || ''}&age=${nextPatient?.age || ''}&doctorId=${nextVisit.doctor_id || activeDoctor}`;
+        router.push(nextUrl);
+      } else {
+        router.push('/doctor');
+      }
+    } catch (err) {
+      console.warn('Error navigating to next patient:', err);
+      router.push('/doctor');
+    } finally {
+      setIsNavigatingNext(false);
     }
   }
 
@@ -680,11 +742,14 @@ function PrescribeContent() {
               </p>
             </div>
           </div>
-          <Link href="/doctor">
-            <Button size="sm" className="bg-[var(--green-900)] text-white shrink-0">
-              Next Patient in Queue →
-            </Button>
-          </Link>
+          <Button
+            size="sm"
+            onClick={handleNextPatient}
+            loading={isNavigatingNext}
+            className="bg-[var(--green-900)] text-white shrink-0 min-h-[40px] px-4 font-semibold hover:brightness-110 shadow-xs cursor-pointer"
+          >
+            Next Patient in Queue →
+          </Button>
         </div>
 
         {/* Screen Action Bar (Hidden during actual print) */}
@@ -765,12 +830,13 @@ function PrescribeContent() {
                 Edit
               </Button>
 
-              <Link
-                href="/doctor"
+              <button
+                type="button"
+                onClick={handleNextPatient}
                 className="h-8 px-3 text-xs rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] font-medium inline-flex items-center justify-center transition-all cursor-pointer shadow-xs"
               >
                 Back to Doctor Queue
-              </Link>
+              </button>
             </div>
           </div>
         </div>
