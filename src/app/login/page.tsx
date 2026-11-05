@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
 import { ROLE_HOME } from '@/lib/auth/roles';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import type { UserRole } from '@/lib/types/database';
 
 function LoginForm() {
@@ -69,7 +70,7 @@ function LoginForm() {
         {/* Brand */}
         <div className="flex flex-col items-center mb-6 text-center">
           <div className="h-20 w-auto mb-3 flex items-center justify-center p-2 rounded-[var(--r-card)] bg-white border border-[var(--line-soft)] shadow-[var(--shadow-float)]">
-            <img src="/logo.png" alt="Radha Krishna HMS by opti-x.in" className="h-16 w-auto object-contain" />
+            <BrandLogo className="h-16 w-auto object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-[-0.02em]">RADHA KRISHNA HMS</h1>
           <p className="text-xs font-medium text-[var(--text-muted)] mt-1 tracking-wide uppercase">

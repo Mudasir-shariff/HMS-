@@ -27,6 +27,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { canAccess, ROLE_HOME } from '@/lib/auth/roles';
 import { ConnectionIndicator } from './connection-indicator';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import type { UserRole } from '@/lib/types/database';
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -129,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link href={ROLE_HOME[user.role] || '/'} className="flex items-center gap-2 sm:gap-2.5">
               <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs shrink-0">
-                <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
+                <BrandLogo className="h-7 w-auto object-contain" />
               </div>
               <div>
                 <span className="text-xs sm:text-sm font-bold text-[var(--text-strong)] leading-tight block">
@@ -364,7 +365,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Global Footer Branding & Support Information */}
         <footer className="mt-16 pt-6 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Radha Krishna HMS" className="h-5 w-auto object-contain" />
+            <BrandLogo className="h-5 w-auto object-contain" />
             <span className="font-semibold text-[var(--text-strong)]">Radha Krishna HMS</span>
             <span>· All Rights Reserved</span>
           </div>

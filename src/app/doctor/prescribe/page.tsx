@@ -29,6 +29,7 @@ import {
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, Textarea, Input, StatusPill } from '@/components/ui';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import {
   useDrugs,
   useDoctors,
@@ -830,7 +831,7 @@ function PrescribeContent() {
               {/* 1. Header: Hospital Brand & Info */}
               <div className="flex justify-between items-start pb-2 border-b-2 border-[#134e4a]">
                 <div className="flex items-center gap-3">
-                  <img src="/logo.png" alt="Radha Krishna HMS" className="h-12 w-auto object-contain" />
+                  <BrandLogo className="h-12 w-auto object-contain" />
                   <div>
                     <h1 className="font-serif text-2xl sm:text-[28px] font-bold tracking-wide text-[#134e4a] uppercase leading-tight">
                       {settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}

@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth/context';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import type { UserRole } from '@/lib/types/database';
 
 const ROLES = [
@@ -289,7 +290,7 @@ export default function RegisterPage() {
             <ArrowLeft size={18} />
           </Link>
           <div className="h-10 px-2 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs shrink-0">
-            <img src="/logo.png" alt="Radha Krishna HMS" className="h-7 w-auto object-contain" />
+            <BrandLogo className="h-7 w-auto object-contain" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-strong)]">Register Staff / Doctor</h1>
