@@ -182,7 +182,6 @@ export default function PharmacyPage() {
   // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
   const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
     const dispensedRxIds = new Set(allDispensingsMerged.map((d) => d.prescription_id).filter(Boolean));
-    const dispensedPatientIds = new Set(allDispensingsMerged.map((d) => d.patient_id).filter(Boolean));
     const dispensedVisitIds = new Set([
       ...allVisitsMerged.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
       ...allDispensingsMerged.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
@@ -207,21 +206,18 @@ export default function PharmacyPage() {
       if (
         v.status === 'dispensed' ||
         v.status === 'completed' ||
-        dispensedVisitIds.has(v.id) ||
-        (v.patient_id && dispensedPatientIds.has(v.patient_id))
+        dispensedVisitIds.has(v.id)
       ) {
         return;
       }
 
-      // Match prescription by visit_id or patient_id
+      // Match prescription by visit_id
       const rx = allPrescriptionsMerged.find(
-        (p) =>
-          (p.visit_id && p.visit_id === v.id) ||
-          (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
+        (p) => p.visit_id && p.visit_id === v.id
       );
 
       // If prescription was already dispensed, NEVER include in pending queue
-      if (rx && (dispensedRxIds.has(rx.id) || (rx.patient_id && dispensedPatientIds.has(rx.patient_id)))) {
+      if (rx && dispensedRxIds.has(rx.id)) {
         return;
       }
 
@@ -254,7 +250,6 @@ export default function PharmacyPage() {
     // Pass 2: Include any un-dispensed prescriptions (e.g. IP prescriptions or direct consultations)
     allPrescriptionsMerged.forEach((rx) => {
       if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
-      if (rx.patient_id && dispensedPatientIds.has(rx.patient_id)) return;
       if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
       if (!rx.items || rx.items.length === 0) return;
 

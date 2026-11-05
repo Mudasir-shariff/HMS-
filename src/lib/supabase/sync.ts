@@ -632,6 +632,12 @@ export async function pushAdmissionToSupabase(adm: Admission) {
       total_pharmacy_charges: adm.total_pharmacy_charges || 0,
       total_lab_charges: adm.total_lab_charges || 0,
     });
+
+    // Keep bed occupancy state synchronized in Supabase
+    if (adm.bed_id && isValidUUID(adm.bed_id)) {
+      const isOccupied = adm.status === 'admitted';
+      await supabase.from('beds').update({ is_occupied: isOccupied }).eq('id', adm.bed_id);
+    }
   } catch (e) {
     console.warn('Failed to push admission to Supabase:', e);
   }

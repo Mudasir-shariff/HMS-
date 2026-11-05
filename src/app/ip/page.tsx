@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BedDouble,
   Plus,
@@ -124,7 +124,11 @@ export default function InPatientPage() {
   }
 
   // Calculate live hours stayed based on PRD v1.1 Section 3.7 timer
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   function calculateStay(admittedAt: string) {
     const diffMs = now - new Date(admittedAt).getTime();
     const totalHours = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60)));

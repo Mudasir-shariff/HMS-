@@ -165,10 +165,21 @@ function PrescribeContent() {
   const activePatient = patients.find((p) => p.id === patientId || p.uhid === uhid);
   const activeVisit = visits.find((v) => v.id === visitId);
 
-  // Load existing prescription for this visit or patient (includes any tablet added by pharmacist)
-  const existingRx = prescriptions.find(
-    (p) => (visitId && p.visit_id === visitId) || (patientId && p.patient_id === patientId)
-  );
+  // Load existing prescription specifically for this visit or admission (prevent bleed-through of old visits)
+  const existingRx = useMemo(() => {
+    if (!prescriptions || prescriptions.length === 0) return null;
+    if (visitId) {
+      return prescriptions.find((p) => p.visit_id === visitId) || null;
+    }
+    if (uaid && stayDayNumber !== undefined) {
+      return prescriptions.find((p) => p.uaid === uaid && p.stay_day_number === stayDayNumber) || null;
+    }
+    if (patientId) {
+      const today = new Date().toISOString().split('T')[0];
+      return prescriptions.find((p) => p.patient_id === patientId && p.created_at?.startsWith(today)) || null;
+    }
+    return null;
+  }, [prescriptions, visitId, uaid, stayDayNumber, patientId]);
 
   const doctor = doctors.find((d) => d.id === doctorId) || {
     id: doctorId,
@@ -485,7 +496,7 @@ function PrescribeContent() {
     }));
 
     const validPatientId = patientId || activePatient?.id || activeVisit?.patient_id || generateUUID();
-    const targetVisitId = visitId || activeVisit?.id || (validPatientId && visits.find((v) => v.patient_id === validPatientId)?.id) || generateUUID();
+    const targetVisitId = visitId || activeVisit?.id || (validPatientId && visits.find((v) => v.patient_id === validPatientId && (v.status === 'waiting' || v.status === 'in_consultation'))?.id) || generateUUID();
 
     const rxPayload: Prescription = {
       id: rxId,
@@ -507,7 +518,7 @@ function PrescribeContent() {
 
     // 2. Ensure visit record is strictly moved to 'prescribed' in query cache
     let finalVisitId = targetVisitId;
-    const existing = visits.find((v) => v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId));
+    const existing = visits.find((v) => v.id === targetVisitId);
     const updatedVisit: Visit = existing
       ? {
           ...existing,
@@ -534,7 +545,7 @@ function PrescribeContent() {
     queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
       old
         ? old.map((v) =>
-            v.id === updatedVisit.id || v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId)
+            v.id === updatedVisit.id || v.id === targetVisitId
               ? updatedVisit
               : v
           )
@@ -559,14 +570,6 @@ function PrescribeContent() {
         };
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
           await supabase.from('visits').update(updatePayload).eq('id', finalVisitId);
-        }
-        if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
-          await supabase
-            .from('visits')
-            .update(updatePayload)
-            .eq('patient_id', validPatientId)
-            .neq('status', 'dispensed')
-            .neq('status', 'completed');
         }
       } catch (uErr) {
         console.warn('Error updating visit status to prescribed:', uErr);
@@ -666,14 +669,6 @@ function PrescribeContent() {
         if (targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
           await supabase.from('visits').update(updatePayload).eq('id', targetId);
         }
-        if (targetPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetPatientId)) {
-          await supabase
-            .from('visits')
-            .update(updatePayload)
-            .eq('patient_id', targetPatientId)
-            .neq('status', 'dispensed')
-            .neq('status', 'completed');
-        }
       }
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
@@ -685,6 +680,8 @@ function PrescribeContent() {
         const isNotCurrent = v.id !== targetId && (!targetPatientId || v.patient_id !== targetPatientId);
         return belongsToDoctor && isNotCurrent && v.status === 'waiting';
       });
+
+      setShowPrintView(false);
 
       if (nextVisit) {
         broadcastChange('visit_updated', { visit: { id: nextVisit.id, status: 'in_consultation' } });
@@ -856,7 +853,10 @@ function PrescribeContent() {
 
               <button
                 type="button"
-                onClick={handleNextPatient}
+                onClick={() => {
+                  setShowPrintView(false);
+                  router.push('/doctor');
+                }}
                 className="h-8 px-3 text-xs rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] font-medium inline-flex items-center justify-center transition-all cursor-pointer shadow-xs"
               >
                 Back to Doctor Queue

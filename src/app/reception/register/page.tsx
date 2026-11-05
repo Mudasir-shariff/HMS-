@@ -281,16 +281,12 @@ export default function RegisterPatientPage() {
               >
                 Register Next Patient
               </Button>
-              <a
+              <Link
                 href="/reception"
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.location.href = '/reception';
-                }}
                 className="flex-1 w-full min-h-[42px] px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
               >
                 Back to Reception Desk
-              </a>
+              </Link>
             </div>
           </div>
         </Card>

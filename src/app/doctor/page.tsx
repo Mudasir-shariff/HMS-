@@ -71,9 +71,8 @@ export default function DoctorPage() {
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
 
-    // 3. Precompute prescribed visit & patient IDs to guarantee zero ghost patients in waiting queue
+    // 3. Precompute prescribed visit IDs to guarantee zero ghost patients in waiting queue
     const prescribedVisitIds = new Set(prescriptions.map((rx) => rx.visit_id).filter(Boolean));
-    const prescribedPatientIds = new Set(prescriptions.map((rx) => rx.patient_id).filter(Boolean));
 
     // 4. Filter visits belonging to doctor
     const doctorVisits = visits.filter((v) => {
@@ -104,8 +103,7 @@ export default function DoctorPage() {
         v.status === 'prescribed' ||
         v.status === 'dispensed' ||
         v.status === 'completed' ||
-        prescribedVisitIds.has(v.id) ||
-        (v.patient_id && prescribedPatientIds.has(v.patient_id));
+        prescribedVisitIds.has(v.id);
 
       if (isAlreadyPrescribed) {
         completed.push({

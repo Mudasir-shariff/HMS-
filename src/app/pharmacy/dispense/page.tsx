@@ -105,7 +105,6 @@ function DispenseContent() {
   // Find next waiting patient in queue (excluding current patient/visit/prescription)
   const nextPatient = useMemo(() => {
     const dispensedRxIds = new Set(dispensings.map((d) => d.prescription_id).filter(Boolean));
-    const dispensedPatientIds = new Set(dispensings.map((d) => d.patient_id).filter(Boolean));
     const dispensedVisitIds = new Set([
       ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
       ...dispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
@@ -134,20 +133,16 @@ function DispenseContent() {
     // Scan merged visits
     allVisits.forEach((v) => {
       if (v.id === currentVisitId) return;
-      if (currentPatientId && v.patient_id === currentPatientId) return;
       if (
         v.status === 'dispensed' ||
         v.status === 'completed' ||
-        dispensedVisitIds.has(v.id) ||
-        (v.patient_id && dispensedPatientIds.has(v.patient_id))
+        dispensedVisitIds.has(v.id)
       ) {
         return;
       }
 
       const matchingRx = allPrescriptions.find(
-        (p) =>
-          (p.visit_id && p.visit_id === v.id) ||
-          (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
+        (p) => p.visit_id && p.visit_id === v.id
       );
 
       if (matchingRx && (dispensedRxIds.has(matchingRx.id) || matchingRx.id === currentRxId)) {
@@ -173,9 +168,7 @@ function DispenseContent() {
     // Scan unlinked prescriptions (e.g. IP prescriptions)
     allPrescriptions.forEach((pRx) => {
       if (pRx.id === currentRxId) return;
-      if (currentPatientId && pRx.patient_id === currentPatientId) return;
       if (dispensedRxIds.has(pRx.id)) return;
-      if (pRx.patient_id && dispensedPatientIds.has(pRx.patient_id)) return;
       if (pRx.visit_id && (dispensedVisitIds.has(pRx.visit_id) || pRx.visit_id === currentVisitId)) return;
       if (!pRx.items || pRx.items.length === 0) return;
       if (candidates.some((c) => c.prescriptionId === pRx.id || (pRx.visit_id && c.visitId === pRx.visit_id))) return;

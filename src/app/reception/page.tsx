@@ -106,12 +106,13 @@ export default function ReceptionPage() {
   const filtered = useMemo(() => {
     return todayVisits
       .filter((v) => {
+        const q = search.trim().toLowerCase();
         const matchesSearch =
-          !search.trim() ||
-          v.patientName.toLowerCase().includes(search.toLowerCase()) ||
-          v.patientPhone.includes(search) ||
-          v.patientUhid.toLowerCase().includes(search.toLowerCase()) ||
-          v.visit_number.toLowerCase().includes(search.toLowerCase());
+          !q ||
+          (v.patientName || '').toLowerCase().includes(q) ||
+          (v.patientPhone || '').toLowerCase().includes(q) ||
+          (v.patientUhid || '').toLowerCase().includes(q) ||
+          (v.visit_number || '').toLowerCase().includes(q);
 
         const matchesDoc =
           doctorFilter === 'all' ||

@@ -50,6 +50,7 @@ function setSessionCookie(u: { id: string; email: string; role: string; fullName
   if (typeof document === 'undefined') return;
   const val = encodeURIComponent(JSON.stringify(u));
   document.cookie = `hms_session_user=${val}; path=/; max-age=2592000; SameSite=Lax`;
+  document.cookie = `hms_role=${u.role}; path=/; max-age=2592000; SameSite=Lax`;
 }
 
 function getSessionCookie(): { id: string; email: string; role: string; fullName: string } | null {
@@ -66,6 +67,9 @@ function getSessionCookie(): { id: string; email: string; role: string; fullName
 function clearSessionCookie() {
   if (typeof document === 'undefined') return;
   document.cookie = 'hms_session_user=; path=/; max-age=0; SameSite=Lax';
+  document.cookie = 'hms_role=; path=/; max-age=0; SameSite=Lax';
+  document.cookie = 'hms_verified_role=; path=/; max-age=0; SameSite=Lax';
+  document.cookie = 'hms_verified_uid=; path=/; max-age=0; SameSite=Lax';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
