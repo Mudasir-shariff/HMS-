@@ -288,7 +288,7 @@ export const HMSStore = {
     return this.getPatients().find((p) => p.id === id);
   },
 
-  savePatient(patient: Patient) {
+  savePatient(patient: Patient, options?: { skipRemoteSync?: boolean }) {
     const patients = this.getPatients();
     const idx = patients.findIndex((p) => p.id === patient.id);
     if (idx >= 0) {
@@ -297,16 +297,16 @@ export const HMSStore = {
       patients.unshift(patient);
     }
     setStorage('patients', patients);
-    if (this._onSavePatient) this._onSavePatient(patient);
+    if (!options?.skipRemoteSync && this._onSavePatient) this._onSavePatient(patient);
   },
 
-  deletePatient(patientId: string) {
+  deletePatient(patientId: string, options?: { skipRemoteSync?: boolean }) {
     const patients = this.getPatients().filter((p) => p.id !== patientId);
     setStorage('patients', patients);
     // Also remove associated visits
     const visits = this.getVisits().filter((v) => v.patient_id !== patientId);
     setStorage('visits', visits);
-    if (this._onDeletePatient) this._onDeletePatient(patientId);
+    if (!options?.skipRemoteSync && this._onDeletePatient) this._onDeletePatient(patientId);
   },
 
   // ── Visits (OPD) ──
@@ -341,15 +341,17 @@ export const HMSStore = {
       .sort((a, b) => a.token_number - b.token_number);
   },
 
-  saveVisit(visit: Visit) {
+  saveVisit(visit: Visit, options?: { skipRemoteSync?: boolean }) {
     const visits = this.getVisits();
     const idx = visits.findIndex((v) => v.id === visit.id);
 
-    // Enforce unique token number: no other visit can have this token
-    const isDuplicate = visits.some((v) => v.id !== visit.id && v.token_number === visit.token_number);
-    if (isDuplicate || !visit.token_number) {
-      const maxToken = visits.reduce((max, v) => (v.token_number > max ? v.token_number : max), 0);
-      visit.token_number = maxToken + 1;
+    // Enforce unique token number: no other visit can have this token (local only)
+    if (!options?.skipRemoteSync) {
+      const isDuplicate = visits.some((v) => v.id !== visit.id && v.token_number === visit.token_number);
+      if (isDuplicate || !visit.token_number) {
+        const maxToken = visits.reduce((max, v) => (v.token_number > max ? v.token_number : max), 0);
+        visit.token_number = maxToken + 1;
+      }
     }
 
     if (idx >= 0) {
@@ -360,16 +362,16 @@ export const HMSStore = {
     // Always persist sorted in ascending token order
     visits.sort((a, b) => a.token_number - b.token_number);
     setStorage('visits', visits);
-    if (this._onSaveVisit) this._onSaveVisit(visit);
+    if (!options?.skipRemoteSync && this._onSaveVisit) this._onSaveVisit(visit);
   },
 
-  deleteVisit(visitId: string) {
+  deleteVisit(visitId: string, options?: { skipRemoteSync?: boolean }) {
     const visits = this.getVisits().filter((v) => v.id !== visitId);
     setStorage('visits', visits);
     // Also remove associated prescription if any
     const rx = this.getPrescriptions().filter((p) => p.visit_id !== visitId);
     setStorage('prescriptions', rx);
-    if (this._onDeleteVisit) this._onDeleteVisit(visitId);
+    if (!options?.skipRemoteSync && this._onDeleteVisit) this._onDeleteVisit(visitId);
   },
 
   updateVisitStatus(visitId: string, status: VisitStatus) {
@@ -492,7 +494,7 @@ export const HMSStore = {
     return this.getPrescriptions().find((p) => p.visit_id === visitId);
   },
 
-  savePrescription(rx: Prescription) {
+  savePrescription(rx: Prescription, options?: { skipRemoteSync?: boolean }) {
     const rxList = this.getPrescriptions();
     const idx = rxList.findIndex((p) => p.id === rx.id);
     if (idx >= 0) {
@@ -501,38 +503,40 @@ export const HMSStore = {
       rxList.push(rx);
     }
     setStorage('prescriptions', rxList);
-    if (this._onSavePrescription) this._onSavePrescription(rx);
+    if (!options?.skipRemoteSync && this._onSavePrescription) this._onSavePrescription(rx);
 
-    // Update visit status to 'prescribed' so it enters Pharmacy queue
-    const visits = this.getVisits();
-    let visit = visits.find((v) => v.id === rx.visit_id);
-    if (!visit && rx.patient_id) {
-      visit = visits.find((v) => v.patient_id === rx.patient_id);
-    }
-    if (visit) {
-      visit.status = 'prescribed';
-      visit.updated_at = new Date().toISOString();
-      this.saveVisit(visit);
-    } else if (rx.patient_id) {
-      // Auto-create visit record so queues can track it
-      const newVisit: Visit = {
-        id: rx.visit_id || generateUUID(),
-        visit_number: `V-${Date.now().toString().slice(-4)}`,
-        patient_id: rx.patient_id,
-        doctor_id: rx.doctor_id,
-        token_number: visits.length + 1,
-        status: 'prescribed',
-        created_at: rx.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      this.saveVisit(newVisit);
+    // Update visit status to 'prescribed' so it enters Pharmacy queue (local only if skipRemoteSync)
+    if (!options?.skipRemoteSync) {
+      const visits = this.getVisits();
+      let visit = visits.find((v) => v.id === rx.visit_id);
+      if (!visit && rx.patient_id) {
+        visit = visits.find((v) => v.patient_id === rx.patient_id);
+      }
+      if (visit) {
+        visit.status = 'prescribed';
+        visit.updated_at = new Date().toISOString();
+        this.saveVisit(visit);
+      } else if (rx.patient_id) {
+        // Auto-create visit record so queues can track it
+        const newVisit: Visit = {
+          id: rx.visit_id || generateUUID(),
+          visit_number: `V-${Date.now().toString().slice(-4)}`,
+          patient_id: rx.patient_id,
+          doctor_id: rx.doctor_id,
+          token_number: visits.length + 1,
+          status: 'prescribed',
+          created_at: rx.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.saveVisit(newVisit);
+      }
     }
   },
 
-  deletePrescription(rxId: string) {
+  deletePrescription(rxId: string, options?: { skipRemoteSync?: boolean }) {
     const rxList = this.getPrescriptions().filter((p) => p.id !== rxId);
     setStorage('prescriptions', rxList);
-    if (this._onDeletePrescription) this._onDeletePrescription(rxId);
+    if (!options?.skipRemoteSync && this._onDeletePrescription) this._onDeletePrescription(rxId);
   },
 
   // ── Drugs & Pharmacy Inventory ──
@@ -544,7 +548,7 @@ export const HMSStore = {
     setStorage('drugs', drugs);
   },
 
-  saveDrug(drug: Drug) {
+  saveDrug(drug: Drug, options?: { skipRemoteSync?: boolean }) {
     const drugs = this.getDrugs();
     const idx = drugs.findIndex((d) => d.id === drug.id);
     if (idx >= 0) {
@@ -553,13 +557,13 @@ export const HMSStore = {
       drugs.unshift(drug);
     }
     setStorage('drugs', drugs);
-    if (this._onSaveDrug) this._onSaveDrug(drug);
+    if (!options?.skipRemoteSync && this._onSaveDrug) this._onSaveDrug(drug);
   },
 
-  deleteDrug(drugId: string) {
+  deleteDrug(drugId: string, options?: { skipRemoteSync?: boolean }) {
     const drugs = this.getDrugs().filter((d) => d.id !== drugId);
     setStorage('drugs', drugs);
-    if (this._onDeleteDrug) this._onDeleteDrug(drugId);
+    if (!options?.skipRemoteSync && this._onDeleteDrug) this._onDeleteDrug(drugId);
   },
 
   reduceStock(drugId: string, qty: number): boolean {

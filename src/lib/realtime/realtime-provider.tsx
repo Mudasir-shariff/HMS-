@@ -76,6 +76,45 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     const channelId = `hospital-sync-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase.channel(channelId);
 
+    // Debounced query invalidation helpers to prevent socket exhaustion and thundering herds
+    let visitDebounceTimer: any = null;
+    const triggerVisitInvalidation = () => {
+      if (visitDebounceTimer) clearTimeout(visitDebounceTimer);
+      visitDebounceTimer = setTimeout(() => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      }, 300);
+    };
+
+    let patientDebounceTimer: any = null;
+    const triggerPatientInvalidation = () => {
+      if (patientDebounceTimer) clearTimeout(patientDebounceTimer);
+      patientDebounceTimer = setTimeout(() => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+      }, 300);
+    };
+
+    let drugDebounceTimer: any = null;
+    const triggerDrugInvalidation = () => {
+      if (drugDebounceTimer) clearTimeout(drugDebounceTimer);
+      drugDebounceTimer = setTimeout(() => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+      }, 300);
+    };
+
+    let dispDebounceTimer: any = null;
+    const triggerDispInvalidation = () => {
+      if (dispDebounceTimer) clearTimeout(dispDebounceTimer);
+      dispDebounceTimer = setTimeout(() => {
+        setLastSyncedAt(new Date());
+        queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      }, 300);
+    };
+
     // ── 1. VISITS (Live OPD Queue & Status updates across all roles) ──
     channel.on(
       'postgres_changes',
@@ -111,14 +150,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        // Mirror to HMSStore
+        // Mirror to HMSStore (skipRemoteSync=true prevents infinite loop back to Supabase)
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.saveVisit(payload.new as any);
+          HMSStore.saveVisit(payload.new as any, { skipRemoteSync: true });
         } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deleteVisit((payload.old as any).id);
+          HMSStore.deleteVisit((payload.old as any).id, { skipRemoteSync: true });
         }
 
-        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        triggerVisitInvalidation();
       }
     );
 
@@ -155,14 +194,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        // Mirror to HMSStore
+        // Mirror to HMSStore (skipRemoteSync=true prevents infinite loop back to Supabase)
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.savePatient(payload.new as any);
+          HMSStore.savePatient(payload.new as any, { skipRemoteSync: true });
         } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deletePatient((payload.old as any).id);
+          HMSStore.deletePatient((payload.old as any).id, { skipRemoteSync: true });
         }
 
-        queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+        triggerPatientInvalidation();
       }
     );
 
@@ -200,12 +239,12 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         );
 
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.saveDrug(payload.new as any);
+          HMSStore.saveDrug(payload.new as any, { skipRemoteSync: true });
         } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deleteDrug((payload.old as any).id);
+          HMSStore.deleteDrug((payload.old as any).id, { skipRemoteSync: true });
         }
 
-        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+        triggerDrugInvalidation();
       }
     );
 
@@ -285,9 +324,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           HMSStore.deleteDispensing((payload.old as any).id);
         }
 
-        queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+        triggerDispInvalidation();
       }
     );
 

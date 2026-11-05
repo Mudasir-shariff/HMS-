@@ -152,9 +152,9 @@ export default function RegisterPatientPage() {
         uhid: form.uhidLookup.trim() || undefined,
       });
 
-      // Mirror to local store for offline consistency
-      HMSStore.savePatient(res.patient);
-      HMSStore.saveVisit(res.visit);
+      // Mirror to local store for offline consistency (skip remote sync since atomic RPC already persisted to Supabase)
+      HMSStore.savePatient(res.patient, { skipRemoteSync: true });
+      HMSStore.saveVisit(res.visit, { skipRemoteSync: true });
 
       queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });

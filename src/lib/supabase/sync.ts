@@ -287,6 +287,19 @@ function isValidUUID(id?: string | null): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
+async function withTimeout<T>(promise: PromiseLike<T>, ms = 4000): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    return result as T | null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function pushUserToSupabase(user: UserAccount) {
   if (!isSupabaseConfigured() || !isValidUUID(user.id)) return;
   try {
@@ -398,38 +411,68 @@ export async function purgeAllRecordsFromSupabase() {
   }
 }
 
+const inFlightPatients = new Set<string>();
+const inFlightVisits = new Set<string>();
+const lastVisitPushTime = new Map<string, number>();
+
 export async function pushPatientToSupabase(patient: Patient) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured() || !patient?.id) return;
+  const patientId = isValidUUID(patient.id) ? patient.id : null;
+  if (!patientId || inFlightPatients.has(patientId)) return;
+
+  inFlightPatients.add(patientId);
   try {
     const supabase = createClient();
-    const patientId = isValidUUID(patient.id) ? patient.id : generateUUID();
-    const { error } = await supabase.from('patients').upsert({
-      id: patientId,
-      uhid: patient.uhid,
-      name: patient.name,
-      age: patient.age,
-      phone: patient.phone,
-      blood_group: patient.blood_group || null,
-      has_bp: patient.has_bp,
-      has_sugar: patient.has_sugar,
-      other_conditions: patient.other_conditions || null,
-      updated_at: new Date().toISOString(),
-    });
-    if (error) console.error('Error pushing patient to Supabase:', error);
-  } catch (e) {
-    console.warn('Failed to push patient to Supabase:', e);
+    const res = await withTimeout(
+      supabase.from('patients').upsert({
+        id: patientId,
+        uhid: patient.uhid,
+        name: patient.name,
+        age: patient.age,
+        phone: patient.phone,
+        blood_group: patient.blood_group || null,
+        has_bp: patient.has_bp,
+        has_sugar: patient.has_sugar,
+        other_conditions: patient.other_conditions || null,
+        updated_at: new Date().toISOString(),
+      }),
+      4000
+    );
+    if (res?.error) console.warn('Supabase patient push warning:', res.error.message);
+  } catch (e: any) {
+    console.warn('Failed to push patient to Supabase:', e?.message || e);
+  } finally {
+    inFlightPatients.delete(patientId);
   }
 }
 
 export async function pushVisitToSupabase(visit: Visit) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured() || !visit?.id) return;
+  const visitKey = `${visit.id}-${visit.status}`;
+
+  // In-flight guard: prevent concurrent requests for same visit
+  if (inFlightVisits.has(visitKey)) {
+    return;
+  }
+
+  // Rate-limiting: do not push same visit state multiple times in 1.5s
+  const now = Date.now();
+  const lastTime = lastVisitPushTime.get(visitKey) || 0;
+  if (now - lastTime < 1500) {
+    return;
+  }
+
+  inFlightVisits.add(visitKey);
+  lastVisitPushTime.set(visitKey, now);
+
   try {
     const supabase = createClient();
-    const visitId = isValidUUID(visit.id) ? visit.id : generateUUID();
+    const visitId = isValidUUID(visit.id) ? visit.id : null;
+    if (!visitId) return;
 
     // Quick direct status update if record already exists
-    if (isValidUUID(visit.id)) {
-      const { data: updated, error: uErr } = await supabase
+    const updateRes = await withTimeout(
+      supabase
         .from('visits')
         .update({
           status: visit.status,
@@ -439,56 +482,74 @@ export async function pushVisitToSupabase(visit: Visit) {
         })
         .eq('id', visitId)
         .select('id')
-        .maybeSingle();
+        .maybeSingle(),
+      4000
+    );
 
-      if (!uErr && updated) {
-        return;
-      }
+    if (updateRes && !updateRes.error && updateRes.data) {
+      return;
     }
 
     // Resolve doctor: Ensure the doctor exists in public.doctors so foreign key never fails
-    let doctorIdToUse = visit.doctor_id;
+    let doctorIdToUse: string | null = null;
     if (isValidUUID(visit.doctor_id)) {
-      const { data: existingDoc } = await supabase
-        .from('doctors')
-        .select('id, user_id')
-        .or(`id.eq.${visit.doctor_id},user_id.eq.${visit.doctor_id}`)
-        .limit(1)
-        .maybeSingle();
+      const docRes = await withTimeout(
+        supabase
+          .from('doctors')
+          .select('id, user_id')
+          .or(`id.eq.${visit.doctor_id},user_id.eq.${visit.doctor_id}`)
+          .limit(1)
+          .maybeSingle(),
+        3000
+      );
 
-      if (existingDoc) {
-        doctorIdToUse = existingDoc.id;
+      if (docRes?.data) {
+        doctorIdToUse = docRes.data.id;
       } else {
         // Auto-provision doctor record so foreign key doesn't reject
-        const { data: newDoc } = await supabase
-          .from('doctors')
-          .insert({
-            id: visit.doctor_id,
-            user_id: visit.doctor_id,
-            specialization: 'General Medicine',
-            consultation_room: 'Room 1',
-            is_available: true,
-          })
-          .select('id')
-          .maybeSingle();
-        if (newDoc) doctorIdToUse = newDoc.id;
+        const newDocRes = await withTimeout(
+          supabase
+            .from('doctors')
+            .insert({
+              id: visit.doctor_id,
+              user_id: visit.doctor_id,
+              specialization: 'General Medicine',
+              consultation_room: 'Room 1',
+              is_available: true,
+            })
+            .select('id')
+            .maybeSingle(),
+          3000
+        );
+        if (newDocRes?.data) doctorIdToUse = newDocRes.data.id;
       }
     }
 
-    const { error } = await supabase.from('visits').upsert({
-      id: visitId,
-      visit_number: visit.visit_number,
-      patient_id: visit.patient_id,
-      doctor_id: doctorIdToUse,
-      token_number: visit.token_number,
-      status: visit.status,
-      follow_up_date: visit.follow_up_date || null,
-      instructions: visit.instructions || null,
-      updated_at: new Date().toISOString(),
-    });
-    if (error) console.error('Error pushing visit to Supabase:', error);
-  } catch (e) {
-    console.warn('Failed to push visit to Supabase:', e);
+    const patientIdToUse = isValidUUID(visit.patient_id) ? visit.patient_id : null;
+    if (!patientIdToUse) return;
+
+    const upsertRes = await withTimeout(
+      supabase.from('visits').upsert({
+        id: visitId,
+        visit_number: visit.visit_number || `V-${Date.now().toString().slice(-4)}`,
+        patient_id: patientIdToUse,
+        doctor_id: doctorIdToUse,
+        token_number: Number(visit.token_number) || 1,
+        status: visit.status,
+        follow_up_date: visit.follow_up_date || null,
+        instructions: visit.instructions || null,
+        updated_at: new Date().toISOString(),
+      }),
+      4000
+    );
+
+    if (upsertRes?.error) {
+      console.warn('Supabase visit push warning:', upsertRes.error.message);
+    }
+  } catch (e: any) {
+    console.warn('Failed to push visit to Supabase (safe offline):', e?.message || e);
+  } finally {
+    inFlightVisits.delete(visitKey);
   }
 }
 

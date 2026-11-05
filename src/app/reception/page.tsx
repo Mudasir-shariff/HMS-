@@ -137,7 +137,7 @@ export default function ReceptionPage() {
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
     if (current) {
-      HMSStore.saveVisit({ ...current, status: 'in_consultation', updated_at });
+      HMSStore.saveVisit({ ...current, status: 'in_consultation', updated_at }, { skipRemoteSync: true });
     }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
@@ -165,7 +165,7 @@ export default function ReceptionPage() {
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
     if (current) {
-      HMSStore.saveVisit({ ...current, status: 'prescribed', updated_at });
+      HMSStore.saveVisit({ ...current, status: 'prescribed', updated_at }, { skipRemoteSync: true });
     }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
@@ -193,7 +193,7 @@ export default function ReceptionPage() {
     const updated_at = new Date().toISOString();
     const current = HMSStore.getVisits().find((v) => v.id === visitId);
     if (current) {
-      HMSStore.saveVisit({ ...current, status: 'dispensed', updated_at });
+      HMSStore.saveVisit({ ...current, status: 'dispensed', updated_at }, { skipRemoteSync: true });
     }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []

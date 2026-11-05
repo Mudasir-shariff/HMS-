@@ -515,7 +515,7 @@ function PrescribeContent() {
             updated_at: new Date().toISOString(),
           };
       finalVisitId = updatedVisit.id;
-      HMSStore.saveVisit(updatedVisit);
+      HMSStore.saveVisit(updatedVisit, { skipRemoteSync: true });
 
       // Optimistically update React Query cache for visits and prescriptions (<1ms)
       queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
