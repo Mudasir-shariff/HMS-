@@ -997,9 +997,9 @@ function PrescribeContent() {
   // 3. EDIT / PRESCRIBE FORM VIEW (Mobile-Optimized PWA Interface)
   // ────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="pb-28 lg:pb-8">
+    <div className="pb-36 lg:pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -1011,7 +1011,7 @@ function PrescribeContent() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-2xl lg:text-[36px] font-medium text-[var(--text-strong)] tracking-[-0.02em] leading-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold font-[family-name:var(--font-heading)] text-[var(--text-strong)] tracking-tight leading-tight">
               Consultation · Token #{String(token).padStart(2, '0')}
             </h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
@@ -1047,18 +1047,18 @@ function PrescribeContent() {
       </div>
 
       {/* Clinical Template Shortcuts */}
-      <div className="mb-5 bg-[var(--bg-card)] p-3.5 rounded-[var(--r-tile)] border border-[var(--line-soft)]">
+      <div className="mb-5 bg-[var(--bg-card)] p-3 sm:p-3.5 rounded-[var(--r-tile)] border border-[var(--line-soft)]">
         <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-[var(--text-strong)]">
           <Sparkles size={14} className="text-[var(--gold-500)]" />
           <span>Quick Diagnosis Presets (1-Click Templates):</span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 snap-x">
           {CLINICAL_TEMPLATES.map((tpl) => (
             <button
               key={tpl.name}
               type="button"
               onClick={() => applyTemplate(tpl)}
-              className="text-xs px-3 py-1.5 rounded-[var(--r-pill)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] hover:bg-[var(--sage-100)] text-[var(--text-body)] transition-all font-medium"
+              className="text-xs px-3 py-1.5 rounded-[var(--r-pill)] bg-white border border-[var(--line-soft)] hover:border-[var(--green-600)] hover:bg-[var(--sage-100)] text-[var(--text-body)] transition-all font-medium shrink-0 min-h-[36px] snap-start"
             >
               + {tpl.name}
             </button>
@@ -1688,32 +1688,32 @@ function PrescribeContent() {
       </div>
 
       {/* Mobile Sticky Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--line-soft)] p-4 shadow-[var(--shadow-float)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--line-soft)] p-3 sm:p-4 pb-safe shadow-[var(--shadow-float)]">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="hidden sm:block text-xs text-[var(--text-muted)]">
             Token #{String(token).padStart(2, '0')} · {medicines.length} medicines · {labTests.length} tests
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <Button
               variant="secondary"
-              icon={<Send size={16} />}
+              icon={<Send size={15} />}
               onClick={handleSaveOnly}
               loading={isSaving}
               disabled={isSaving}
-              className="flex-1 sm:flex-initial"
+              className="flex-1 sm:flex-initial justify-center min-h-[44px]"
             >
               {isSaving ? 'Sending...' : 'Send to Pharmacy'}
             </Button>
 
             <Button
-              icon={<Printer size={16} />}
+              icon={<Printer size={15} />}
               onClick={handleSaveAndPrint}
               loading={isSaving}
               disabled={isSaving}
-              className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white"
+              className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white justify-center min-h-[44px]"
             >
-              {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
+              {isSaving ? 'Sending...' : 'Send & Print'}
             </Button>
           </div>
         </div>

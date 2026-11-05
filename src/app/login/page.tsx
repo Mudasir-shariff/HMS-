@@ -65,7 +65,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-dvh bg-[var(--bg-canvas)] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="flex flex-col items-center mb-6 text-center">
@@ -107,7 +107,7 @@ function LoginForm() {
         )}
 
         {/* Credentials Login Card */}
-        <div className="bg-[var(--bg-card)] rounded-[var(--r-card)] p-6 sm:p-7 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
+        <div className="bg-[var(--bg-card)] rounded-[var(--r-card)] p-5 sm:p-7 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
           <h2 className="text-base font-semibold text-[var(--text-strong)] mb-1">Sign In to Your Account</h2>
           <p className="text-xs text-[var(--text-muted)] mb-5">
             Enter your authorized hospital email address and password to access your department portal.
@@ -135,12 +135,13 @@ function LoginForm() {
               <input
                 id="email"
                 type="email"
+                inputMode="email"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="e.g. doctor@hospital.com"
                 required
-                className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)] transition-all"
+                className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-base sm:text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)] transition-all"
               />
             </div>
 
@@ -158,12 +159,12 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 pr-10 text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)] transition-all"
+                  className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 pr-10 text-base sm:text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)] transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)] hover:text-[var(--text-muted)] p-1.5"
                   tabIndex={-1}
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
@@ -175,7 +176,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading || !email}
-              className="h-11 w-full rounded-[var(--r-control)] bg-[var(--green-900)] text-white text-sm font-medium transition-all hover:brightness-[0.94] active:brightness-[0.90] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-xs"
+              className="h-11 w-full rounded-[var(--r-control)] bg-[var(--green-900)] text-white text-sm font-semibold transition-all hover:brightness-[0.94] active:brightness-[0.90] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-xs cursor-pointer min-h-[44px]"
             >
               {loading && <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
               Sign In to Portal

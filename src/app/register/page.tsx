@@ -227,8 +227,8 @@ export default function RegisterPage() {
 
   if (registeredAccount) {
     return (
-      <div className="min-h-screen bg-[var(--bg-canvas)] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md bg-[var(--bg-card)] rounded-[var(--r-card)] p-8 text-center shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
+      <div className="min-h-dvh bg-[var(--bg-canvas)] flex items-center justify-center px-4 py-8 sm:py-12">
+        <div className="w-full max-w-md bg-[var(--bg-card)] rounded-[var(--r-card)] p-6 sm:p-8 text-center shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
           <div className="h-16 w-16 rounded-full bg-[var(--success-bg)] text-[var(--success)] flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} />
           </div>
@@ -278,7 +278,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-dvh bg-[var(--bg-canvas)] flex flex-col items-center justify-center px-4 py-8 sm:py-10">
       <div className="w-full max-w-xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

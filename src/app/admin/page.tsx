@@ -278,7 +278,7 @@ export default function AdminPage() {
       />
 
       {/* Hospital Stats Master Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
         {[
           { label: 'Staff Accounts', value: users.length, color: 'text-[var(--text-strong)]' },
           { label: 'Active Doctors', value: doctors.length, color: 'text-[var(--green-700)]' },
@@ -286,15 +286,15 @@ export default function AdminPage() {
           { label: 'OPD Visits Total', value: visits.length, color: 'text-[var(--text-strong)]' },
           { label: 'Pharmacy Drugs', value: drugs.length, color: 'text-[#8A6520]' },
         ].map((s) => (
-          <div key={s.label} className="bg-[var(--bg-card)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)]">
-            <p className={`text-[28px] font-light leading-tight ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{s.label}</p>
+          <div key={s.label} className="bg-[var(--bg-card)] rounded-[var(--r-tile)] p-3 sm:p-4 border border-[var(--line-soft)] flex flex-col justify-between min-h-[88px] sm:min-h-[96px] shadow-2xs">
+            <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${s.color}`}>{s.value}</p>
+            <p className="text-xs font-semibold text-[var(--text-muted)] mt-1 line-clamp-2 leading-snug">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Tabs Header */}
-      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-fit shadow-[var(--shadow-float)] mb-6 overflow-x-auto border border-[var(--line-soft)]">
+      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-full sm:w-fit shadow-[var(--shadow-float)] mb-5 sm:mb-6 overflow-x-auto no-scrollbar snap-x border border-[var(--line-soft)]">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -305,9 +305,9 @@ export default function AdminPage() {
                 setSearch('');
               }}
               className={clsx(
-                'flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-[var(--r-pill)] text-xs font-medium transition-all',
+                'flex items-center gap-2 flex-shrink-0 px-3.5 sm:px-4 py-2 rounded-[var(--r-pill)] text-xs sm:text-sm font-semibold transition-all shrink-0 min-h-[40px] snap-start touch-manipulation cursor-pointer',
                 tab === t.id
-                  ? 'bg-[var(--green-900)] text-white shadow-sm'
+                  ? 'bg-[var(--green-900)] text-white shadow-xs'
                   : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
               )}
             >
@@ -349,65 +349,66 @@ export default function AdminPage() {
                   <div
                     key={u.id}
                     className={clsx(
-                      'flex items-center gap-3.5 rounded-[var(--r-tile)] p-3.5 border transition-all',
+                      'flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-[var(--r-tile)] p-3.5 border transition-all shadow-2xs',
                       u.is_active ? 'bg-[var(--bg-tile)] border-[var(--line-soft)]' : 'bg-red-50/50 border-red-200 opacity-75'
                     )}
                   >
-                    <Avatar name={u.full_name} size="md" className="shrink-0" />
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <Avatar name={u.full_name} size="md" className="shrink-0 hidden xs:flex" />
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-[var(--text-strong)]">{u.full_name}</span>
-                        <StatusPill variant={pill.variant} label={pill.label} />
-                        {!u.is_active ? (
-                          <StatusPill variant="danger" label="Deactivated" />
-                        ) : (
-                          <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                            Active Login
-                          </span>
-                        )}
-                        {u.id === currentUser?.id && (
-                          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">
-                            Current Session
-                          </span>
-                        )}
-                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{u.full_name}</span>
+                          <StatusPill variant={pill.variant} label={pill.label} />
+                          {!u.is_active ? (
+                            <StatusPill variant="danger" label="Deactivated" />
+                          ) : (
+                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                              Active Login
+                            </span>
+                          )}
+                          {u.id === currentUser?.id && (
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">
+                              Current Session
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                        <span className="font-mono text-[var(--text-strong)]">{u.email}</span>
-                        {u.phone && <span>· Phone: {u.phone}</span>}
-                        {u.specialization && (
-                          <span className="text-[var(--green-700)] font-medium">
-                            · {u.specialization} ({u.consultation_room || 'Room 1'})
-                          </span>
-                        )}
-                        {u.opd_timings && <span>· Timings: {u.opd_timings}</span>}
-                        {u.consultation_fee && <span>· Fee: ₹{u.consultation_fee}</span>}
-                        <span className="text-emerald-700 font-medium">· Auth: Secure Supabase Auth</span>
+                        <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                          <span className="font-mono text-[var(--text-strong)]">{u.email}</span>
+                          {u.phone && <span>· Phone: {u.phone}</span>}
+                          {u.specialization && (
+                            <span className="text-[var(--green-700)] font-medium">
+                              · {u.specialization} ({u.consultation_room || 'Room 1'})
+                            </span>
+                          )}
+                          {u.opd_timings && <span>· Timings: {u.opd_timings}</span>}
+                          {u.consultation_fee && <span>· Fee: ₹{u.consultation_fee}</span>}
+                        </div>
                       </div>
                     </div>
 
                     {/* Actions: Active/Deactivate, Edit, Delete */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                       <button
                         title={u.is_active ? 'Deactivate Login (Block Access)' : 'Activate Login'}
                         onClick={() => handleToggleUserActive(u)}
                         disabled={u.id === currentUser?.id}
                         className={clsx(
-                          'h-8 px-2.5 flex items-center gap-1 text-xs rounded-[var(--r-control)] font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed',
+                          'h-10 sm:h-8 px-3 sm:px-2.5 flex items-center justify-center gap-1.5 text-xs rounded-[var(--r-control)] font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed min-h-[40px] sm:min-h-0',
                           u.is_active
                             ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                             : 'bg-green-100 text-green-800 hover:bg-green-200'
                         )}
                       >
-                        {u.is_active ? <UserX size={13} /> : <UserCheck size={13} />}
-                        <span className="hidden sm:inline">{u.is_active ? 'Deactivate' : 'Activate'}</span>
+                        {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
+                        <span>{u.is_active ? 'Deactivate' : 'Activate'}</span>
                       </button>
 
                       <button
                         title="Edit Login Details"
                         onClick={() => setEditingUser({ ...u })}
-                        className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors"
+                        className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
                       >
                         <Pencil size={14} />
                       </button>
@@ -416,7 +417,7 @@ export default function AdminPage() {
                         title={u.id === currentUser?.id ? 'Cannot delete your active login session' : 'Delete User Login'}
                         onClick={() => setDeletingUser(u)}
                         disabled={u.id === currentUser?.id}
-                        className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -457,44 +458,46 @@ export default function AdminPage() {
               {filteredPatients.map((p) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)] shadow-2xs"
                 >
-                  <div className="h-10 w-10 rounded-full bg-[var(--sage-100)] flex items-center justify-center font-bold text-xs text-[var(--green-900)] shrink-0">
-                    {p.blood_group || '—'}
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-full bg-[var(--sage-100)] flex items-center justify-center font-bold text-xs text-[var(--green-900)] shrink-0 border border-[var(--green-300)]">
+                      {p.blood_group || '—'}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{p.name}</span>
+                        <span className="text-xs text-[var(--text-muted)] tabular-nums">{p.age} years</span>
+                        {p.has_bp && <StatusPill variant="warning" label="BP" />}
+                        {p.has_sugar && <StatusPill variant="info" label="Diabetes" />}
+                      </div>
+                      <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                        <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
+                        <span>·</span>
+                        <span>Phone: {p.phone}</span>
+                        {p.other_conditions && (
+                          <>
+                            <span>·</span>
+                            <span className="italic">{p.other_conditions}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[var(--text-strong)]">{p.name}</span>
-                      <span className="text-xs text-[var(--text-muted)]">{p.age} years</span>
-                      {p.has_bp && <StatusPill variant="warning" label="BP" />}
-                      {p.has_sugar && <StatusPill variant="info" label="Diabetes" />}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                      <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
-                      <span>·</span>
-                      <span>Phone: {p.phone}</span>
-                      {p.other_conditions && (
-                        <>
-                          <span>·</span>
-                          <span className="italic">{p.other_conditions}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                     <button
                       title="Edit Patient"
                       onClick={() => setEditingPatient({ ...p })}
-                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors"
+                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       title="Delete Patient"
                       onClick={() => setDeletingPatient(p)}
-                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors"
+                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -517,7 +520,7 @@ export default function AdminPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Search patient or doctor..."
-                className="w-60"
+                className="w-full sm:w-60"
               />
             }
           />
@@ -537,43 +540,47 @@ export default function AdminPage() {
                 return (
                   <div
                     key={v.id}
-                    className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)] shadow-2xs"
                   >
-                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
-                      <p className="text-[18px] leading-none font-bold text-[var(--text-strong)]">
-                        #{String(v.token_number).padStart(2, '0')}
-                      </p>
-                      <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 px-1 border border-[var(--line-soft)] shadow-2xs">
+                        <p className="text-[18px] leading-none font-bold text-[var(--green-900)] tabular-nums">
+                          #{String(v.token_number).padStart(2, '0')}
+                        </p>
+                        <p className="text-[9px] text-[var(--text-faint)] mt-1 font-bold">TOKEN</p>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">
+                            {pat?.name || 'Patient'}
+                          </span>
+                          <span className="text-xs text-[var(--text-muted)] font-mono">{v.visit_number}</span>
+                          <StatusPill
+                            variant={v.status === 'dispensed' ? 'success' : v.status === 'prescribed' ? 'warning' : 'info'}
+                            label={v.status}
+                          />
+                        </div>
+                        <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                          <span>
+                            Doctor: <strong className="text-[var(--green-700)]">{doc?.full_name || 'Doctor'}</strong> ({doc?.specialization})
+                          </span>
+                          <span>·</span>
+                          <span className="tabular-nums">Time: {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                          {v.follow_up_date && <span>· Follow-up: {v.follow_up_date}</span>}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-[var(--text-strong)]">
-                          {pat?.name || 'Patient'}
-                        </span>
-                        <span className="text-xs text-[var(--text-muted)] font-mono">{v.visit_number}</span>
-                        <StatusPill
-                          variant={v.status === 'dispensed' ? 'success' : v.status === 'prescribed' ? 'warning' : 'info'}
-                          label={v.status}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                        <span>
-                          Assigned to: <strong className="text-[var(--green-700)]">{doc?.full_name || 'Doctor'}</strong> ({doc?.specialization})
-                        </span>
-                        <span>·</span>
-                        <span>Time: {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                        {v.follow_up_date && <span>· Follow-up: {v.follow_up_date}</span>}
-                      </div>
+                    <div className="flex justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
+                      <button
+                        title="Delete Visit"
+                        onClick={() => handleDeleteVisit(v)}
+                        className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-
-                    <button
-                      title="Delete Visit"
-                      onClick={() => handleDeleteVisit(v)}
-                      className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 );
               })}
@@ -724,7 +731,7 @@ export default function AdminPage() {
                   type="text"
                   value={editingUser.full_name}
                   onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   required
                 />
               </div>
@@ -735,7 +742,7 @@ export default function AdminPage() {
                   type="email"
                   value={editingUser.email}
                   onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   required
                 />
               </div>
@@ -746,7 +753,7 @@ export default function AdminPage() {
                   type="text"
                   value={editingUser.password || ''}
                   onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   placeholder="Set login password"
                 />
               </div>
@@ -757,7 +764,7 @@ export default function AdminPage() {
                   <select
                     value={editingUser.role}
                     onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
-                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs capitalize"
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs capitalize"
                   >
                     <option value="admin">Super Admin</option>
                     <option value="doctor">Doctor</option>
@@ -769,9 +776,10 @@ export default function AdminPage() {
                   <label className="text-[var(--text-muted)] block mb-1">Phone</label>
                   <input
                     type="tel"
+                    inputMode="tel"
                     value={editingUser.phone || ''}
                     onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
-                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   />
                 </div>
               </div>
@@ -785,7 +793,7 @@ export default function AdminPage() {
                       type="text"
                       value={editingUser.specialization || ''}
                       onChange={(e) => setEditingUser({ ...editingUser, specialization: e.target.value })}
-                      className="h-9 w-full rounded-[var(--r-control)] border px-2 text-xs bg-white"
+                      className="h-9 w-full rounded-[var(--r-control)] border px-2 text-base sm:text-xs bg-white"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -795,16 +803,17 @@ export default function AdminPage() {
                         type="text"
                         value={editingUser.consultation_room || ''}
                         onChange={(e) => setEditingUser({ ...editingUser, consultation_room: e.target.value })}
-                        className="h-9 w-full rounded-[var(--r-control)] border px-2 text-xs bg-white"
+                        className="h-9 w-full rounded-[var(--r-control)] border px-2 text-base sm:text-xs bg-white"
                       />
                     </div>
                     <div>
                       <label className="text-[var(--text-muted)] block mb-1">Fee (₹)</label>
                       <input
                         type="number"
+                        inputMode="numeric"
                         value={editingUser.consultation_fee || 500}
                         onChange={(e) => setEditingUser({ ...editingUser, consultation_fee: Number(e.target.value) })}
-                        className="h-9 w-full rounded-[var(--r-control)] border px-2 text-xs bg-white"
+                        className="h-9 w-full rounded-[var(--r-control)] border px-2 text-base sm:text-xs bg-white"
                       />
                     </div>
                   </div>
@@ -812,8 +821,8 @@ export default function AdminPage() {
               )}
 
               <div className="flex gap-2 pt-3 border-t mt-2">
-                <Button type="submit" className="flex-1">Save Changes</Button>
-                <Button type="button" variant="secondary" onClick={() => setEditingUser(null)} className="flex-1">
+                <Button type="submit" className="flex-1 min-h-[44px]">Save Changes</Button>
+                <Button type="button" variant="secondary" onClick={() => setEditingUser(null)} className="flex-1 min-h-[44px]">
                   Cancel
                 </Button>
               </div>
@@ -864,7 +873,7 @@ export default function AdminPage() {
                   type="text"
                   value={editingPatient.name}
                   onChange={(e) => setEditingPatient({ ...editingPatient, name: e.target.value })}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   required
                 />
               </div>
@@ -874,9 +883,10 @@ export default function AdminPage() {
                   <label className="text-[var(--text-muted)] block mb-1">Age</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     value={editingPatient.age}
                     onChange={(e) => setEditingPatient({ ...editingPatient, age: Number(e.target.value) })}
-                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                     required
                   />
                 </div>
@@ -884,9 +894,10 @@ export default function AdminPage() {
                   <label className="text-[var(--text-muted)] block mb-1">Phone</label>
                   <input
                     type="tel"
+                    inputMode="tel"
                     value={editingPatient.phone}
                     onChange={(e) => setEditingPatient({ ...editingPatient, phone: e.target.value })}
-                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                     required
                   />
                 </div>
@@ -898,13 +909,13 @@ export default function AdminPage() {
                   type="text"
                   value={editingPatient.other_conditions || ''}
                   onChange={(e) => setEditingPatient({ ...editingPatient, other_conditions: e.target.value })}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs"
+                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                 />
               </div>
 
               <div className="flex gap-2 pt-3 border-t mt-2">
-                <Button type="submit" className="flex-1">Save Patient</Button>
-                <Button type="button" variant="secondary" onClick={() => setEditingPatient(null)} className="flex-1">
+                <Button type="submit" className="flex-1 min-h-[44px]">Save Patient</Button>
+                <Button type="button" variant="secondary" onClick={() => setEditingPatient(null)} className="flex-1 min-h-[44px]">
                   Cancel
                 </Button>
               </div>

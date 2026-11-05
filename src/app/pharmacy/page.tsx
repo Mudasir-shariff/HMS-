@@ -516,16 +516,18 @@ export default function PharmacyPage() {
         title="Pharmacy Portal"
         subtitle="Live prescription queue, walk-in sales, stock auto-deduction & inventory control"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="secondary"
-              icon={<ShoppingCart size={16} />}
+              size="sm"
+              icon={<ShoppingCart size={15} />}
               onClick={() => setShowWalkInModal(true)}
+              className="min-h-[40px] sm:min-h-0"
             >
               + Walk-in Sale (No Rx)
             </Button>
             <Link href="/pharmacy/inventory/add">
-              <Button icon={<Plus size={16} />}>Add New Drug</Button>
+              <Button size="sm" icon={<Plus size={15} />} className="min-h-[40px] sm:min-h-0">Add New Drug</Button>
             </Link>
           </div>
         }
@@ -533,14 +535,16 @@ export default function PharmacyPage() {
 
       {/* Stock Alerts Banner */}
       {(lowStockDrugs.length > 0 || expiringDrugs.length > 0) && (
-        <div className="flex items-center gap-3 bg-[var(--warning-bg)] border border-[var(--warning)] rounded-[var(--r-tile)] px-4 py-3 mb-5">
-          <AlertTriangle size={18} className="text-[var(--warning)] shrink-0" />
-          <div className="flex-1 text-xs text-[#8A6520]">
-            <strong>Inventory Alerts:</strong> {lowStockDrugs.length} drug(s) below reorder threshold ·{' '}
-            {expiringDrugs.length} drug(s) expiring within 90 days.
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 bg-[var(--warning-bg)] border border-[var(--warning)] rounded-[var(--r-tile)] p-3 sm:px-4 sm:py-3 mb-5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} className="text-[var(--warning)] shrink-0" />
+            <div className="flex-1 text-xs text-[#8A6520]">
+              <strong>Inventory Alerts:</strong> {lowStockDrugs.length} drug(s) below reorder threshold ·{' '}
+              {expiringDrugs.length} drug(s) expiring within 90 days.
+            </div>
           </div>
           <button
-            className="text-xs font-semibold text-[#8A6520] underline hover:no-underline"
+            className="text-xs font-semibold text-[#8A6520] underline hover:no-underline text-left sm:text-right shrink-0"
             onClick={() => setTab('reorder')}
           >
             View Reorder List ({lowStockDrugs.length})
@@ -549,7 +553,7 @@ export default function PharmacyPage() {
       )}
 
       {/* Pill Tab Switcher */}
-      <div className="flex gap-1 bg-white rounded-[var(--r-pill)] p-1 w-fit shadow-[var(--shadow-float)] mb-5 overflow-x-auto">
+      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-full sm:w-fit shadow-[var(--shadow-float)] mb-5 overflow-x-auto no-scrollbar snap-x border border-[var(--line-soft)]">
         {[
           { id: 'queue' as Tab, label: 'Dispensing Queue', count: pendingQueue.length },
           { id: 'dispensed' as Tab, label: "Today's Patient List", count: todayDispensed.length },
@@ -560,16 +564,16 @@ export default function PharmacyPage() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={clsx(
-              'flex items-center gap-1.5 px-4 py-2 rounded-[var(--r-pill)] text-sm font-medium transition-all duration-150 shrink-0',
+              'flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-[var(--r-pill)] text-xs sm:text-sm font-semibold transition-all duration-150 shrink-0 min-h-[40px] snap-start touch-manipulation cursor-pointer',
               tab === t.id
-                ? 'bg-[var(--green-600)] text-white'
+                ? 'bg-[var(--green-600)] text-white shadow-xs'
                 : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
             )}
           >
             {t.label}
             <span
               className={clsx(
-                'inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-medium',
+                'inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-bold tabular-nums',
                 tab === t.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-tile)] text-[var(--text-muted)]'
               )}
             >
@@ -597,24 +601,24 @@ export default function PharmacyPage() {
               {pendingQueue.map((item) => (
                 <div
                   key={item.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[68px] border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3 sm:p-4 border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
                 >
                   {/* Left: Token + Avatar + Info */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
                     {/* Token */}
-                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 border border-[var(--line-soft)]">
-                      <p className="text-[20px] leading-none font-semibold text-[var(--text-strong)]">
+                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 px-1 border border-[var(--line-soft)] shadow-2xs">
+                      <p className="text-[20px] leading-none font-bold text-[var(--green-900)] tabular-nums">
                         {String(item.token_number).padStart(2, '0')}
                       </p>
-                      <p className="text-[9px] text-[var(--text-faint)] mt-0.5">TOKEN</p>
+                      <p className="text-[9px] text-[var(--text-faint)] mt-1 font-bold">TOKEN</p>
                     </div>
 
-                    <Avatar name={item.patientName} size="md" className="shrink-0" />
+                    <Avatar name={item.patientName} size="md" className="shrink-0 hidden xs:flex" />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-[var(--text-strong)]">{item.patientName}</span>
-                        <span className="text-xs text-[var(--text-muted)]">{item.patientAge}y</span>
+                        <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{item.patientName}</span>
+                        <span className="text-xs text-[var(--text-muted)] tabular-nums">{item.patientAge}y</span>
                         {item.uaid ? (
                           <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded">
                             In-Patient ({item.uaid})
@@ -623,8 +627,11 @@ export default function PharmacyPage() {
                           <StatusPill variant="warning" label="Ready to Dispense" />
                         )}
                       </div>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                        UHID: {item.patientUhid} · Prescribed by: {item.doctorName} ·{' '}
+                      <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+                        <span className="font-mono text-[var(--text-strong)]">UHID: {item.patientUhid}</span>
+                        <span>·</span>
+                        <span>Dr: {item.doctorName}</span>
+                        <span>·</span>
                         <strong className="text-[var(--text-strong)]">{item.medicineCount} medicines</strong>
                       </p>
                     </div>
@@ -636,7 +643,7 @@ export default function PharmacyPage() {
                       href={`/pharmacy/dispense?visitId=${item.visitId || item.id}&rxId=${item.prescriptionId || ''}&token=${item.token_number}`}
                       className="w-full sm:w-auto"
                     >
-                      <Button size="sm" className="w-full sm:w-auto justify-center min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
+                      <Button size="sm" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
                         Dispense Medicines
                       </Button>
                     </Link>
@@ -840,10 +847,10 @@ export default function PharmacyPage() {
                         <button
                           type="button"
                           onClick={() => setEditingDrug({ ...drug })}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-colors shadow-2xs cursor-pointer min-h-[34px]"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:border-[var(--green-600)] transition-colors shadow-2xs cursor-pointer min-h-[44px] sm:min-h-[34px]"
                           title="Edit medicine details & stock"
                         >
-                          <Edit2 size={13} className="text-[var(--green-700)]" />
+                          <Edit2 size={14} className="text-[var(--green-700)]" />
                           <span>Edit</span>
                         </button>
 
@@ -851,10 +858,10 @@ export default function PharmacyPage() {
                           type="button"
                           disabled={isDeletingDrugId === drug.id}
                           onClick={() => handleDeleteDrug(drug)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--r-control)] bg-white border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer min-h-[34px]"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-[var(--r-control)] bg-white border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer min-h-[44px] sm:min-h-[34px]"
                           title="Delete medicine from inventory"
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={14} />
                           <span>Delete</span>
                         </button>
                       </div>

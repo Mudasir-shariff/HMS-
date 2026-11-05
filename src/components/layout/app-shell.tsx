@@ -112,16 +112,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pillNavItems = navItems.slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)]">
+    <div className="min-h-dvh bg-[var(--bg-canvas)]">
       {/* ── Top Bar ── */}
-      <header className="sticky top-0 z-40 h-16 bg-[var(--bg-card)] border-b border-[var(--line-soft)]">
-        <div className="flex items-center justify-between h-full px-4 lg:px-8">
+      <header className="sticky top-0 z-40 h-16 bg-[var(--bg-card)] border-b border-[var(--line-soft)] pt-safe">
+        <div className="flex items-center justify-between h-full px-3 sm:px-4 lg:px-8">
           {/* Left: Brand + Mobile Toggle */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {navItems.length > 1 && (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white text-[var(--text-strong)]"
+                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] shadow-xs shrink-0"
                 aria-label="Toggle menu"
               >
                 {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
@@ -133,10 +133,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <BrandLogo className="h-7 w-auto object-contain" />
               </div>
               <div>
-                <span className="text-xs sm:text-sm font-bold text-[var(--text-strong)] leading-tight block">
+                <span className="text-sm font-bold text-[var(--text-strong)] leading-tight block sm:hidden">
+                  RK HMS
+                </span>
+                <span className="text-sm font-bold text-[var(--text-strong)] leading-tight hidden sm:block">
                   Radha Krishna HMS
                 </span>
-                <span className="text-[9px] sm:text-[10px] text-[var(--text-muted)] font-medium leading-tight block mt-0.5">
+                <span className="text-[10px] text-[var(--text-muted)] font-medium hidden sm:block mt-0.5">
                   {roleLabels[user.role]} · <a href="https://opti-x.in" target="_blank" rel="noopener noreferrer" className="text-[var(--green-700)] hover:underline font-semibold">opti-x.in</a>
                 </span>
               </div>
@@ -169,16 +172,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Right: Realtime status + User Profile Chip */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <ConnectionIndicator />
 
             {/* User Chip */}
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen((v) => !v)}
-                className="flex items-center gap-2 h-10 px-3.5 rounded-[var(--r-pill)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all shadow-sm"
+                className="flex items-center gap-2 h-10 w-10 sm:w-auto px-0 sm:px-3.5 rounded-[var(--r-pill)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all shadow-sm shrink-0 justify-center min-h-[40px]"
+                aria-label="User profile menu"
               >
-                <div className="h-5 w-5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px]">
+                <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center font-bold text-[11px]">
                   {user.fullName.charAt(0)}
                 </div>
                 <div className="text-left hidden sm:block">
@@ -189,43 +193,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
               {userMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 top-12 z-20 bg-white rounded-[var(--r-tile)] shadow-[var(--shadow-float)] border border-[var(--line-soft)] w-60 py-2">
-                    <div className="px-4 py-2 border-b border-[var(--line-soft)] mb-1">
-                      <p className="text-xs font-semibold text-[var(--text-strong)] truncate">{user.fullName}</p>
-                      <p className="text-[11px] text-[var(--green-700)] font-medium">{roleLabels[user.role]}</p>
+                  <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs" onClick={() => setUserMenuOpen(false)} />
+                  <div className="fixed inset-x-4 bottom-6 sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-12 z-50 bg-white rounded-[var(--r-card)] sm:rounded-[var(--r-tile)] shadow-2xl border border-[var(--line-soft)] w-auto sm:w-64 max-w-[calc(100vw-2rem)] py-2 animate-in fade-in zoom-in-95">
+                    <div className="px-4 py-3 sm:py-2 border-b border-[var(--line-soft)] mb-1">
+                      <p className="text-sm sm:text-xs font-semibold text-[var(--text-strong)] truncate">{user.fullName}</p>
+                      <p className="text-xs sm:text-[11px] text-[var(--green-700)] font-medium">{roleLabels[user.role]}</p>
                       {user.specialization && (
-                        <p className="text-[10px] text-[var(--text-muted)]">
+                        <p className="text-[11px] sm:text-[10px] text-[var(--text-muted)] mt-0.5">
                           {user.specialization} · {user.consultationRoom}
                         </p>
                       )}
-                      <p className="text-[10px] text-[var(--text-faint)] truncate mt-0.5">{user.email}</p>
+                      <p className="text-[11px] sm:text-[10px] text-[var(--text-faint)] truncate mt-0.5">{user.email}</p>
                     </div>
 
                     <Link
                       href={ROLE_HOME[user.role] || '/'}
                       onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 sm:py-2 text-xs font-medium text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors min-h-[44px] sm:min-h-0"
                     >
-                      <Activity size={14} className="text-[var(--green-700)]" />
+                      <Activity size={16} className="text-[var(--green-700)]" />
                       My Dashboard
                     </Link>
 
                     <Link
                       href="/privacy-policy"
                       onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 sm:py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors min-h-[44px] sm:min-h-0"
                     >
-                      <Shield size={14} className="text-[var(--text-muted)]" />
+                      <Shield size={16} className="text-[var(--text-muted)]" />
                       Privacy Policy
                     </Link>
 
                     <Link
                       href="/terms-and-conditions"
                       onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 sm:py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors min-h-[44px] sm:min-h-0"
                     >
-                      <ClipboardList size={14} className="text-[var(--text-muted)]" />
+                      <ClipboardList size={16} className="text-[var(--text-muted)]" />
                       Terms & Conditions
                     </Link>
 
@@ -235,18 +239,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         setUserMenuOpen(false);
                         setSupportModalOpen(true);
                       }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors text-left"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 sm:py-2 text-xs text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-colors text-left min-h-[44px] sm:min-h-0 cursor-pointer"
                     >
-                      <HelpCircle size={14} className="text-[var(--green-700)]" />
+                      <HelpCircle size={16} className="text-[var(--green-700)]" />
                       Help & Support
                     </button>
 
                     <div className="border-t border-[var(--line-soft)] mt-1 pt-1">
                       <button
                         onClick={signOut}
-                        className="flex items-center gap-2 w-full px-4 py-2 text-xs text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors font-medium"
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 sm:py-2 text-xs text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors font-semibold min-h-[44px] sm:min-h-0 cursor-pointer"
                       >
-                        <LogOut size={14} />
+                        <LogOut size={16} />
                         Sign Out
                       </button>
                     </div>
@@ -258,26 +262,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* ── Mobile Sidebar ── */}
+      {/* ── Mobile Sidebar Drawer ── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-30 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs lg:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       <aside
         className={clsx(
-          'fixed top-16 left-0 z-30 h-[calc(100vh-64px)] w-64 bg-[var(--bg-card)] border-r border-[var(--line-soft)] flex flex-col',
+          'fixed top-0 bottom-0 left-0 z-50 w-72 max-w-[85vw] bg-[var(--bg-card)] border-r border-[var(--line-soft)] flex flex-col shadow-2xl pt-safe pb-safe',
           'transform transition-transform duration-200 ease-in-out lg:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-4 border-b border-[var(--line-soft)] mb-2">
-          <p className="text-sm font-semibold text-[var(--text-strong)]">{user.fullName}</p>
-          <p className="text-xs text-[var(--green-700)]">{roleLabels[user.role]}</p>
+        <div className="p-4 border-b border-[var(--line-soft)] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 px-1.5 rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] flex items-center justify-center shadow-xs shrink-0">
+              <BrandLogo className="h-6 w-auto object-contain" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--text-strong)] leading-tight">Radha Krishna HMS</p>
+              <p className="text-[11px] text-[var(--green-700)] font-medium leading-tight">{roleLabels[user.role]}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="h-9 w-9 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-tile)] shrink-0"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 bg-[var(--bg-canvas)]/50 border-b border-[var(--line-soft)]">
+          <p className="text-xs font-semibold text-[var(--text-strong)] truncate">{user.fullName}</p>
+          <p className="text-[10px] text-[var(--text-faint)] truncate">{user.email}</p>
           {user.specialization && (
-            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{user.specialization}</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-medium">{user.specialization}</p>
           )}
         </div>
-        <nav className="p-3 flex flex-col gap-1 flex-1 overflow-y-auto">
+
+        <nav className="p-3 flex flex-col gap-1 flex-1 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = ICON_MAP[item.iconName] ?? Activity;
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -287,18 +314,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-[var(--r-tile)] text-xs font-medium transition-colors',
-                  isActive ? 'bg-[var(--green-600)] text-white' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+                  'flex items-center gap-3 px-3.5 py-3 rounded-[var(--r-tile)] text-sm font-medium transition-colors min-h-[44px]',
+                  isActive ? 'bg-[var(--green-600)] text-white shadow-xs' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
                 )}
               >
-                <Icon size={16} />
+                <Icon size={18} />
                 {item.name}
               </Link>
             );
           })}
         </nav>
 
-        {/* Mobile Quick Support & Actions Footer */}
+        {/* Mobile Drawer Support & Signout Footer */}
         <div className="p-3 border-t border-[var(--line-soft)] bg-[var(--bg-canvas)]/60 flex flex-col gap-2">
           <button
             type="button"
@@ -306,39 +333,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               setSidebarOpen(false);
               setSupportModalOpen(true);
             }}
-            className="flex items-center justify-between w-full px-3 py-2 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-strong)] hover:border-[var(--green-600)] transition-colors shadow-2xs"
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-[var(--r-tile)] bg-white border border-[var(--line-soft)] text-xs font-medium text-[var(--text-strong)] hover:border-[var(--green-600)] transition-colors shadow-2xs min-h-[44px]"
           >
             <span className="flex items-center gap-2">
-              <HelpCircle size={14} className="text-[var(--green-700)]" />
+              <HelpCircle size={15} className="text-[var(--green-700)]" />
               Help & Support
             </span>
-            <span className="text-[10px] text-[var(--green-700)] font-bold">24/7 Desk</span>
+            <span className="text-[10px] text-[var(--green-700)] font-bold bg-[var(--green-50)] px-2 py-0.5 rounded-full border border-[var(--green-200)]">
+              24/7 Desk
+            </span>
           </button>
-
-          <div className="bg-white p-2.5 rounded-[var(--r-tile)] border border-[var(--line-soft)] text-[11px] space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-muted)] flex items-center gap-1">
-                <PhoneCall size={11} className="text-[var(--green-700)]" /> Helpline:
-              </span>
-              <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
-                8123649448
-              </a>
-            </div>
-            <p className="text-[9px] text-[var(--text-faint)]">Calling Hours: 9:00 PM – 10:00 PM Night</p>
-          </div>
 
           <button
             onClick={signOut}
-            className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-[var(--r-tile)] text-xs text-[var(--danger)] bg-red-50 hover:bg-red-100 font-semibold transition-colors mt-1"
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-[var(--r-tile)] text-xs text-[var(--danger)] bg-red-50 hover:bg-red-100 font-semibold transition-colors min-h-[44px]"
           >
-            <LogOut size={14} />
+            <LogOut size={15} />
             Sign Out
           </button>
         </div>
       </aside>
 
-      {/* ── Main Content with Role Access Guard ── */}
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] mx-auto flex flex-col min-h-[calc(100vh-64px)] justify-between">
+      {/* ── Main Content ── */}
+      <main className="px-3 sm:px-4 lg:px-8 py-4 sm:py-6 max-w-[1400px] mx-auto flex flex-col min-h-[calc(100dvh-64px)] justify-between pb-24 lg:pb-8">
         <div>
           {!hasAccess ? (
             <div className="py-16 text-center max-w-md mx-auto">
@@ -362,30 +379,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Global Footer Branding & Support Information */}
-        <footer className="mt-16 pt-6 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Global Footer Branding & Support Information (Compact single-line) */}
+        <footer className="mt-12 sm:mt-16 pt-4 pb-4 border-t border-[var(--line-soft)] text-xs text-[var(--text-muted)] flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2">
             <BrandLogo className="h-5 w-auto object-contain" />
             <span className="font-semibold text-[var(--text-strong)]">Radha Krishna HMS</span>
             <span>· All Rights Reserved</span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] bg-[var(--bg-card)] p-2.5 sm:px-3.5 sm:py-1.5 rounded-[var(--r-tile)] sm:rounded-[var(--r-pill)] border border-[var(--line-soft)] shadow-xs text-center">
-            <span className="font-semibold text-[var(--text-strong)] flex items-center justify-center gap-1">
-              <PhoneCall size={12} className="text-[var(--green-700)]" /> Support:
-            </span>
-            <a href="tel:8123649448" className="font-bold text-[var(--green-800)] hover:underline">
-              8123649448
-            </a>
-            <span className="text-[10px] text-[var(--text-muted)]">(Calling: 9:00 PM – 10:00 PM Night)</span>
-            <span className="hidden sm:inline">·</span>
-            <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline flex items-center justify-center gap-1 break-all">
-              <Mail size={12} className="shrink-0" /> shariffmudasirshariff@gmail.com
-            </a>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span>Engineered & Powered by</span>
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              type="button"
+              onClick={() => setSupportModalOpen(true)}
+              className="text-[var(--green-800)] font-semibold hover:underline flex items-center gap-1 cursor-pointer bg-white px-2.5 py-1 rounded-[var(--r-pill)] border border-[var(--line-soft)] shadow-2xs"
+            >
+              <HelpCircle size={13} className="text-[var(--green-700)]" />
+              Support & Helpline
+            </button>
+            <span className="text-[var(--line-soft)]">|</span>
+            <span className="text-[var(--text-faint)]">Powered by</span>
             <a
               href="https://opti-x.in"
               target="_blank"
@@ -397,6 +409,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       </main>
+
+      {/* ── Mobile Bottom Navigation Bar (Persistent quick-access) ── */}
+      {pillNavItems.length > 1 && (
+        <nav className="fixed bottom-0 left-0 right-0 z-30 lg:hidden bg-white/95 backdrop-blur-md border-t border-[var(--line-soft)] pb-safe shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <div className="flex items-center justify-around px-2 py-1 h-14">
+            {pillNavItems.map((item) => {
+              const Icon = ICON_MAP[item.iconName] ?? Activity;
+              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+              const shortName = item.name
+                .replace(' (IP)', '')
+                .replace(' Panel', '')
+                .replace(' Desk', '')
+                .replace(' Queue', '')
+                .replace(' Pad', '')
+                .replace('My Patient', 'Patients')
+                .replace('Add Drug', 'Add');
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={clsx(
+                    'flex flex-col items-center justify-center min-w-[52px] py-1 px-1 rounded-[var(--r-tile)] transition-all touch-manipulation',
+                    isActive
+                      ? 'text-[var(--green-800)] font-bold'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+                  )}
+                >
+                  <div className={clsx(
+                    'h-7 w-7 rounded-full flex items-center justify-center transition-all',
+                    isActive ? 'bg-[var(--green-100)] text-[var(--green-800)]' : 'text-current'
+                  )}>
+                    <Icon size={16} />
+                  </div>
+                  <span className="text-[10px] leading-tight mt-0.5 truncate max-w-[64px]">
+                    {shortName}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
 
       {/* ── Help & Support Modal ── */}
       {supportModalOpen && (

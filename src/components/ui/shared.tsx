@@ -119,7 +119,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', classN
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={clsx(
-          'h-10 w-full rounded-[var(--r-pill)] bg-white pl-9 pr-3 text-sm',
+          'h-11 w-full rounded-[var(--r-pill)] bg-white pl-9 pr-3 text-base sm:text-sm',
           'border border-[var(--line-soft)] text-[var(--text-body)]',
           'placeholder:text-[var(--text-faint)]',
           'focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)]',

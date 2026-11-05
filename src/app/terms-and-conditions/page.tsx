@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function TermsAndConditionsPage() {
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-dvh bg-[var(--bg-canvas)] py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Navigation Bar */}
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--line-soft)]">

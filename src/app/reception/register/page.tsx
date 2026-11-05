@@ -225,12 +225,12 @@ export default function RegisterPatientPage() {
               <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold">
                 Daily Token Number
               </p>
-              <div className="my-2 py-3 px-8 bg-[var(--sage-100)] border-2 border-[var(--green-600)] rounded-[var(--r-tile)] inline-block">
-                <span className="text-[72px] leading-none font-light text-[var(--green-900)] tracking-tight">
+              <div className="my-2 py-3 px-6 sm:px-8 bg-[var(--sage-100)] border-2 border-[var(--green-600)] rounded-[var(--r-tile)] inline-block">
+                <span className="text-5xl sm:text-7xl leading-none font-bold tabular-nums text-[var(--green-900)] tracking-tight">
                   {tokenDisplay}
                 </span>
               </div>
-              <p className="text-base font-medium text-[var(--text-strong)] mt-1">
+              <p className="text-sm sm:text-base font-medium text-[var(--text-strong)] mt-1">
                 Tell Patient: <strong className="text-[var(--green-700)]">Token #{tokenDisplay}</strong>
               </p>
               <p className="text-xs text-[var(--text-muted)]">
@@ -368,6 +368,8 @@ export default function RegisterPatientPage() {
                   <Input
                     label="Mobile Phone Number *"
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     placeholder="10-digit mobile number (e.g. 9876543210)"
                     value={form.phone}
                     onChange={(e) => update('phone', e.target.value)}
@@ -384,13 +386,14 @@ export default function RegisterPatientPage() {
                     value={form.name}
                     onChange={(e) => update('name', e.target.value)}
                     error={errors.name}
-                    autoComplete="off"
+                    autoComplete="name"
                   />
                 </div>
 
                 <Input
                   label="Age (Years) *"
                   type="number"
+                  inputMode="numeric"
                   placeholder="e.g. 35"
                   min={0}
                   max={120}
@@ -485,8 +488,8 @@ export default function RegisterPatientPage() {
                 )}
               </div>
 
-              <div className="mt-6 pt-4 border-t border-[var(--line-soft)] flex flex-col gap-2">
-                <Button type="submit" size="lg" className="w-full" loading={isSubmitting} disabled={isSubmitting}>
+              <div className="mt-6 pt-4 border-t border-[var(--line-soft)] flex flex-col gap-2.5">
+                <Button type="submit" size="lg" className="w-full min-h-[44px]" loading={isSubmitting} disabled={isSubmitting}>
                   {isSubmitting ? 'Registering...' : 'Save & Generate Token'}
                 </Button>
                 <a
@@ -495,7 +498,7 @@ export default function RegisterPatientPage() {
                     e.preventDefault();
                     window.location.href = '/reception';
                   }}
-                  className="w-full h-10 px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+                  className="w-full min-h-[44px] px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
                 >
                   Cancel & Return to Reception
                 </a>

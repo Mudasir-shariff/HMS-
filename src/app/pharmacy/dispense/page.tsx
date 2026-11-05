@@ -790,10 +790,10 @@ function DispenseContent() {
                           type="button"
                           onClick={() => stepQty(item.id, -1)}
                           disabled={!item.included || item.qty <= 1}
-                          className="h-9 w-9 flex items-center justify-center text-base font-bold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--line-soft)] disabled:opacity-30 disabled:cursor-not-allowed border-r border-[var(--line-soft)] transition-colors cursor-pointer"
+                          className="h-11 w-11 sm:h-9 sm:w-9 flex items-center justify-center text-base font-bold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--line-soft)] disabled:opacity-30 disabled:cursor-not-allowed border-r border-[var(--line-soft)] transition-colors cursor-pointer touch-manipulation min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                           title="Decrease quantity by 1"
                         >
-                          <Minus size={13} />
+                          <Minus size={15} />
                         </button>
                         <input
                           type="number"
@@ -805,16 +805,16 @@ function DispenseContent() {
                             const val = parseInt(e.target.value, 10);
                             updateQty(item.id, isNaN(val) ? 1 : val);
                           }}
-                          className="h-9 w-14 text-center text-xs font-bold text-[var(--text-strong)] focus:outline-none focus:bg-[var(--sage-100)]"
+                          className="h-11 sm:h-9 w-14 text-center text-base sm:text-xs font-bold text-[var(--text-strong)] focus:outline-none focus:bg-[var(--sage-100)] tabular-nums"
                         />
                         <button
                           type="button"
                           onClick={() => stepQty(item.id, 1)}
                           disabled={!item.included}
-                          className="h-9 w-9 flex items-center justify-center text-base font-bold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--line-soft)] disabled:opacity-30 disabled:cursor-not-allowed border-l border-[var(--line-soft)] transition-colors cursor-pointer"
+                          className="h-11 w-11 sm:h-9 sm:w-9 flex items-center justify-center text-base font-bold text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--line-soft)] disabled:opacity-30 disabled:cursor-not-allowed border-l border-[var(--line-soft)] transition-colors cursor-pointer touch-manipulation min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                           title="Increase quantity by 1"
                         >
-                          <Plus size={13} />
+                          <Plus size={15} />
                         </button>
                       </div>
                       <span className="text-xs text-[var(--text-muted)] w-12 text-left">
@@ -827,10 +827,10 @@ function DispenseContent() {
                       <button
                         type="button"
                         onClick={() => setEditingItem(item)}
-                        className="h-9 px-3 text-xs font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:border-[var(--green-600)] hover:bg-[var(--bg-tile)] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        className="h-11 sm:h-9 px-3 text-xs font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:border-[var(--green-600)] hover:bg-[var(--bg-tile)] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[44px] sm:min-h-0"
                         title="Edit price, dosage, or substitute medicine"
                       >
-                        <Pencil size={12} className="text-[var(--green-700)]" />
+                        <Pencil size={13} className="text-[var(--green-700)]" />
                         Edit
                       </button>
 
@@ -838,10 +838,10 @@ function DispenseContent() {
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
-                        className="h-9 w-9 flex items-center justify-center rounded-[var(--r-control)] text-[var(--text-muted)] hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                        className="h-11 w-11 sm:h-9 sm:w-9 flex items-center justify-center rounded-[var(--r-control)] text-[var(--text-muted)] hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                         title="Remove this item"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
@@ -852,13 +852,13 @@ function DispenseContent() {
         </div>
 
         {/* Bottom Confirmation & Action Bar */}
-        <div className="mt-6 pt-5 border-t border-[var(--line-soft)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="mt-6 pt-5 border-t border-[var(--line-soft)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-20 sm:pb-0">
           <div>
             <p className="text-xs text-[var(--text-muted)]">
               Dispensing <strong className="text-[var(--text-strong)]">{includedItems.length} of {items.length} items</strong> ·
               Pharmacist on duty: <strong>{user?.fullName || 'Pharmacist'}</strong>
             </p>
-            <p className="text-sm font-bold text-[var(--green-900)] mt-0.5">
+            <p className="text-base sm:text-sm font-bold text-[var(--green-900)] mt-0.5 tabular-nums">
               Grand Total: ₹{totalAmount.toFixed(2)}
             </p>
           </div>
@@ -866,7 +866,7 @@ function DispenseContent() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             <Link
               href="/pharmacy"
-              className="h-11 px-5 text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer w-full sm:w-auto"
+              className="min-h-[44px] sm:min-h-0 sm:h-11 px-5 text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer w-full sm:w-auto"
             >
               Back to Dispensing Queue
             </Link>
@@ -878,7 +878,7 @@ function DispenseContent() {
               onClick={handleMarkDelivered}
               disabled={isSubmitting}
               loading={isSubmitting}
-              className="bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] px-8 shadow-sm font-semibold w-full sm:w-auto justify-center"
+              className="bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] px-8 shadow-sm font-semibold w-full sm:w-auto justify-center min-h-[44px]"
             >
               {isSubmitting ? 'Delivering...' : `Delivered (₹${totalAmount.toFixed(2)})`}
             </Button>

@@ -668,7 +668,7 @@ export default function AddDrugPage() {
                 </div>
               </div>
 
-              <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+              <Button type="submit" size="lg" className="w-full min-h-[44px]" disabled={submitting}>
                 {submitting ? 'Saving to Catalog...' : 'Save Drug to Catalog'}
               </Button>
             </Card>

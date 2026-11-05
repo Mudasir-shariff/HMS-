@@ -81,7 +81,7 @@ export function ConnectionIndicator({ className }: { className?: string }) {
             : 'Network offline. Using cached data. Click to retry connection.'
         }
         className={clsx(
-          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all duration-200 select-none shadow-xs cursor-pointer hover:opacity-90',
+          'inline-flex items-center gap-1.5 px-1.5 sm:px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all duration-200 select-none shadow-xs cursor-pointer hover:opacity-90',
           config.bgColor,
           className
         )}
@@ -100,10 +100,11 @@ export function ConnectionIndicator({ className }: { className?: string }) {
         <config.icon
           size={12}
           className={clsx(
-            status === 'reconnecting' && 'animate-spin'
+            status === 'reconnecting' && 'animate-spin',
+            'hidden sm:inline shrink-0'
           )}
         />
-        <span>{config.label}</span>
+        <span className="hidden sm:inline">{config.label}</span>
       </button>
 
       {lastError && (

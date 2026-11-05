@@ -207,27 +207,27 @@ export default function InPatientPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
         {[
           { label: 'Total Hospital Beds', value: beds.length },
           { label: 'Occupied Beds', value: beds.filter((b) => b.is_occupied).length },
           { label: 'Available Free Beds', value: availableBeds.length },
           { label: 'Active IP Patients', value: admissions.filter((a) => a.status === 'admitted').length },
         ].map((s) => (
-          <div key={s.label} className="bg-[var(--bg-card)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)]">
-            <p className="text-[28px] font-light text-[var(--text-strong)]">{s.value}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{s.label}</p>
+          <div key={s.label} className="bg-[var(--bg-card)] rounded-[var(--r-tile)] p-3 sm:p-4 border border-[var(--line-soft)] flex flex-col justify-between min-h-[88px] sm:min-h-[100px] shadow-2xs">
+            <p className="text-2xl sm:text-3xl font-bold tabular-nums text-[var(--text-strong)]">{s.value}</p>
+            <p className="text-xs font-semibold text-[var(--text-muted)] mt-1 line-clamp-2 leading-snug">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-fit shadow-[var(--shadow-float)] mb-6 border border-[var(--line-soft)]">
+      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-full sm:w-fit shadow-[var(--shadow-float)] mb-5 sm:mb-6 border border-[var(--line-soft)] overflow-x-auto no-scrollbar snap-x">
         <button
           onClick={() => setActiveTab('admissions')}
           className={clsx(
-            'px-4 py-2 rounded-[var(--r-pill)] text-xs font-medium transition-all',
-            activeTab === 'admissions' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+            'px-3.5 sm:px-4 py-2 rounded-[var(--r-pill)] text-xs sm:text-sm font-semibold transition-all shrink-0 min-h-[40px] snap-start touch-manipulation cursor-pointer',
+            activeTab === 'admissions' ? 'bg-[var(--green-900)] text-white shadow-xs' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
           )}
         >
           Active Admissions & Daily Billing Timer
@@ -235,8 +235,8 @@ export default function InPatientPage() {
         <button
           onClick={() => setActiveTab('beds')}
           className={clsx(
-            'px-4 py-2 rounded-[var(--r-pill)] text-xs font-medium transition-all',
-            activeTab === 'beds' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+            'px-3.5 sm:px-4 py-2 rounded-[var(--r-pill)] text-xs sm:text-sm font-semibold transition-all shrink-0 min-h-[40px] snap-start touch-manipulation cursor-pointer',
+            activeTab === 'beds' ? 'bg-[var(--green-900)] text-white shadow-xs' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
           )}
         >
           Wards & Bed Occupancy Matrix
@@ -268,22 +268,22 @@ export default function InPatientPage() {
                 return (
                   <div
                     key={adm.id}
-                    className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)] flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shadow-xs"
                   >
-                    <div className="flex items-start gap-3.5">
-                      <div className="h-11 w-11 rounded-full bg-[var(--sage-100)] text-[var(--green-900)] font-bold flex flex-col items-center justify-center shrink-0 border border-[var(--green-300)]">
-                        <span className="text-xs leading-none">{bed?.bed_number || 'Bed'}</span>
+                    <div className="flex items-start gap-3">
+                      <div className="h-11 w-11 rounded-full bg-[var(--sage-100)] text-[var(--green-900)] font-bold flex flex-col items-center justify-center shrink-0 border border-[var(--green-300)] shadow-2xs">
+                        <span className="text-xs font-bold leading-none">{bed?.bed_number || 'Bed'}</span>
                       </div>
 
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-[var(--text-strong)]">{pat?.name}</span>
+                          <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{pat?.name}</span>
                           <span className="font-mono text-xs bg-white px-2 py-0.5 rounded border text-[var(--text-strong)] font-bold">
                             UAID: {adm.uaid}
                           </span>
                           <StatusPill
                             variant={adm.status === 'admitted' ? 'info' : 'success'}
-                            label={adm.status === 'admitted' ? 'Admitted (Stay Active)' : 'Discharged'}
+                            label={adm.status === 'admitted' ? 'Admitted' : 'Discharged'}
                           />
                         </div>
 
@@ -300,8 +300,8 @@ export default function InPatientPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-4 border-[var(--line-soft)] text-xs">
                       <div>
                         <p className="text-[var(--text-muted)] flex items-center gap-1">
-                          <Clock size={12} className="text-[var(--green-700)]" />
-                          Stay: <strong>{stay.totalHours} hrs</strong> ({stay.billingDays} day(s) @ {settings.ip_hours_per_day || 18}h/cycle)
+                          <Clock size={13} className="text-[var(--green-700)] shrink-0" />
+                          <span>Stay: <strong>{stay.totalHours} hrs</strong> ({stay.billingDays} day(s))</span>
                         </p>
                         <p className="text-[var(--text-muted)] mt-0.5">
                           Bed: ₹{bedCost} · Rx: ₹{adm.total_pharmacy_charges || 0} · Total: <strong className="text-[var(--green-700)]">₹{grandTotal}</strong>
@@ -309,19 +309,20 @@ export default function InPatientPage() {
                       </div>
 
                       {adm.status === 'admitted' && (
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                           {/* Write IP Daily Prescription (Section 3.7) */}
                           <Link
                             href={`/doctor/prescribe?patientId=${pat?.id}&name=${encodeURIComponent(pat?.name || '')}&uhid=${pat?.uhid}&age=${pat?.age}&doctorId=${doc?.id}&uaid=${adm.uaid}&day=${stay.billingDays}`}
+                            className="w-full sm:w-auto"
                           >
-                            <Button size="sm" variant="secondary" icon={<FileText size={13} />}>
-                              Prescribe (Day {stay.billingDays})
+                            <Button size="sm" variant="secondary" icon={<FileText size={13} />} className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]">
+                              Rx Day {stay.billingDays}
                             </Button>
                           </Link>
 
                           {/* Discharge & Final Bill */}
-                          <Button size="sm" variant="danger" onClick={() => setDischargeTarget(adm)}>
-                            Discharge & Final Bill
+                          <Button size="sm" variant="danger" onClick={() => setDischargeTarget(adm)} className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]">
+                            Discharge
                           </Button>
                         </div>
                       )}

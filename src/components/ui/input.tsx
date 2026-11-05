@@ -26,7 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-sm text-[var(--text-body)]',
+            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-body)]',
             'border transition-all duration-150',
             'placeholder:text-[var(--text-faint)]',
             'focus:outline-none focus:ring-[3px]',
@@ -74,7 +74,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'w-full rounded-[var(--r-control)] bg-white p-3 text-sm text-[var(--text-body)]',
+            'w-full rounded-[var(--r-control)] bg-white p-3 text-base sm:text-sm text-[var(--text-body)]',
             'border transition-all duration-150 resize-y min-h-[88px]',
             'placeholder:text-[var(--text-faint)]',
             'focus:outline-none focus:ring-[3px]',
@@ -121,7 +121,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-sm text-[var(--text-body)]',
+            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-body)]',
             'border transition-all duration-150 appearance-none',
             'bg-[url("data:image/svg+xml,%3csvg%20xmlns%3d%27http%3a%2f%2fwww.w3.org%2f2000%2fsvg%27%20fill%3d%27none%27%20viewBox%3d%270%200%2020%2020%27%3e%3cpath%20stroke%3d%27%236F776B%27%20stroke-linecap%3d%27round%27%20stroke-linejoin%3d%27round%27%20stroke-width%3d%271.5%27%20d%3d%27M6%208l4%204%204-4%27%2f%3e%3c%2fsvg%3e")]',
             'bg-[length:20px_20px] bg-[right_8px_center] bg-no-repeat pr-8',
