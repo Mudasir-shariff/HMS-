@@ -38,7 +38,7 @@ import { useAuth } from '@/lib/auth/context';
 import { HMSStore } from '@/lib/store/hms-store';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { pushDrugToSupabase, deleteDrugFromSupabase } from '@/lib/supabase/sync';
-import type { Dispensing, Drug } from '@/lib/types/database';
+import type { Dispensing, Drug, Visit, Prescription } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 type Tab = 'queue' | 'dispensed' | 'inventory' | 'reorder';
@@ -185,14 +185,54 @@ export default function PharmacyPage() {
     });
   }, [dispensings]);
 
+  // Deduplicated merged visits (local store + React Query server cache)
+  const allVisitsMerged = useMemo(() => {
+    const local = HMSStore.getVisits();
+    const map = new Map<string, Visit>();
+    // First populate from server query cache
+    visits.forEach((v) => map.set(v.id, v));
+    // Then merge local storage visits
+    local.forEach((lv) => {
+      const existing = map.get(lv.id);
+      if (!existing) {
+        map.set(lv.id, lv);
+      } else {
+        // If local has prescribed or dispensed status, it reflects the latest user action
+        if (lv.status === 'prescribed' && existing.status !== 'dispensed' && existing.status !== 'completed') {
+          map.set(lv.id, { ...existing, status: 'prescribed', updated_at: lv.updated_at });
+        } else if (lv.status === 'dispensed' || lv.status === 'completed') {
+          map.set(lv.id, { ...existing, status: lv.status, updated_at: lv.updated_at });
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => (Number(a.token_number) || 0) - (Number(b.token_number) || 0));
+  }, [visits]);
+
+  // Deduplicated merged prescriptions (local store + React Query server cache)
+  const allPrescriptionsMerged = useMemo(() => {
+    const local = HMSStore.getPrescriptions();
+    const map = new Map<string, Prescription>();
+    // First populate from server query cache
+    prescriptions.forEach((p) => map.set(p.id, p));
+    // Then merge local storage prescriptions
+    local.forEach((lp) => {
+      const existing = map.get(lp.id);
+      if (!existing) {
+        map.set(lp.id, lp);
+      } else if ((!existing.items || existing.items.length === 0) && lp.items && lp.items.length > 0) {
+        map.set(lp.id, { ...existing, items: lp.items });
+      }
+    });
+    return Array.from(map.values());
+  }, [prescriptions]);
+
   // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
   const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
     const dispensedRxIds = new Set(allDispensingsMerged.map((d) => d.prescription_id).filter(Boolean));
     const dispensedPatientIds = new Set(allDispensingsMerged.map((d) => d.patient_id).filter(Boolean));
     const dispensedVisitIds = new Set([
-      ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+      ...allVisitsMerged.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
       ...allDispensingsMerged.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
-      ...HMSStore.getVisits().filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
     ]);
 
     const matchedRxIds = new Set<string>();
@@ -200,6 +240,9 @@ export default function PharmacyPage() {
 
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
+    HMSStore.getPatients().forEach((p) => {
+      if (!patientMap.has(p.id)) patientMap.set(p.id, p);
+    });
 
     const doctorMap = new Map<string, (typeof doctors)[0]>();
     doctors.forEach((d) => {
@@ -209,8 +252,8 @@ export default function PharmacyPage() {
 
     const queue: PharmacyQueueItem[] = [];
 
-    // Pass 1: Scan all visits
-    visits.forEach((v) => {
+    // Pass 1: Scan all visits (using allVisitsMerged and allPrescriptionsMerged)
+    allVisitsMerged.forEach((v) => {
       if (
         v.status === 'dispensed' ||
         v.status === 'completed' ||
@@ -221,7 +264,7 @@ export default function PharmacyPage() {
       }
 
       // Match prescription by visit_id or patient_id
-      const rx = prescriptions.find(
+      const rx = allPrescriptionsMerged.find(
         (p) =>
           (p.visit_id && p.visit_id === v.id) ||
           (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
@@ -259,7 +302,7 @@ export default function PharmacyPage() {
     });
 
     // Pass 2: Include any un-dispensed prescriptions (e.g. IP prescriptions or direct consultations)
-    prescriptions.forEach((rx) => {
+    allPrescriptionsMerged.forEach((rx) => {
       if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
       if (rx.patient_id && dispensedPatientIds.has(rx.patient_id)) return;
       if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
@@ -293,7 +336,7 @@ export default function PharmacyPage() {
     });
 
     return queue;
-  }, [visits, prescriptions, allDispensingsMerged, patients, doctors]);
+  }, [allVisitsMerged, allPrescriptionsMerged, allDispensingsMerged, patients, doctors]);
 
   // 2. Today's Dispensed Patients (PRD v1.1: Remains in today's patient list, editable with auto stock correction)
   const todayDispensed = useMemo(() => {

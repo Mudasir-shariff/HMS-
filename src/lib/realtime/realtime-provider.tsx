@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/query/keys';
 import { HMSStore } from '@/lib/store/hms-store';
 import { syncFromSupabase } from '@/lib/supabase/sync';
-import type { Visit, Patient, Drug, Dispensing } from '@/lib/types/database';
+import type { Visit, Patient, Drug, Dispensing, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
 
@@ -264,7 +264,35 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescriptions' },
-      () => {
+      (payload) => {
+        setLastSyncedAt(new Date());
+
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const newRx = payload.new as Prescription;
+          queryClient.setQueriesData<Prescription[]>(
+            { queryKey: ['prescriptions'] },
+            (oldRx) => {
+              if (!oldRx) return [newRx];
+              const idx = oldRx.findIndex((p) => p.id === newRx.id);
+              if (idx >= 0) {
+                const next = [...oldRx];
+                // Preserve joined items if incoming table payload has no items
+                next[idx] = { ...newRx, items: newRx.items || next[idx].items || [] };
+                return next;
+              }
+              return [newRx, ...oldRx];
+            }
+          );
+          HMSStore.savePrescription(newRx, { skipRemoteSync: true });
+        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
+          const delId = (payload.old as any).id;
+          queryClient.setQueriesData<Prescription[]>(
+            { queryKey: ['prescriptions'] },
+            (oldRx) => (oldRx ? oldRx.filter((p) => p.id !== delId) : [])
+          );
+          HMSStore.deletePrescription(delId, { skipRemoteSync: true });
+        }
+
         triggerRxInvalidation();
       }
     );
@@ -272,7 +300,34 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescription_items' },
-      () => {
+      (payload) => {
+        setLastSyncedAt(new Date());
+
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const item = payload.new as PrescriptionItem;
+          if (item?.prescription_id) {
+            queryClient.setQueriesData<Prescription[]>(
+              { queryKey: ['prescriptions'] },
+              (oldRx) => {
+                if (!oldRx) return oldRx;
+                return oldRx.map((p) => {
+                  if (p.id !== item.prescription_id) return p;
+                  const existingItems = p.items || [];
+                  const idx = existingItems.findIndex((it) => it.id === item.id);
+                  let updatedItems: PrescriptionItem[];
+                  if (idx >= 0) {
+                    updatedItems = [...existingItems];
+                    updatedItems[idx] = { ...updatedItems[idx], ...item };
+                  } else {
+                    updatedItems = [...existingItems, item];
+                  }
+                  return { ...p, items: updatedItems };
+                });
+              }
+            );
+          }
+        }
+
         triggerRxInvalidation();
       }
     );

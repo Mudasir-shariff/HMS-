@@ -36,6 +36,7 @@ import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { createClient } from '@/lib/supabase/client';
+import { withTimeout } from '@/lib/supabase/sync';
 import type { DrugType, Drug, Prescription, PrescriptionItem, Visit, Dispensing } from '@/lib/types/database';
 
 interface DispenseItemState {
@@ -86,7 +87,7 @@ function DispenseContent() {
   const token = searchParams.get('token') || '—';
   const rxIdParam = searchParams.get('rxId') || '';
 
-  const visit = visits.find((v) => v.id === visitId);
+  const visit = visits.find((v) => v.id === visitId) || HMSStore.getVisits().find((v) => v.id === visitId);
 
   // Match rx by rxIdParam, visitId, or patient_id, with fallback to local store
   const cachedRx = prescriptions.find(
@@ -96,17 +97,22 @@ function DispenseContent() {
       (visit?.patient_id && p.patient_id === visit.patient_id)
   );
 
-  const localRx = !cachedRx
-    ? HMSStore.getPrescriptions().find(
-        (p) =>
-          (rxIdParam && p.id === rxIdParam) ||
-          (visitId && (p.visit_id === visitId || p.id === visitId)) ||
-          (visit?.patient_id && p.patient_id === visit.patient_id)
-      )
-    : null;
+  const localRx = HMSStore.getPrescriptions().find(
+    (p) =>
+      (rxIdParam && p.id === rxIdParam) ||
+      (visitId && (p.visit_id === visitId || p.id === visitId)) ||
+      (visit?.patient_id && p.patient_id === visit.patient_id)
+  );
 
-  const rx = cachedRx || localRx;
-  const patient = patients.find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id);
+  const rx = cachedRx
+    ? {
+        ...cachedRx,
+        items: cachedRx.items && cachedRx.items.length > 0 ? cachedRx.items : localRx?.items || [],
+      }
+    : localRx;
+  const patient =
+    patients.find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id) ||
+    HMSStore.getPatients().find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id);
   const doctor = doctors.find(
     (d) => d.id === rx?.doctor_id || d.id === visit?.doctor_id || (d as any).user_id === rx?.doctor_id
   );
@@ -129,6 +135,37 @@ function DispenseContent() {
 
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
+    HMSStore.getPatients().forEach((p) => {
+      if (!patientMap.has(p.id)) patientMap.set(p.id, p);
+    });
+
+    const localVisits = HMSStore.getVisits();
+    const visitMap = new Map<string, Visit>();
+    visits.forEach((v) => visitMap.set(v.id, v));
+    localVisits.forEach((lv) => {
+      const existing = visitMap.get(lv.id);
+      if (!existing) {
+        visitMap.set(lv.id, lv);
+      } else if (lv.status === 'prescribed' && existing.status !== 'dispensed' && existing.status !== 'completed') {
+        visitMap.set(lv.id, { ...existing, status: 'prescribed', updated_at: lv.updated_at });
+      } else if (lv.status === 'dispensed' || lv.status === 'completed') {
+        visitMap.set(lv.id, { ...existing, status: lv.status, updated_at: lv.updated_at });
+      }
+    });
+    const allVisits = Array.from(visitMap.values());
+
+    const localPrescriptions = HMSStore.getPrescriptions();
+    const rxMap = new Map<string, Prescription>();
+    prescriptions.forEach((p) => rxMap.set(p.id, p));
+    localPrescriptions.forEach((lp) => {
+      const existing = rxMap.get(lp.id);
+      if (!existing) {
+        rxMap.set(lp.id, lp);
+      } else if ((!existing.items || existing.items.length === 0) && lp.items && lp.items.length > 0) {
+        rxMap.set(lp.id, { ...existing, items: lp.items });
+      }
+    });
+    const allPrescriptions = Array.from(rxMap.values());
 
     const candidates: Array<{
       id: string;
@@ -140,8 +177,8 @@ function DispenseContent() {
       created_at?: string;
     }> = [];
 
-    // Scan visits
-    visits.forEach((v) => {
+    // Scan merged visits
+    allVisits.forEach((v) => {
       if (v.id === currentVisitId) return;
       if (currentPatientId && v.patient_id === currentPatientId) return;
       if (
@@ -153,7 +190,7 @@ function DispenseContent() {
         return;
       }
 
-      const matchingRx = prescriptions.find(
+      const matchingRx = allPrescriptions.find(
         (p) =>
           (p.visit_id && p.visit_id === v.id) ||
           (v.patient_id && p.patient_id === v.patient_id && !dispensedRxIds.has(p.id))
@@ -180,7 +217,7 @@ function DispenseContent() {
     });
 
     // Scan unlinked prescriptions (e.g. IP prescriptions)
-    prescriptions.forEach((pRx) => {
+    allPrescriptions.forEach((pRx) => {
       if (pRx.id === currentRxId) return;
       if (currentPatientId && pRx.patient_id === currentPatientId) return;
       if (dispensedRxIds.has(pRx.id)) return;
@@ -607,10 +644,13 @@ function DispenseContent() {
 
         if (currentVisitId) {
           const supabase = createClient();
-          await supabase
-            .from('visits')
-            .update({ status: 'dispensed', updated_at: new Date().toISOString() })
-            .eq('id', currentVisitId);
+          await withTimeout(
+            supabase
+              .from('visits')
+              .update({ status: 'dispensed', updated_at: new Date().toISOString() })
+              .eq('id', currentVisitId),
+            4000
+          );
         }
       } catch (bgErr: any) {
         console.warn('Background sync note (safe offline/cached):', bgErr?.message || bgErr);

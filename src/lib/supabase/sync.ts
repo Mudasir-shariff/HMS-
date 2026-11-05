@@ -287,14 +287,47 @@ function isValidUUID(id?: string | null): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-async function withTimeout<T>(promise: PromiseLike<T>, ms = 4000): Promise<T | null> {
+export async function withTimeout<T>(
+  queryOrFn: PromiseLike<T> | ((signal: AbortSignal) => PromiseLike<T>),
+  ms = 4000
+): Promise<T | null> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
+
   const timeoutPromise = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), ms);
+    timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        controller.abort();
+      } catch {}
+      resolve(null);
+    }, ms);
   });
+
   try {
-    const result = await Promise.race([promise, timeoutPromise]);
-    return result as T | null;
+    let promise: PromiseLike<T>;
+    if (typeof queryOrFn === 'function') {
+      promise = queryOrFn(controller.signal);
+    } else {
+      if (typeof (queryOrFn as any)?.abortSignal === 'function') {
+        try {
+          (queryOrFn as any).abortSignal(controller.signal);
+        } catch {}
+      }
+      promise = queryOrFn;
+    }
+
+    const res = await Promise.race([promise, timeoutPromise]);
+    if (res === null || timedOut || (res as any)?.error?.message?.includes('AbortError')) {
+      return null;
+    }
+    return res as T;
+  } catch (err: any) {
+    if (timedOut || err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      return null;
+    }
+    throw err;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -593,11 +626,16 @@ export async function pushDrugToSupabase(drug: Drug) {
 
 const doctorResolutionCache = new Map<string, string>();
 
+const inFlightPrescriptions = new Set<string>();
+
 export async function pushPrescriptionToSupabase(rx: Prescription) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured() || !rx?.id) return;
+  const rxId = isValidUUID(rx.id) ? rx.id : generateUUID();
+  if (inFlightPrescriptions.has(rxId)) return;
+  inFlightPrescriptions.add(rxId);
+
   try {
     const supabase = createClient();
-    const rxId = isValidUUID(rx.id) ? rx.id : generateUUID();
 
     // Resolve doctor_id to ensure foreign key passes (cached in-memory for instant lookups)
     let doctorIdToUse = rx.doctor_id;
@@ -605,39 +643,61 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       if (doctorResolutionCache.has(rx.doctor_id)) {
         doctorIdToUse = doctorResolutionCache.get(rx.doctor_id)!;
       } else {
-        const { data: existingDoc } = await supabase
-          .from('doctors')
-          .select('id, user_id')
-          .or(`id.eq.${rx.doctor_id},user_id.eq.${rx.doctor_id}`)
-          .limit(1)
-          .maybeSingle();
-        if (existingDoc) {
-          doctorIdToUse = existingDoc.id;
-          doctorResolutionCache.set(rx.doctor_id, existingDoc.id);
+        const docRes = await withTimeout(
+          supabase
+            .from('doctors')
+            .select('id, user_id')
+            .or(`id.eq.${rx.doctor_id},user_id.eq.${rx.doctor_id}`)
+            .limit(1)
+            .maybeSingle(),
+          3000
+        );
+        if (docRes?.data) {
+          doctorIdToUse = docRes.data.id;
+          doctorResolutionCache.set(rx.doctor_id, docRes.data.id);
         }
       }
     }
 
-    let { error: rxErr } = await supabase.from('prescriptions').upsert({
-      id: rxId,
-      visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
-      doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
-      patient_id: isValidUUID(rx.patient_id) ? rx.patient_id : null,
-      notes: rx.notes || null,
-      uaid: rx.uaid || null,
-      stay_day_number: rx.stay_day_number || null,
-      updated_at: new Date().toISOString(),
-    });
-    if (rxErr) {
-      console.warn('Prescription full upsert warning, retrying core schema:', rxErr.message);
-      const { error: coreErr } = await supabase.from('prescriptions').upsert({
+    const rxUpsertRes = await withTimeout(
+      supabase.from('prescriptions').upsert({
         id: rxId,
         visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
         doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
         patient_id: isValidUUID(rx.patient_id) ? rx.patient_id : null,
         notes: rx.notes || null,
-      });
-      if (coreErr) console.error('Core prescription upsert failed:', coreErr);
+        uaid: rx.uaid || null,
+        stay_day_number: rx.stay_day_number || null,
+        updated_at: new Date().toISOString(),
+      }),
+      4000
+    );
+
+    if (rxUpsertRes === null) {
+      console.warn('Prescription upsert timed out; halting dependent writes for', rxId);
+      return;
+    }
+
+    if (rxUpsertRes.error) {
+      console.warn('Prescription full upsert warning, retrying core schema:', rxUpsertRes.error.message);
+      const coreRxRes = await withTimeout(
+        supabase.from('prescriptions').upsert({
+          id: rxId,
+          visit_id: isValidUUID(rx.visit_id) ? rx.visit_id : null,
+          doctor_id: isValidUUID(doctorIdToUse) ? doctorIdToUse : null,
+          patient_id: isValidUUID(rx.patient_id) ? rx.patient_id : null,
+          notes: rx.notes || null,
+        }),
+        3000
+      );
+      if (coreRxRes === null) {
+        console.warn('Prescription core schema retry timed out; halting dependent writes for', rxId);
+        return;
+      }
+      if (coreRxRes.error) {
+        console.warn('Prescription core schema retry failed, halting dependent writes:', coreRxRes.error.message);
+        return;
+      }
     }
 
     if (rx.items && rx.items.length > 0) {
@@ -658,9 +718,14 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
         added_by_pharmacist: Boolean(it.added_by_pharmacist),
         pharmacist_notes: it.pharmacist_notes || null,
       }));
-      let { error: itemsErr } = await supabase.from('prescription_items').upsert(itemsPayload);
-      if (itemsErr) {
-        console.warn('Items full upsert warning, retrying core schema:', itemsErr.message);
+      const itemsRes = await withTimeout(
+        supabase.from('prescription_items').upsert(itemsPayload),
+        4000
+      );
+      if (itemsRes === null) {
+        console.warn('Prescription items upsert timed out; halting items retry for', rxId);
+      } else if (itemsRes.error) {
+        console.warn('Items full upsert warning, retrying core schema:', itemsRes.error.message);
         const coreItems = rx.items.map((it) => ({
           id: isValidUUID(it.id) ? it.id : generateUUID(),
           prescription_id: rxId,
@@ -673,9 +738,14 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
           num_days: Number(it.num_days) || 1,
           quantity: Number(it.quantity) || 1,
         }));
-        const { error: coreItemsErr } = await supabase.from('prescription_items').upsert(coreItems);
-        if (coreItemsErr) {
-          console.warn('Core items retry failed, attempting without drug_id:', coreItemsErr.message);
+        const coreItemsRes = await withTimeout(
+          supabase.from('prescription_items').upsert(coreItems),
+          3000
+        );
+        if (coreItemsRes === null) {
+          console.warn('Core items retry timed out; halting items retry for', rxId);
+        } else if (coreItemsRes.error) {
+          console.warn('Core items retry failed, attempting without drug_id:', coreItemsRes.error.message);
           const safeItems = rx.items.map((it) => ({
             id: isValidUUID(it.id) ? it.id : generateUUID(),
             prescription_id: rxId,
@@ -688,25 +758,38 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
             num_days: Number(it.num_days) || 1,
             quantity: Number(it.quantity) || 1,
           }));
-          const { error: safeErr } = await supabase.from('prescription_items').upsert(safeItems);
-          if (safeErr) console.error('Safe items upsert failed:', safeErr);
+          const safeItemsRes = await withTimeout(
+            supabase.from('prescription_items').upsert(safeItems),
+            3000
+          );
+          if (safeItemsRes === null) {
+            console.warn('Safe items retry timed out for', rxId);
+          } else if (safeItemsRes.error) {
+            console.warn('Safe items retry failed:', safeItemsRes.error.message);
+          }
         }
       }
     }
 
     // Keep visit in Supabase strictly in lockstep with status = 'prescribed'
     if (isValidUUID(rx.visit_id)) {
-      await supabase
-        .from('visits')
-        .update({ status: 'prescribed', updated_at: new Date().toISOString() })
-        .eq('id', rx.visit_id);
+      await withTimeout(
+        supabase
+          .from('visits')
+          .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+          .eq('id', rx.visit_id),
+        3000
+      );
     } else if (isValidUUID(rx.patient_id)) {
-      await supabase
-        .from('visits')
-        .update({ status: 'prescribed', updated_at: new Date().toISOString() })
-        .eq('patient_id', rx.patient_id)
-        .neq('status', 'dispensed')
-        .neq('status', 'completed');
+      await withTimeout(
+        supabase
+          .from('visits')
+          .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+          .eq('patient_id', rx.patient_id)
+          .neq('status', 'dispensed')
+          .neq('status', 'completed'),
+        3000
+      );
     }
 
     if (rx.lab_tests && rx.lab_tests.length > 0) {
@@ -726,6 +809,8 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
     }
   } catch (e) {
     console.warn('Failed to push prescription to Supabase:', e);
+  } finally {
+    inFlightPrescriptions.delete(rxId);
   }
 }
 

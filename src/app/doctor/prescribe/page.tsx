@@ -43,7 +43,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
 import { HMSStore, generateUUID } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
-import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured } from '@/lib/supabase/sync';
+import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -481,8 +481,8 @@ function PrescribeContent() {
 
     // 1. Immediately save into local store and query cache (zero latency)
     try {
-      HMSStore.savePrescription(rxPayload);
-      queryClient.setQueriesData<Prescription[]>({ queryKey: ['prescriptions'] }, (old) =>
+      HMSStore.savePrescription(rxPayload, { skipRemoteSync: true });
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
         old ? [rxPayload, ...old.filter((p) => p.id !== rxId)] : [rxPayload]
       );
     } catch (e) {
@@ -518,7 +518,7 @@ function PrescribeContent() {
       HMSStore.saveVisit(updatedVisit, { skipRemoteSync: true });
 
       // Optimistically update React Query cache for visits and prescriptions (<1ms)
-      queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
         old
           ? old.map((v) =>
               v.id === updatedVisit.id || v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId)
@@ -527,49 +527,47 @@ function PrescribeContent() {
             )
           : [updatedVisit]
       );
-      queryClient.setQueriesData<Prescription[]>({ queryKey: ['prescriptions'] }, (old) =>
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
         old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
       );
     } catch (vErr) {
       console.warn('Local visit status update warning:', vErr);
     }
 
-    // 3. Sequential Push: Commit prescription & items FIRST, then visit 'prescribed' status (runs asynchronously in background for 0ms doctor response)
+    // 3. Concurrent Push: Commit prescription & items and visit 'prescribed' status simultaneously (runs asynchronously in background for 0ms doctor response)
     const executePushOperations = async () => {
       try {
-        // Step A: Ensure prescription and its items are fully committed in Supabase first
-        await pushPrescriptionToSupabase(rxPayload);
-
-        // Step B: Now update visit to 'prescribed' so pharmacy receives the status only when items are in DB
-        if (isSupabaseConfigured()) {
+        const updateVisitTask = async () => {
+          if (!isSupabaseConfigured()) return;
           const supabase = createClient();
+          const updatePayload = {
+            status: 'prescribed' as const,
+            follow_up_date: followUp || null,
+            instructions: instructions || null,
+            updated_at: new Date().toISOString(),
+          };
           if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalVisitId)) {
-            await supabase
-              .from('visits')
-              .update({
-                status: 'prescribed',
-                follow_up_date: followUp || null,
-                instructions: instructions || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', finalVisitId);
+            await withTimeout(
+              supabase.from('visits').update(updatePayload).eq('id', finalVisitId),
+              4000
+            );
           } else if (validPatientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validPatientId)) {
-            await supabase
-              .from('visits')
-              .update({
-                status: 'prescribed',
-                follow_up_date: followUp || null,
-                instructions: instructions || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('patient_id', validPatientId);
+            await withTimeout(
+              supabase.from('visits').update(updatePayload).eq('patient_id', validPatientId),
+              4000
+            );
           }
-        }
+        };
+
+        await Promise.allSettled([
+          pushPrescriptionToSupabase(rxPayload),
+          updateVisitTask(),
+        ]);
       } catch (pErr) {
-        console.warn('Sequential pushPrescriptionToSupabase warning:', pErr);
+        console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
       } finally {
-        queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
-        queryClient.invalidateQueries({ queryKey: ['visits'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
       }
     };
 
