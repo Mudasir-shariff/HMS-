@@ -33,7 +33,7 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { createClient } from '@/lib/supabase/client';
 import { withTimeout } from '@/lib/supabase/sync';
@@ -87,46 +87,27 @@ function DispenseContent() {
   const token = searchParams.get('token') || '—';
   const rxIdParam = searchParams.get('rxId') || '';
 
-  const visit = visits.find((v) => v.id === visitId) || HMSStore.getVisits().find((v) => v.id === visitId);
+  const visit = visits.find((v) => v.id === visitId);
 
-  // Match rx by rxIdParam, visitId, or patient_id, with fallback to local store
-  const cachedRx = prescriptions.find(
+  const rx = prescriptions.find(
     (p) =>
       (rxIdParam && p.id === rxIdParam) ||
       (visitId && (p.visit_id === visitId || p.id === visitId)) ||
       (visit?.patient_id && p.patient_id === visit.patient_id)
   );
 
-  const localRx = HMSStore.getPrescriptions().find(
-    (p) =>
-      (rxIdParam && p.id === rxIdParam) ||
-      (visitId && (p.visit_id === visitId || p.id === visitId)) ||
-      (visit?.patient_id && p.patient_id === visit.patient_id)
-  );
-
-  const rx = cachedRx
-    ? {
-        ...cachedRx,
-        items: cachedRx.items && cachedRx.items.length > 0 ? cachedRx.items : localRx?.items || [],
-      }
-    : localRx;
-  const patient =
-    patients.find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id) ||
-    HMSStore.getPatients().find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id);
+  const patient = patients.find((p) => p.id === rx?.patient_id || p.id === visit?.patient_id);
   const doctor = doctors.find(
     (d) => d.id === rx?.doctor_id || d.id === visit?.doctor_id || (d as any).user_id === rx?.doctor_id
   );
 
   // Find next waiting patient in queue (excluding current patient/visit/prescription)
   const nextPatient = useMemo(() => {
-    const localDispensings = HMSStore.getDispensings();
-    const allDispensings = [...dispensings, ...localDispensings];
-    const dispensedRxIds = new Set(allDispensings.map((d) => d.prescription_id).filter(Boolean));
-    const dispensedPatientIds = new Set(allDispensings.map((d) => d.patient_id).filter(Boolean));
+    const dispensedRxIds = new Set(dispensings.map((d) => d.prescription_id).filter(Boolean));
+    const dispensedPatientIds = new Set(dispensings.map((d) => d.patient_id).filter(Boolean));
     const dispensedVisitIds = new Set([
       ...visits.filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
-      ...allDispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
-      ...HMSStore.getVisits().filter((v) => v.status === 'dispensed' || v.status === 'completed').map((v) => v.id),
+      ...dispensings.map((d: any) => d.visit_id || d.visitId).filter(Boolean),
     ]);
 
     const currentVisitId = visitId || visit?.id;
@@ -135,37 +116,9 @@ function DispenseContent() {
 
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
-    HMSStore.getPatients().forEach((p) => {
-      if (!patientMap.has(p.id)) patientMap.set(p.id, p);
-    });
 
-    const localVisits = HMSStore.getVisits();
-    const visitMap = new Map<string, Visit>();
-    visits.forEach((v) => visitMap.set(v.id, v));
-    localVisits.forEach((lv) => {
-      const existing = visitMap.get(lv.id);
-      if (!existing) {
-        visitMap.set(lv.id, lv);
-      } else if (lv.status === 'prescribed' && existing.status !== 'dispensed' && existing.status !== 'completed') {
-        visitMap.set(lv.id, { ...existing, status: 'prescribed', updated_at: lv.updated_at });
-      } else if (lv.status === 'dispensed' || lv.status === 'completed') {
-        visitMap.set(lv.id, { ...existing, status: lv.status, updated_at: lv.updated_at });
-      }
-    });
-    const allVisits = Array.from(visitMap.values());
-
-    const localPrescriptions = HMSStore.getPrescriptions();
-    const rxMap = new Map<string, Prescription>();
-    prescriptions.forEach((p) => rxMap.set(p.id, p));
-    localPrescriptions.forEach((lp) => {
-      const existing = rxMap.get(lp.id);
-      if (!existing) {
-        rxMap.set(lp.id, lp);
-      } else if ((!existing.items || existing.items.length === 0) && lp.items && lp.items.length > 0) {
-        rxMap.set(lp.id, { ...existing, items: lp.items });
-      }
-    });
-    const allPrescriptions = Array.from(rxMap.values());
+    const allVisits = visits;
+    const allPrescriptions = prescriptions;
 
     const candidates: Array<{
       id: string;
@@ -253,7 +206,7 @@ function DispenseContent() {
         const drug = drugs.find((d) => d.id === i.drug_id);
         const drugType = (i.item_type || drug?.drug_type || 'tablet') as DrugType;
 
-        const smartQty = HMSStore.calculateSmartQuantity(
+        const smartQty = calculateSmartQuantity(
           drugType,
           i.dose_morning,
           i.dose_afternoon,
@@ -298,7 +251,7 @@ function DispenseContent() {
           rx.items.map((i) => {
             const drug = drugs.find((d) => d.id === i.drug_id);
             const drugType = (i.item_type || drug?.drug_type || 'tablet') as DrugType;
-            const smartQty = HMSStore.calculateSmartQuantity(
+            const smartQty = calculateSmartQuantity(
               drugType,
               i.dose_morning,
               i.dose_afternoon,
@@ -389,7 +342,7 @@ function DispenseContent() {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? withFlag : i)));
     setEditingItem(null);
 
-    const targetRx = rx || HMSStore.getPrescriptions().find((p) => p.visit_id === visitId || p.id === rxIdParam);
+    const targetRx = rx || prescriptions.find((p) => p.visit_id === visitId || p.id === rxIdParam);
     if (targetRx && targetRx.items) {
       const updatedRxItems = targetRx.items.map((it) => {
         if (it.id === updated.id) {
@@ -406,10 +359,9 @@ function DispenseContent() {
         }
         return it;
       });
-      HMSStore.savePrescription({
-        ...targetRx,
-        items: updatedRxItems,
-      });
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+        old ? old.map((p) => (p.id === targetRx.id ? { ...p, items: updatedRxItems } : p)) : []
+      );
     }
   }
 
@@ -440,9 +392,7 @@ function DispenseContent() {
 
     setItems((prev) => [...prev, newItem]);
 
-    // Instantly sync newly added medication to Prescription in HMSStore
-    // so it shows up on the Doctor's prescription immediately!
-    const targetRx = rx || HMSStore.getPrescriptions().find((p) => p.visit_id === visitId || p.id === rxIdParam);
+    const targetRx = rx || prescriptions.find((p) => p.visit_id === visitId || p.id === rxIdParam);
     if (targetRx) {
       const rxItem: PrescriptionItem = {
         id: newItem.id,
@@ -461,39 +411,9 @@ function DispenseContent() {
         pharmacist_notes: 'Added by Pharmacist during dispensing',
         created_at: new Date().toISOString(),
       };
-      HMSStore.savePrescription({
-        ...targetRx,
-        items: [...(targetRx.items || []), rxItem],
-      });
-    } else if (visit) {
-      const newPrescription: Prescription = {
-        id: rxIdParam || `rx-${Date.now()}`,
-        visit_id: visit.id,
-        doctor_id: visit.doctor_id,
-        patient_id: visit.patient_id,
-        notes: 'Prescription initiated/added by Pharmacy',
-        created_at: new Date().toISOString(),
-        items: [
-          {
-            id: newItem.id,
-            prescription_id: rxIdParam || `rx-${Date.now()}`,
-            drug_id: newItem.drugId,
-            drug_name: newItem.name,
-            item_type: newItem.drugType,
-            dose_morning: true,
-            dose_afternoon: false,
-            dose_night: true,
-            dose_relation: 'after_food',
-            num_days: Math.ceil(newItem.qty / 2) || 5,
-            quantity: newItem.qty,
-            is_custom: newItem.isCustom,
-            added_by_pharmacist: true,
-            pharmacist_notes: 'Added by Pharmacist during dispensing',
-            created_at: new Date().toISOString(),
-          },
-        ],
-      };
-      HMSStore.savePrescription(newPrescription);
+      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+        old ? old.map((p) => (p.id === targetRx.id ? { ...p, items: [...(p.items || []), rxItem] } : p)) : []
+      );
     }
 
     setShowAddModal(false);
@@ -533,40 +453,44 @@ function DispenseContent() {
 
     setIsSubmitting(true);
     const pharmacistName = user?.fullName || 'Pharmacist on Duty';
-    const pharmacistId =
-      user?.id && user.id.length === 36
-        ? user.id
-        : HMSStore.getUsers().find((u) => u.role === 'pharmacist' || u.role === 'admin')?.id || generateUUID();
+    const pharmacistId = user?.id || generateUUID();
 
     const currentVisitId = visit?.id || visitId;
     const currentPatientId = patient?.id;
     const currentRxId = rx?.id || generateUUID();
 
-    // 1. INSTANT OPTIMISTIC STORE UPDATE (<5ms)
-    // Synchronously reduce stock, mark visit as dispensed, and record in HMSStore
-    const deliveredDispensing = HMSStore.deliverPrescription({
-      visitId: currentVisitId,
-      prescriptionId: currentRxId,
-      pharmacistId,
-      pharmacistName,
-      patientId: currentPatientId,
-      patientName: patient?.name,
-      patientPhone: patient?.phone,
-      patientUhid: patient?.uhid,
+    const dispensingId = generateUUID();
+    const deliveredDispensing: Dispensing = {
+      id: dispensingId,
+      visit_id: currentVisitId,
+      prescription_id: currentRxId,
+      pharmacist_id: pharmacistId,
+      pharmacist_name: pharmacistName,
+      patient_id: currentPatientId,
+      patient_name: patient?.name,
+      patient_phone: patient?.phone,
+      patient_uhid: patient?.uhid,
       uaid: rx?.uaid,
-      stayDayNumber: rx?.stay_day_number,
+      stay_day_number: rx?.stay_day_number,
       items: includedItems.map((i) => ({
-        drugId: i.drugId,
-        drugName: i.name,
+        id: generateUUID(),
+        dispensing_id: dispensingId,
+        drug_id: i.drugId || '',
+        drug_name: i.name,
         quantity: i.qty,
-        unitPrice: i.unitPrice,
-        totalPrice: Number((i.qty * i.unitPrice).toFixed(2)),
-        isCustom: i.isCustom,
+        unit_price: i.unitPrice,
+        total_price: Number((i.qty * i.unitPrice).toFixed(2)),
+        is_custom: i.isCustom,
+        created_at: new Date().toISOString(),
       })),
-      totalAmount,
-      overrideReason: overrideReason.trim() || undefined,
-      hasScheduleHWarning: includedItems.some((i) => i.isScheduleH),
-    });
+      total_amount: totalAmount,
+      override_reason: overrideReason.trim() || undefined,
+      has_schedule_h_warning: includedItems.some((i) => i.isScheduleH),
+      is_walk_in: false,
+      delivered_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
     // 2. INSTANT OPTIMISTIC REACT QUERY CACHE UPDATE
     // Mark visit as dispensed in React Query visits cache
@@ -653,7 +577,7 @@ function DispenseContent() {
           );
         }
       } catch (bgErr: any) {
-        console.warn('Background sync note (safe offline/cached):', bgErr?.message || bgErr);
+        console.warn('Background sync note:', bgErr?.message || bgErr);
       } finally {
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });

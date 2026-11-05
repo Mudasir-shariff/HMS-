@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Activity, Eye, EyeOff, ShieldCheck, UserPlus, FileText, PhoneCall, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import { BrandLogo } from '@/components/ui/brand-logo';
@@ -38,8 +37,7 @@ function LoginForm() {
           return;
         }
       } catch {}
-      const existing = HMSStore.getUsers();
-      setHasExistingAccounts(existing.length > 0);
+      setHasExistingAccounts(true);
     }
     checkExistingAccounts();
   }, []);
@@ -56,9 +54,8 @@ function LoginForm() {
     }
 
     // Redirect to user's assigned role dashboard
-    const current = HMSStore.getCurrentUser();
-    if (current?.role) {
-      router.push(ROLE_HOME[current.role as UserRole] || '/');
+    if (res.role) {
+      router.push(ROLE_HOME[res.role as UserRole] || '/');
     } else {
       router.push('/');
     }

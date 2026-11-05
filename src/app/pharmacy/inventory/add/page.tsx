@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Input, Checkbox } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { generateUUID } from '@/lib/utils/quantity';
 import { pushDrugToSupabase } from '@/lib/supabase/sync';
 import { saveDrugMutation } from '@/lib/api/mutations';
 import type { DrugType, Drug } from '@/lib/types/database';

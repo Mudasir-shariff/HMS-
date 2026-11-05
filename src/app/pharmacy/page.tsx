@@ -35,7 +35,7 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore } from '@/lib/store/hms-store';
+import { createClient } from '@/lib/supabase/client';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { pushDrugToSupabase, deleteDrugFromSupabase } from '@/lib/supabase/sync';
 import type { Dispensing, Drug, Visit, Prescription } from '@/lib/types/database';
@@ -113,7 +113,6 @@ export default function PharmacyPage() {
     }
     setIsDeletingDrugId(drug.id);
     try {
-      HMSStore.deleteDrug(drug.id);
       queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
         old ? old.filter((d) => d.id !== drug.id) : []
       );
@@ -142,7 +141,6 @@ export default function PharmacyPage() {
         low_stock_limit: Math.max(0, Number(editingDrug.low_stock_limit) || 10),
         updated_at: new Date().toISOString(),
       };
-      HMSStore.saveDrug(updated);
       await pushDrugToSupabase(updated);
       await queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
       setEditingDrug(null);
@@ -171,60 +169,15 @@ export default function PharmacyPage() {
 
   // Deduplicated merged dispensings (local store + React Query server cache)
   const allDispensingsMerged = useMemo(() => {
-    const local = HMSStore.getDispensings();
-    const map = new Map<string, Dispensing>();
-    // First local
-    local.forEach((d) => map.set(d.id, d));
-    // Then server
-    dispensings.forEach((d) => map.set(d.id, d));
-    // Return sorted newest delivered/created first
-    return Array.from(map.values()).sort((a, b) => {
+    return [...dispensings].sort((a, b) => {
       const timeA = new Date(a.delivered_at || a.created_at || 0).getTime();
       const timeB = new Date(b.delivered_at || b.created_at || 0).getTime();
       return timeB - timeA;
     });
   }, [dispensings]);
 
-  // Deduplicated merged visits (local store + React Query server cache)
-  const allVisitsMerged = useMemo(() => {
-    const local = HMSStore.getVisits();
-    const map = new Map<string, Visit>();
-    // First populate from server query cache
-    visits.forEach((v) => map.set(v.id, v));
-    // Then merge local storage visits
-    local.forEach((lv) => {
-      const existing = map.get(lv.id);
-      if (!existing) {
-        map.set(lv.id, lv);
-      } else {
-        // If local has prescribed or dispensed status, it reflects the latest user action
-        if (lv.status === 'prescribed' && existing.status !== 'dispensed' && existing.status !== 'completed') {
-          map.set(lv.id, { ...existing, status: 'prescribed', updated_at: lv.updated_at });
-        } else if (lv.status === 'dispensed' || lv.status === 'completed') {
-          map.set(lv.id, { ...existing, status: lv.status, updated_at: lv.updated_at });
-        }
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => (Number(a.token_number) || 0) - (Number(b.token_number) || 0));
-  }, [visits]);
-
-  // Deduplicated merged prescriptions (local store + React Query server cache)
-  const allPrescriptionsMerged = useMemo(() => {
-    const local = HMSStore.getPrescriptions();
-    const map = new Map<string, Prescription>();
-    // First populate from server query cache
-    prescriptions.forEach((p) => map.set(p.id, p));
-    // Then merge local storage prescriptions
-    local.forEach((lp) => {
-      const existing = map.get(lp.id);
-      if (!existing) {
-        map.set(lp.id, lp);
-      } else if ((!existing.items || existing.items.length === 0) && lp.items && lp.items.length > 0) {
-        map.set(lp.id, { ...existing, items: lp.items });
-      }
-    });
-    return Array.from(map.values());
-  }, [prescriptions]);
+  const allVisitsMerged = visits;
+  const allPrescriptionsMerged = prescriptions;
 
   // 1. Pending Prescriptions Queue (OPD & IP) - comprehensive cross-matching with zero data loss (memoized O(1) lookups)
   const pendingQueue = useMemo<PharmacyQueueItem[]>(() => {
@@ -240,9 +193,6 @@ export default function PharmacyPage() {
 
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
-    HMSStore.getPatients().forEach((p) => {
-      if (!patientMap.has(p.id)) patientMap.set(p.id, p);
-    });
 
     const doctorMap = new Map<string, (typeof doctors)[0]>();
     doctors.forEach((d) => {
@@ -526,44 +476,10 @@ export default function PharmacyPage() {
         overrideReason: walkInOverrideReason.trim() || undefined,
         isWalkIn: true,
       });
-
-      // Mirror local store
-      HMSStore.recordWalkInSale({
-        pharmacistId: user?.id || 'pharm-1',
-        pharmacistName: user?.fullName || 'Pharmacist on Duty',
-        patientName: walkInPatientName.trim() || undefined,
-        patientPhone: walkInPatientPhone.trim() || undefined,
-        patientUhid: walkInPatientUhid.trim() || undefined,
-        items: walkInItems.map((wi) => ({
-          drugId: wi.drugId || '',
-          drugName: wi.name,
-          quantity: wi.quantity,
-          unitPrice: wi.unitPrice,
-          totalPrice: wi.totalPrice,
-        })),
-        totalAmount: Number(walkInTotal.toFixed(2)),
-        hasScheduleHWarning: walkInHasScheduleH,
-        overrideReason: walkInOverrideReason.trim() || undefined,
-      });
     } catch (err: any) {
-      console.warn('Walk-in atomic RPC failed, using local store:', err?.message);
-      HMSStore.recordWalkInSale({
-        pharmacistId: user?.id || 'pharm-1',
-        pharmacistName: user?.fullName || 'Pharmacist on Duty',
-        patientName: walkInPatientName.trim() || undefined,
-        patientPhone: walkInPatientPhone.trim() || undefined,
-        patientUhid: walkInPatientUhid.trim() || undefined,
-        items: walkInItems.map((wi) => ({
-          drugId: wi.drugId || '',
-          drugName: wi.name,
-          quantity: wi.quantity,
-          unitPrice: wi.unitPrice,
-          totalPrice: wi.totalPrice,
-        })),
-        totalAmount: Number(walkInTotal.toFixed(2)),
-        hasScheduleHWarning: walkInHasScheduleH,
-        overrideReason: walkInOverrideReason.trim() || undefined,
-      });
+      console.error('Walk-in atomic RPC failed:', err?.message || err);
+      alert('Failed to complete sale: ' + (err?.message || 'Server error'));
+      return;
     }
 
     queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
@@ -1486,9 +1402,13 @@ export default function PharmacyPage() {
                         const input = document.getElementById(`edit-qty-${item.id}`) as HTMLInputElement;
                         const newQ = Number(input?.value) || 0;
                         if (newQ === 0) {
-                          HMSStore.removeDispensedItem(editingDispensing.id, item.id);
+                          createClient().from('dispensing_items').delete().eq('id', item.id).then(() => {
+                            queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+                          });
                         } else {
-                          HMSStore.editDispensedItem(editingDispensing.id, item.id, newQ);
+                          createClient().from('dispensing_items').update({ quantity: newQ, total_price: newQ * item.unit_price }).eq('id', item.id).then(() => {
+                            queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
+                          });
                         }
                         setEditingDispensing(null);
                       }}

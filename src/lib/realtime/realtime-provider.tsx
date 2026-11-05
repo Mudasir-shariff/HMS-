@@ -1,11 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/query/keys';
-import { HMSStore } from '@/lib/store/hms-store';
-import { syncFromSupabase } from '@/lib/supabase/sync';
 import type { Visit, Patient, Drug, Dispensing, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
@@ -33,11 +31,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   const refetchAllActive = useCallback(() => {
     queryClient.refetchQueries({ type: 'active' });
-    syncFromSupabase().catch(() => {});
     setLastSyncedAt(new Date());
   }, [queryClient]);
 
-  // Window Focus & Online/Offline listeners (re-fetch when phone wakes or tab regains focus)
+  // Window Focus & Online/Offline listeners
   useEffect(() => {
     function handleOnline() {
       setStatus('reconnecting');
@@ -76,7 +73,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     const channelId = `hospital-sync-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase.channel(channelId);
 
-    // Debounced query invalidation helpers to prevent socket exhaustion and thundering herds
+    // Debounced query invalidation helpers
     let visitDebounceTimer: any = null;
     const triggerVisitInvalidation = () => {
       if (visitDebounceTimer) clearTimeout(visitDebounceTimer);
@@ -150,13 +147,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        // Mirror to HMSStore (skipRemoteSync=true prevents infinite loop back to Supabase)
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.saveVisit(payload.new as any, { skipRemoteSync: true });
-        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deleteVisit((payload.old as any).id, { skipRemoteSync: true });
-        }
-
         triggerVisitInvalidation();
       }
     );
@@ -193,13 +183,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
             return oldPatients;
           }
         );
-
-        // Mirror to HMSStore (skipRemoteSync=true prevents infinite loop back to Supabase)
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.savePatient(payload.new as any, { skipRemoteSync: true });
-        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deletePatient((payload.old as any).id, { skipRemoteSync: true });
-        }
 
         triggerPatientInvalidation();
       }
@@ -238,12 +221,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.saveDrug(payload.new as any, { skipRemoteSync: true });
-        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deleteDrug((payload.old as any).id, { skipRemoteSync: true });
-        }
-
         triggerDrugInvalidation();
       }
     );
@@ -256,7 +233,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-        syncFromSupabase().catch(() => {});
       }, 150);
     };
 
@@ -276,21 +252,18 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
               const idx = oldRx.findIndex((p) => p.id === newRx.id);
               if (idx >= 0) {
                 const next = [...oldRx];
-                // Preserve joined items if incoming table payload has no items
                 next[idx] = { ...newRx, items: newRx.items || next[idx].items || [] };
                 return next;
               }
               return [newRx, ...oldRx];
             }
           );
-          HMSStore.savePrescription(newRx, { skipRemoteSync: true });
         } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
           const delId = (payload.old as any).id;
           queryClient.setQueriesData<Prescription[]>(
             { queryKey: ['prescriptions'] },
             (oldRx) => (oldRx ? oldRx.filter((p) => p.id !== delId) : [])
           );
-          HMSStore.deletePrescription(delId, { skipRemoteSync: true });
         }
 
         triggerRxInvalidation();
@@ -373,12 +346,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          HMSStore.saveDispensing(payload.new as any);
-        } else if (payload.eventType === 'DELETE' && (payload.old as any)?.id) {
-          HMSStore.deleteDispensing((payload.old as any).id);
-        }
-
         triggerDispInvalidation();
       }
     );
@@ -391,7 +358,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
-        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -401,7 +367,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       () => {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
-        syncFromSupabase().catch(() => {});
       }
     );
 
@@ -441,44 +406,34 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       { event: '*', schema: 'public', table: 'hospital_settings' },
       () => {
         setLastSyncedAt(new Date());
-        queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.current });
       }
     );
 
-    // Channel subscription lifecycle
+    // Subscribe to channel and handle connection state
     channel.subscribe((subStatus) => {
       if (subStatus === 'SUBSCRIBED') {
         setStatus('connected');
         setLastSyncedAt(new Date());
-        refetchAllActive();
-      } else if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT') {
-        setStatus('reconnecting');
-      } else if (subStatus === 'CLOSED') {
+      } else if (subStatus === 'CLOSED' || subStatus === 'CHANNEL_ERROR') {
+        setStatus('offline');
+      } else if (subStatus === 'TIMED_OUT') {
         setStatus('reconnecting');
       }
     });
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [queryClient, refetchAllActive]);
+  }, [queryClient]);
 
   const reconnect = useCallback(() => {
     setStatus('reconnecting');
     refetchAllActive();
   }, [refetchAllActive]);
 
-  const value = useMemo(
-    () => ({
-      status,
-      lastSyncedAt,
-      reconnect,
-    }),
-    [status, lastSyncedAt, reconnect]
-  );
-
   return (
-    <RealtimeContext.Provider value={value}>
+    <RealtimeContext.Provider value={{ status, lastSyncedAt, reconnect }}>
       {children}
     </RealtimeContext.Provider>
   );

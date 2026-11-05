@@ -9,7 +9,6 @@ import { PageHeader } from '@/components/layout';
 import { useDoctors, usePatients, useHospitalSettings } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
-import { HMSStore } from '@/lib/store/hms-store';
 import { pushPatientToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
 import { registerPatientAndVisitAtomic } from '@/lib/api/mutations';
 import type { Patient, Visit } from '@/lib/types/database';
@@ -152,38 +151,13 @@ export default function RegisterPatientPage() {
         uhid: form.uhidLookup.trim() || undefined,
       });
 
-      // Mirror to local store for offline consistency (skip remote sync since atomic RPC already persisted to Supabase)
-      HMSStore.savePatient(res.patient, { skipRemoteSync: true });
-      HMSStore.saveVisit(res.visit, { skipRemoteSync: true });
-
       queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
 
       setCreatedResult(res);
     } catch (err: any) {
-      console.warn('Atomic DB registration fell back to client generator:', err?.message);
-      // Fallback: Client-side generation with push to Supabase
-      const res = HMSStore.registerPatientAndVisit({
-        name: form.name.trim(),
-        age: Number(form.age),
-        phone: form.phone.trim(),
-        blood_group: form.bloodGroup || undefined,
-        has_bp: form.hasBP,
-        has_sugar: form.hasSugar,
-        other_conditions: form.hasOther ? form.otherCondition.trim() : undefined,
-        doctorId: form.doctorId,
-      });
-
-      // Push concurrently to avoid cascading delays
-      await Promise.allSettled([
-        pushPatientToSupabase(res.patient),
-        pushVisitToSupabase(res.visit),
-      ]);
-
-      queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-
-      setCreatedResult(res);
+      console.error('Registration failed:', err?.message || err);
+      alert('Patient registration failed: ' + (err?.message || 'Server error. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

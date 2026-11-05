@@ -29,8 +29,8 @@ import {
 } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
-import { HMSStore, generateUUID } from '@/lib/store/hms-store';
-import { pushWardToSupabase, pushBedToSupabase } from '@/lib/supabase/sync';
+import { generateUUID } from '@/lib/utils/quantity';
+import { pushWardToSupabase, pushBedToSupabase, pushAdmissionToSupabase } from '@/lib/supabase/sync';
 import type { Admission, Bed, Ward } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -69,7 +69,7 @@ export default function InPatientPage() {
 
   const availableBeds = beds.filter((b) => !b.is_occupied);
 
-  function handleAdmit(e: React.FormEvent) {
+  async function handleAdmit(e: React.FormEvent) {
     e.preventDefault();
     if (!admitPatientId || !admitBedId || !admitDoctorId) {
       alert('Please select patient, bed, and doctor.');
@@ -97,13 +97,13 @@ export default function InPatientPage() {
       total_lab_charges: 0,
     };
 
-    HMSStore.saveAdmission(newAdmission);
+    await pushAdmissionToSupabase(newAdmission);
     queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setShowAdmitModal(false);
   }
 
-  function handleConfirmDischarge() {
+  async function handleConfirmDischarge() {
     if (!dischargeTarget) return;
 
     const stay = calculateStay(dischargeTarget.admitted_at);
@@ -117,7 +117,7 @@ export default function InPatientPage() {
       total_bed_charges: finalBedCharges,
     };
 
-    HMSStore.saveAdmission(updated);
+    await pushAdmissionToSupabase(updated);
     queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setDischargeTarget(null);
@@ -140,11 +140,6 @@ export default function InPatientPage() {
       is_active: true,
       created_at: new Date().toISOString(),
     };
-    const currentWards = HMSStore.getWards();
-    currentWards.push(newWard);
-    HMSStore.saveSettings(settings); // triggers event
-    localStorage.setItem('hms_data_wards', JSON.stringify(currentWards));
-    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'wards' } }));
     await pushWardToSupabase(newWard);
     queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
     setNewWardName('');
@@ -161,10 +156,6 @@ export default function InPatientPage() {
       is_occupied: false,
       created_at: new Date().toISOString(),
     };
-    const currentBeds = HMSStore.getBeds();
-    currentBeds.push(newBed);
-    localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
-    window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
     await pushBedToSupabase(newBed);
     queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setNewBedNumber('');
@@ -173,15 +164,8 @@ export default function InPatientPage() {
 
   async function handleUpdateBedPrice() {
     if (!editingBed) return;
-    const currentBeds = HMSStore.getBeds();
-    const bed = currentBeds.find((b) => b.id === editingBed.id);
-    if (bed) {
-      bed.price_per_day = editBedPrice;
-      localStorage.setItem('hms_data_beds', JSON.stringify(currentBeds));
-      window.dispatchEvent(new CustomEvent('hms-store-change', { detail: { key: 'beds' } }));
-      await pushBedToSupabase(bed);
-      queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
-    }
+    await pushBedToSupabase({ ...editingBed, price_per_day: editBedPrice });
+    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
     setEditingBed(null);
   }
 

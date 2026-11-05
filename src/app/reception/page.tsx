@@ -21,7 +21,6 @@ import { PageHeader } from '@/components/layout';
 import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
-import { HMSStore } from '@/lib/store/hms-store';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus, Visit } from '@/lib/types/database';
@@ -135,10 +134,6 @@ export default function ReceptionPage() {
     setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
-    const current = HMSStore.getVisits().find((v) => v.id === visitId);
-    if (current) {
-      HMSStore.saveVisit({ ...current, status: 'in_consultation', updated_at }, { skipRemoteSync: true });
-    }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation', updated_at } : v)) : []
     );
@@ -150,7 +145,7 @@ export default function ReceptionPage() {
     try {
       const { error } = await supabase.from('visits').update({ status: 'in_consultation', updated_at }).eq('id', visitId);
       if (error) {
-        console.warn('Supabase update error (local updated):', error.message);
+        console.warn('Supabase update error:', error.message);
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
@@ -163,10 +158,6 @@ export default function ReceptionPage() {
     setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
-    const current = HMSStore.getVisits().find((v) => v.id === visitId);
-    if (current) {
-      HMSStore.saveVisit({ ...current, status: 'prescribed', updated_at }, { skipRemoteSync: true });
-    }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
     );
@@ -178,7 +169,7 @@ export default function ReceptionPage() {
     try {
       const { error } = await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
       if (error) {
-        console.warn('Supabase update error (local updated):', error.message);
+        console.warn('Supabase update error:', error.message);
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
@@ -191,10 +182,6 @@ export default function ReceptionPage() {
     setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
-    const current = HMSStore.getVisits().find((v) => v.id === visitId);
-    if (current) {
-      HMSStore.saveVisit({ ...current, status: 'dispensed', updated_at }, { skipRemoteSync: true });
-    }
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
       old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
     );
@@ -206,7 +193,7 @@ export default function ReceptionPage() {
     try {
       const { error } = await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
       if (error) {
-        console.warn('Supabase update error (local updated):', error.message);
+        console.warn('Supabase update error:', error.message);
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {

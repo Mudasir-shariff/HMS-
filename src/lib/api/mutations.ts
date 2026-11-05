@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { getQueryClient } from '@/lib/query/provider';
 import { queryKeys } from '@/lib/query/keys';
-import { HMSStore } from '@/lib/store/hms-store';
 import type { QueryClient } from '@tanstack/react-query';
 import type { Patient, Visit, Dispensing, DispensingItem, Drug } from '@/lib/types/database';
 
@@ -284,9 +283,6 @@ export async function saveDrugMutation(
     expiry_date: data.expiry_date,
     updated_at: data.updated_at,
   };
-
-  // Update in-memory HMSStore
-  HMSStore.saveDrug(savedDrug);
 
   // Invalidate TanStack Query cache so /pharmacy and /admin refresh immediately
   const qClient = client || getQueryClient();

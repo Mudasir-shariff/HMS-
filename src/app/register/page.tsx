@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Activity, Eye, EyeOff, CheckCircle, Stethoscope, ArrowLeft, ShieldCheck, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { HMSStore, generateUUID } from '@/lib/store/hms-store';
-import { syncFromSupabase, pushUserToSupabase } from '@/lib/supabase/sync';
+import { generateUUID } from '@/lib/utils/quantity';
+import { pushUserToSupabase } from '@/lib/supabase/sync';
+import { useUserProfiles } from '@/lib/query/hooks';
 import { useAuth } from '@/lib/auth/context';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import { useQueryClient } from '@tanstack/react-query';
@@ -54,6 +55,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { switchUser } = useAuth();
+  const { data: existingUsers = [] } = useUserProfiles();
 
   const [form, setForm] = useState<FormState>({
     fullName: '',
@@ -91,7 +93,6 @@ export default function RegisterPage() {
     if (!form.email.trim() || !form.email.includes('@')) errs.email = 'Valid email is required.';
     
     // Check if email already registered
-    const existingUsers = HMSStore.getUsers();
     if (existingUsers.some((u) => u.email.toLowerCase() === form.email.trim().toLowerCase())) {
       errs.email = 'An account with this email address already exists. Please sign in instead.';
     }
@@ -215,9 +216,7 @@ export default function RegisterPage() {
         : {}),
     };
 
-    // Save into HMSStore cache and trigger global sync
-    HMSStore.saveUser(newAccount);
-    await syncFromSupabase().catch(() => {});
+    await pushUserToSupabase(newAccount);
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
 

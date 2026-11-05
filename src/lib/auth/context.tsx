@@ -2,9 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { HMSStore, UserAccount } from '@/lib/store/hms-store';
-import { syncFromSupabase } from '@/lib/supabase/sync';
-import type { UserRole } from '@/lib/types/database';
+import type { UserRole, UserAccount } from '@/lib/types/database';
 
 export interface AuthUser {
   id: string;
@@ -20,7 +18,7 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  signIn: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, password?: string) => Promise<{ success: boolean; role?: UserRole; error?: string }>;
   signOut: () => Promise<void>;
   switchUser: (account: UserAccount) => void;
 }
@@ -33,6 +31,11 @@ const AuthContext = createContext<AuthContextValue>({
   switchUser: () => {},
 });
 
+function isValidUUID(id?: string | null): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 function isSupabaseConfigured(): boolean {
   return !!(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -41,7 +44,7 @@ function isSupabaseConfigured(): boolean {
   );
 }
 
-// ── Cookie Session Persistence (Survives browser cache wipes) ──
+// ── Cookie Session Persistence (Survives browser reloads and navigation) ──
 
 function setSessionCookie(u: { id: string; email: string; role: string; fullName: string }) {
   if (typeof document === 'undefined') return;
@@ -69,19 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
-      const local = HMSStore.getCurrentUser();
-      if (local && local.is_active) {
-        return {
-          id: local.id,
-          email: local.email,
-          fullName: local.full_name,
-          role: local.role,
-          phone: local.phone,
-          doctorId: local.role === 'doctor' ? local.id : undefined,
-          specialization: local.specialization,
-          consultationRoom: local.consultation_room,
-        };
-      }
       const cookieUser = getSessionCookie();
       if (cookieUser?.id) {
         return {
@@ -100,8 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     try {
-      const local = HMSStore.getCurrentUser();
-      if (local?.id && local.is_active) return false;
       const cookieUser = getSessionCookie();
       if (cookieUser?.id) return false;
     } catch {
@@ -109,26 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return true;
   });
-
-  // Fallback to local store
-  const syncLocalUser = useCallback(() => {
-    const local = HMSStore.getCurrentUser();
-    if (local && local.is_active) {
-      setUser({
-        id: local.id,
-        email: local.email,
-        fullName: local.full_name,
-        role: local.role,
-        phone: local.phone,
-        doctorId: local.role === 'doctor' ? local.id : undefined,
-        specialization: local.specialization,
-        consultationRoom: local.consultation_room,
-      });
-    } else {
-      setUser(null);
-    }
-    setLoading(false);
-  }, []);
 
   const loadUser = useCallback(async (uid?: string, email?: string) => {
     try {
@@ -142,15 +110,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profile } = await query.maybeSingle();
 
       if (!profile || !profile.is_active) {
-        syncLocalUser();
-        return;
+        clearSessionCookie();
+        setUser(null);
+        setLoading(false);
+        return null;
       }
 
       let doctorId: string | undefined;
       let specialization: string | undefined = profile.specialization || undefined;
       let consultationRoom: string | undefined = profile.consultation_room || undefined;
 
-      if (profile.role === 'doctor') {
+      if (profile.role === 'doctor' && isValidUUID(profile.id)) {
         const { data: doc } = await supabase
           .from('doctors')
           .select('id, specialization, consultation_room')
@@ -183,37 +153,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: profile.role,
         fullName: profile.full_name,
       });
-
-      // Persist in HMSStore so routing and local fallbacks match
-      HMSStore.setCurrentUser({
-        id: profile.id,
-        email: profile.email || email || '',
-        full_name: profile.full_name,
-        role: profile.role as UserRole,
-        phone: profile.phone ?? undefined,
-        is_active: profile.is_active,
-        specialization,
-        consultation_room: consultationRoom,
-        created_at: profile.created_at || new Date().toISOString(),
-      });
       setLoading(false);
-
-      // Background non-blocking sync so UI renders instantly
-      void syncFromSupabase().catch(() => {});
+      return profile;
     } catch {
-      syncLocalUser();
+      clearSessionCookie();
+      setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [syncLocalUser]);
+  }, []);
 
   useEffect(() => {
-    const onStoreChange = () => syncLocalUser();
-    window.addEventListener('hms-store-change', onStoreChange);
-
     if (!isSupabaseConfigured()) {
-      syncLocalUser();
-      return () => window.removeEventListener('hms-store-change', onStoreChange);
+      const cookieUser = getSessionCookie();
+      if (cookieUser?.id) {
+        setUser({
+          id: cookieUser.id,
+          email: cookieUser.email,
+          fullName: cookieUser.fullName,
+          role: cookieUser.role as UserRole,
+        });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+      return;
     }
 
     const supabase = createClient();
@@ -230,7 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (cookieUser?.id || cookieUser?.email) {
             await loadUser(cookieUser.id, cookieUser.email);
           } else {
-            syncLocalUser();
+            setUser(null);
+            setLoading(false);
           }
         }
       })
@@ -239,33 +205,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cookieUser?.id || cookieUser?.email) {
           loadUser(cookieUser.id, cookieUser.email);
         } else {
-          syncLocalUser();
+          setUser(null);
+          setLoading(false);
         }
       });
 
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(async (_event: any, session: any) => {
       if (session?.user) {
         await loadUser(session.user.id, session.user.email ?? '');
+      } else {
+        const cookieUser = getSessionCookie();
+        if (!cookieUser) {
+          setUser(null);
+        }
       }
     });
 
     return () => {
       subscription?.unsubscribe();
-      window.removeEventListener('hms-store-change', onStoreChange);
     };
-  }, [loadUser, syncLocalUser]);
+  }, [loadUser]);
 
-  async function signIn(email: string, password?: string): Promise<{ success: boolean; error?: string }> {
+  async function signIn(email: string, password?: string): Promise<{ success: boolean; role?: UserRole; error?: string }> {
     const cleanEmail = email.trim().toLowerCase();
-
-    if (!isSupabaseConfigured()) {
-      const res = HMSStore.login(cleanEmail, password);
-      if (res.success && res.user) {
-        syncLocalUser();
-        return { success: true };
-      }
-      return { success: false, error: res.error || 'Login failed.' };
-    }
 
     try {
       const supabase = createClient();
@@ -275,8 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: password || '',
       });
       if (!error && data?.session?.user) {
-        await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
-        return { success: true };
+        const profile = await loadUser(data.session.user.id, data.session.user.email ?? cleanEmail);
+        return { success: true, role: profile?.role as UserRole };
       }
 
       // 2. Direct database profile verification (for hospital staff logins)
@@ -294,18 +256,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: 'Incorrect password. Please verify and try again.' };
         }
         await loadUser(dbProfile.id, dbProfile.email || cleanEmail);
-        return { success: true };
+        return { success: true, role: dbProfile.role as UserRole };
       }
-    } catch {
-      // Continue to local fallback
+    } catch (err: any) {
+      console.error('Sign in error:', err);
+      return { success: false, error: err?.message || 'Login failed. Please check network connection.' };
     }
 
-    // Fallback to local store
-    const localRes = HMSStore.login(cleanEmail, password);
-    if (localRes.success && localRes.user) {
-      syncLocalUser();
-      return { success: true };
-    }
     return { success: false, error: 'Invalid credentials. Please verify your email and password.' };
   }
 
@@ -315,20 +272,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const supabase = createClient();
       await (supabase.auth as any).signOut().catch(() => {});
     }
-    HMSStore.setCurrentUser(null);
     setUser(null);
     window.location.href = '/login';
   }
 
   function switchUser(account: UserAccount) {
-    HMSStore.setCurrentUser(account);
     setSessionCookie({
       id: account.id,
       email: account.email,
       role: account.role,
       fullName: account.full_name,
     });
-    syncLocalUser();
+    setUser({
+      id: account.id,
+      email: account.email,
+      fullName: account.full_name,
+      role: account.role,
+      phone: account.phone,
+      doctorId: account.role === 'doctor' ? account.id : undefined,
+      specialization: account.specialization,
+      consultationRoom: account.consultation_room,
+    });
+    setLoading(false);
   }
 
   return (

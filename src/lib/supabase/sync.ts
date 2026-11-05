@@ -1,5 +1,5 @@
 import { createClient } from './client';
-import { HMSStore, UserAccount, generateUUID } from '../store/hms-store';
+import { generateUUID } from '../utils/quantity';
 import type {
   Patient,
   Visit,
@@ -11,6 +11,7 @@ import type {
   Admission,
   HospitalSettings,
   UserRole,
+  UserAccount,
   Ward,
   Bed,
 } from '../types/database';
@@ -28,259 +29,18 @@ let isSyncing = false;
 let isRealtimeSubscribed = false;
 
 /**
- * Pull all data from Supabase into HMSStore cache
+ * Direct Supabase sync & push operations
  */
 export async function syncFromSupabase(): Promise<boolean> {
-  if (!isSupabaseConfigured() || isSyncing) return false;
-  isSyncing = true;
-
-  try {
-    const supabase = createClient();
-
-    // 1. Fetch Users & Doctors
-    const [profilesRes, docsRes] = await Promise.all([
-      supabase.from('user_profiles').select('*'),
-      supabase.from('doctors').select('*'),
-    ]);
-
-    if (!profilesRes.error && profilesRes.data) {
-      const docs = docsRes.data || [];
-      const syncedUsers: UserAccount[] = profilesRes.data.map((p: any) => {
-        const doc = docs.find((d: any) => d.user_id === p.id || d.id === p.id);
-        return {
-          id: p.id,
-          email: p.email || (p.full_name ? `${p.full_name.toLowerCase().replace(/[^a-z0-9]/g, '')}@hospital.local` : 'user@hospital.local'),
-          password: p.password || undefined,
-          full_name: p.full_name,
-          role: p.role as UserRole,
-          phone: p.phone || undefined,
-          is_active: p.is_active ?? true,
-          specialization: p.specialization || doc?.specialization || undefined,
-          consultation_room: p.consultation_room || doc?.consultation_room || undefined,
-          consultation_fee: p.consultation_fee ? Number(p.consultation_fee) : 500,
-          opd_timings: p.opd_timings || undefined,
-          created_at: p.created_at || new Date().toISOString(),
-        };
-      });
-
-      const localUsers = HMSStore.getUsers();
-      const remoteUserIds = new Set(syncedUsers.map((u) => u.id));
-      const unsyncedLocals = localUsers.filter((u) => !remoteUserIds.has(u.id));
-      // Auto-push any locally registered accounts that aren't on Supabase yet
-      unsyncedLocals.forEach((u) => pushUserToSupabase(u));
-
-      HMSStore.setUsers([...syncedUsers, ...unsyncedLocals]);
-    }
-
-    // 2. Fetch Patients
-    const patientsRes = await supabase.from('patients').select('*');
-    if (!patientsRes.error && patientsRes.data) {
-      const syncedPatients: Patient[] = patientsRes.data.map((p: any) => ({
-        id: p.id,
-        uhid: p.uhid,
-        name: p.name,
-        age: Number(p.age) || 0,
-        phone: p.phone,
-        blood_group: p.blood_group || undefined,
-        has_bp: Boolean(p.has_bp),
-        has_sugar: Boolean(p.has_sugar),
-        other_conditions: p.other_conditions || undefined,
-        created_at: p.created_at,
-        updated_at: p.updated_at || p.created_at,
-      }));
-
-      HMSStore.setPatients(syncedPatients);
-    }
-
-    // 3. Fetch Visits
-    const visitsRes = await supabase.from('visits').select('*');
-    if (!visitsRes.error && visitsRes.data) {
-      const syncedVisits: Visit[] = visitsRes.data.map((v: any) => ({
-        id: v.id,
-        visit_number: v.visit_number,
-        patient_id: v.patient_id,
-        doctor_id: v.doctor_id,
-        token_number: Number(v.token_number) || 1,
-        status: v.status,
-        follow_up_date: v.follow_up_date || undefined,
-        instructions: v.instructions || undefined,
-        created_at: v.created_at,
-        updated_at: v.updated_at || v.created_at,
-      }));
-
-      HMSStore.setVisits(syncedVisits);
-    }
-
-    // 4. Fetch Drugs
-    const drugsRes = await supabase.from('drugs').select('*');
-    if (!drugsRes.error && drugsRes.data) {
-      const syncedDrugs: Drug[] = drugsRes.data.map((d: any) => ({
-        id: d.id,
-        name: d.name,
-        drug_type: d.drug_type,
-        custom_type_name: d.custom_type_name || undefined,
-        expiry_date: d.expiry_date,
-        purchase_price: Number(d.purchase_price) || 0,
-        selling_price: Number(d.selling_price) || 0,
-        stock_quantity: Number(d.stock_quantity) || 0,
-        low_stock_limit: Number(d.low_stock_limit) || 30,
-        boxes: d.boxes ? Number(d.boxes) : undefined,
-        tablets_per_sheet: d.tablets_per_sheet ? Number(d.tablets_per_sheet) : undefined,
-        selling_price_per_sheet: d.price_per_sheet ? Number(d.price_per_sheet) : undefined,
-        batch_number: d.batch_number || undefined,
-        schedule_h: Boolean(d.schedule_h),
-        schedule_h1: Boolean(d.schedule_h1),
-        is_active: d.is_active ?? true,
-        created_at: d.created_at,
-        updated_at: d.updated_at || d.created_at,
-      }));
-
-      HMSStore.setDrugs(syncedDrugs);
-    }
-
-    // 5. Fetch Prescriptions & Items
-    const [rxSettled, itemsSettled] = await Promise.allSettled([
-      supabase.from('prescriptions').select('*'),
-      supabase.from('prescription_items').select('*'),
-    ]);
-
-    const rxRes = rxSettled.status === 'fulfilled' ? rxSettled.value : null;
-    const itemsRes = itemsSettled.status === 'fulfilled' ? itemsSettled.value : null;
-
-    if (rxRes && !rxRes.error && rxRes.data) {
-      const allItems = itemsRes?.data || [];
-      const syncedRx: Prescription[] = rxRes.data.map((r: any) => {
-        const items: PrescriptionItem[] = allItems
-          .filter((it: any) => it.prescription_id === r.id)
-          .map((it: any) => ({
-            id: it.id,
-            prescription_id: it.prescription_id,
-            drug_id: it.drug_id || '',
-            drug_name: it.drug_name,
-            dose_morning: Boolean(it.dose_morning),
-            dose_afternoon: Boolean(it.dose_afternoon),
-            dose_night: Boolean(it.dose_night),
-            dose_relation: it.dose_relation,
-            num_days: Number(it.num_days) || 1,
-            quantity: Number(it.quantity) || 1,
-            is_custom: Boolean(it.is_custom),
-            item_type: it.item_type || undefined,
-            custom_unit: it.custom_unit || undefined,
-            added_by_pharmacist: Boolean(it.added_by_pharmacist),
-            pharmacist_notes: it.pharmacist_notes || undefined,
-            created_at: it.created_at,
-          }));
-
-        return {
-          id: r.id,
-          visit_id: r.visit_id,
-          doctor_id: r.doctor_id,
-          patient_id: r.patient_id,
-          notes: r.notes || undefined,
-          uaid: r.uaid || undefined,
-          stay_day_number: r.stay_day_number || undefined,
-          created_at: r.created_at,
-          items,
-        };
-      });
-
-      // Merge with local store to ensure newly prescribed medicines are never wiped
-      const local = HMSStore.getPrescriptions();
-      const rxMap = new Map<string, Prescription>();
-      syncedRx.forEach((r) => rxMap.set(r.id, r));
-      local.forEach((lr) => {
-        const existing = rxMap.get(lr.id);
-        if (!existing) {
-          rxMap.set(lr.id, lr);
-        } else if ((!existing.items || existing.items.length === 0) && lr.items && lr.items.length > 0) {
-          rxMap.set(lr.id, { ...existing, items: lr.items });
-        }
-      });
-
-      HMSStore.setPrescriptions(Array.from(rxMap.values()));
-    }
-
-    // 6. Fetch Dispensings & Items
-    const [dispRes, dispItemsRes] = await Promise.all([
-      supabase.from('dispensings').select('*'),
-      supabase.from('dispensing_items').select('*'),
-    ]);
-
-    if (!dispRes.error && dispRes.data) {
-      const allDispItems = dispItemsRes.data || [];
-      const syncedDisp: Dispensing[] = dispRes.data.map((d: any) => {
-        const items: DispensingItem[] = allDispItems
-          .filter((it: any) => it.dispensing_id === d.id)
-          .map((it: any) => ({
-            id: it.id,
-            dispensing_id: it.dispensing_id,
-            drug_id: it.drug_id && it.drug_id.trim() !== '' ? it.drug_id : null,
-            drug_name: it.drug_name,
-            quantity: Number(it.quantity) || 1,
-            unit_price: Number(it.unit_price) || 0,
-            total_price: Number(it.total_price) || 0,
-            created_at: it.created_at,
-          }));
-
-        return {
-          id: d.id,
-          prescription_id: d.prescription_id || undefined,
-          patient_id: d.patient_id || undefined,
-          pharmacist_id: d.pharmacist_id,
-          is_walk_in: Boolean(d.is_walk_in),
-          total_amount: Number(d.total_amount) || 0,
-          delivered_at: d.created_at,
-          created_at: d.created_at,
-          updated_at: d.updated_at || d.created_at,
-          items,
-        };
-      });
-
-      HMSStore.setDispensings(syncedDisp);
-    }
-
-    // 7. Fetch Settings
-    const settingsRes = await supabase.from('hospital_settings').select('*').limit(1).single();
-    if (!settingsRes.error && settingsRes.data) {
-      HMSStore.saveSettings({
-        id: settingsRes.data.id || 'settings-1',
-        hospital_name: settingsRes.data.hospital_name || 'RADHAKRISHNA HOSPITAL',
-        address: settingsRes.data.address || '',
-        phone: settingsRes.data.phone || '',
-        token_reset_hour: settingsRes.data.token_reset_hour ?? 0,
-        ip_hours_per_day: settingsRes.data.ip_hours_per_day ?? 18,
-        prescription_paper_size: settingsRes.data.prescription_paper_size || 'A4',
-        prescription_header: settingsRes.data.prescription_header || 'MULTISPECIALITY CARE',
-        prescription_footer: settingsRes.data.prescription_footer || "Please follow the doctor's advice.",
-        default_printer: 'Pharmacy LaserJet Pro (Network)',
-        schedule_h_action: 'warn',
-        whatsapp_enabled: true,
-        whatsapp_template: 'Namaste {patient_name}, your token at {hospital_name} is #{token}.',
-        low_stock_days_warning: settingsRes.data.low_stock_days_warning ?? 7,
-        expiry_days_warning: settingsRes.data.expiry_days_warning || [90, 60, 30],
-        updated_at: settingsRes.data.updated_at || new Date().toISOString(),
-      });
-    }
-
-    return true;
-  } catch (err) {
-    console.warn('Supabase sync warning (running offline fallback):', err);
-    return false;
-  } finally {
-    isSyncing = false;
-  }
+  return true;
 }
 
-/**
- * Setup Realtime channel to listen to changes on Supabase.
- * Unified into RealtimeProvider to prevent duplicate WebSocket channels.
- */
 export function initSupabaseRealtime() {
   // No-op: The single unified persistent WebSocket channel is managed by RealtimeProvider (src/lib/realtime/realtime-provider.tsx)
   return;
 }
 
-// ── Background Push Helpers (Fire & Forget, Graceful offline fallback) ──
+// ── Direct Push Helpers (Atomic & Resilient) ──
 
 function isValidUUID(id?: string | null): boolean {
   if (!id) return false;
@@ -514,47 +274,37 @@ export async function pushVisitToSupabase(visit: Visit) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', visitId)
-        .select('id')
-        .maybeSingle(),
+        .select('id'),
       4000
     );
 
-    if (updateRes && !updateRes.error && updateRes.data) {
+    if (updateRes && !updateRes.error && updateRes.data && updateRes.data.length > 0) {
       return;
     }
 
-    // Resolve doctor: Ensure the doctor exists in public.doctors so foreign key never fails
+    // Resolve doctor: Ensure the doctor exists in public.doctors so foreign key never fails (cached to prevent repeated network queries)
     let doctorIdToUse: string | null = null;
     if (isValidUUID(visit.doctor_id)) {
-      const docRes = await withTimeout(
-        supabase
-          .from('doctors')
-          .select('id, user_id')
-          .or(`id.eq.${visit.doctor_id},user_id.eq.${visit.doctor_id}`)
-          .limit(1)
-          .maybeSingle(),
-        3000
-      );
-
-      if (docRes?.data) {
-        doctorIdToUse = docRes.data.id;
+      if (doctorResolutionCache.has(visit.doctor_id)) {
+        doctorIdToUse = doctorResolutionCache.get(visit.doctor_id)!;
       } else {
-        // Auto-provision doctor record so foreign key doesn't reject
-        const newDocRes = await withTimeout(
+        const docRes = await withTimeout(
           supabase
             .from('doctors')
-            .insert({
-              id: visit.doctor_id,
-              user_id: visit.doctor_id,
-              specialization: 'General Medicine',
-              consultation_room: 'Room 1',
-              is_available: true,
-            })
-            .select('id')
+            .select('id, user_id')
+            .or(`id.eq.${visit.doctor_id},user_id.eq.${visit.doctor_id}`)
+            .limit(1)
             .maybeSingle(),
           3000
         );
-        if (newDocRes?.data) doctorIdToUse = newDocRes.data.id;
+
+        if (docRes?.data) {
+          doctorIdToUse = docRes.data.id;
+          doctorResolutionCache.set(visit.doctor_id, docRes.data.id);
+        } else {
+          doctorIdToUse = visit.doctor_id;
+          doctorResolutionCache.set(visit.doctor_id, visit.doctor_id);
+        }
       }
     }
 
@@ -580,7 +330,7 @@ export async function pushVisitToSupabase(visit: Visit) {
       console.warn('Supabase visit push warning:', upsertRes.error.message);
     }
   } catch (e: any) {
-    console.warn('Failed to push visit to Supabase (safe offline):', e?.message || e);
+    console.warn('Failed to push visit to Supabase:', e?.message || e);
   } finally {
     inFlightVisits.delete(visitKey);
   }
@@ -947,7 +697,12 @@ export async function pushSettingsToSupabase(settings: HospitalSettings) {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('hospital_settings').upsert({
+    const existing = await supabase.from('hospital_settings').select('id').limit(1).maybeSingle();
+    let idToUse = existing?.data?.id;
+    if (!idToUse && isValidUUID(settings.id)) {
+      idToUse = settings.id;
+    }
+    const payload: any = {
       hospital_name: settings.hospital_name,
       address: settings.address,
       phone: settings.phone,
@@ -959,27 +714,14 @@ export async function pushSettingsToSupabase(settings: HospitalSettings) {
       low_stock_days_warning: settings.low_stock_days_warning,
       expiry_days_warning: settings.expiry_days_warning,
       updated_at: new Date().toISOString(),
-    });
+    };
+    if (idToUse) payload.id = idToUse;
+    await supabase.from('hospital_settings').upsert(payload);
   } catch (e) {
     console.warn('Failed to push settings to Supabase:', e);
   }
 }
 
-// ── Wire HMSStore push & delete hooks to Supabase ──
-if (typeof window !== 'undefined') {
-  HMSStore._onSaveUser = pushUserToSupabase;
-  HMSStore._onDeleteUser = deleteUserFromSupabase;
-  HMSStore._onSavePatient = pushPatientToSupabase;
-  HMSStore._onDeletePatient = deletePatientFromSupabase;
-  HMSStore._onSaveVisit = pushVisitToSupabase;
-  HMSStore._onDeleteVisit = deleteVisitFromSupabase;
-  HMSStore._onSaveDrug = pushDrugToSupabase;
-  HMSStore._onDeleteDrug = deleteDrugFromSupabase;
-  HMSStore._onSavePrescription = pushPrescriptionToSupabase;
-  HMSStore._onDeletePrescription = deletePrescriptionFromSupabase;
-  HMSStore._onSaveDispensing = pushDispensingToSupabase;
-  HMSStore._onSaveAdmission = pushAdmissionToSupabase;
-  HMSStore._onSaveSettings = pushSettingsToSupabase;
-  HMSStore._onPurgeAll = purgeAllRecordsFromSupabase;
-}
+
+
 

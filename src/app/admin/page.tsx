@@ -33,9 +33,8 @@ import {
   usePrescriptions,
   useDoctors,
 } from '@/lib/query/hooks';
-import { HMSStore, UserAccount } from '@/lib/store/hms-store';
+import type { UserAccount } from '@/lib/types/database';
 import {
-  syncFromSupabase,
   pushUserToSupabase,
   deleteUserFromSupabase,
   pushPatientToSupabase,
@@ -131,15 +130,13 @@ export default function AdminPage() {
 
   async function handleManualSync() {
     setIsManualSyncing(true);
-    await syncFromSupabase();
-    queryClient.invalidateQueries();
+    await queryClient.refetchQueries();
     setIsManualSyncing(false);
   }
 
   // Handlers for Staff
   async function handleToggleUserActive(user: UserAccount) {
     const updated = { ...user, is_active: !user.is_active };
-    HMSStore.saveUser(updated);
     await pushUserToSupabase(updated);
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
@@ -148,7 +145,6 @@ export default function AdminPage() {
   async function handleSaveUserEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
-    HMSStore.saveUser(editingUser);
     await pushUserToSupabase(editingUser);
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
@@ -158,7 +154,6 @@ export default function AdminPage() {
   async function handleDeleteUserConfirm() {
     if (!deletingUser) return;
     const uid = deletingUser.id;
-    HMSStore.deleteUser(uid);
     queryClient.setQueriesData<any[]>({ queryKey: queryKeys.users.all }, (old) =>
       old ? old.filter((u) => u.id !== uid) : []
     );
@@ -175,7 +170,6 @@ export default function AdminPage() {
   async function handleSavePatientEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingPatient) return;
-    HMSStore.savePatient(editingPatient);
     await pushPatientToSupabase(editingPatient);
     queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
     setEditingPatient(null);
@@ -184,7 +178,6 @@ export default function AdminPage() {
   async function handleDeletePatientConfirm() {
     if (!deletingPatient) return;
     const pid = deletingPatient.id;
-    HMSStore.deletePatient(pid);
     queryClient.setQueriesData<Patient[]>({ queryKey: queryKeys.patients.all }, (old) =>
       old ? old.filter((p) => p.id !== pid) : []
     );
@@ -200,7 +193,6 @@ export default function AdminPage() {
   // Delete Visit
   async function handleDeleteVisit(v: Visit) {
     if (confirm(`Delete visit ${v.visit_number}?`)) {
-      HMSStore.deleteVisit(v.id);
       queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
         old ? old.filter((x) => x.id !== v.id) : []
       );
@@ -212,7 +204,6 @@ export default function AdminPage() {
   // Delete Prescription
   async function handleDeleteRx(rxId: string) {
     if (confirm('Permanently delete this prescription?')) {
-      HMSStore.deletePrescription(rxId);
       queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
         old ? old.filter((x) => x.id !== rxId) : []
       );
@@ -225,7 +216,6 @@ export default function AdminPage() {
   // Delete Drug
   async function handleDeleteDrug(d: Drug) {
     if (confirm(`Delete drug ${d.name} from inventory?`)) {
-      HMSStore.deleteDrug(d.id);
       queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
         old ? old.filter((x) => x.id !== d.id) : []
       );
@@ -237,7 +227,6 @@ export default function AdminPage() {
   // Purge Records
   async function handlePurgeAll() {
     if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
-      HMSStore.resetAllData();
       queryClient.setQueriesData({ queryKey: queryKeys.patients.all }, () => []);
       queryClient.setQueriesData({ queryKey: queryKeys.visits.all }, () => []);
       queryClient.setQueriesData({ queryKey: queryKeys.prescriptions.all }, () => []);

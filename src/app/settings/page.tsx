@@ -8,7 +8,6 @@ import { useHospitalSettings } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { HMSStore } from '@/lib/store/hms-store';
 import type { HospitalSettings } from '@/lib/types/database';
 
 export default function SettingsPage() {
@@ -48,7 +47,6 @@ export default function SettingsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    HMSStore.saveSettings(form);
 
     const supabase = createClient();
     const validId = (form.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form.id))

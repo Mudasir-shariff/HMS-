@@ -3,13 +3,27 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { canAccess, ROLE_HOME } from '@/lib/auth/roles';
 import type { UserRole } from '@/lib/types/database';
 
-const PUBLIC_PATHS = ['/login', '/register', '/privacy-policy', '/terms-and-conditions'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/privacy-policy',
+  '/terms-and-conditions',
+  '/manifest.webmanifest',
+  '/manifest.json',
+  '/favicon.ico',
+  '/icon.png',
+  '/apple-icon.png',
+  '/sw.js',
+  '/api/health',
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isPublicPath = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+
   // 1. Allow public authentication and information endpoints always
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (isPublicPath) {
     return NextResponse.next();
   }
 
@@ -90,11 +104,24 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // 3. In Standalone / Local mode (using cookies set on login):
-  const roleCookie = request.cookies.get('hms_role')?.value as UserRole | undefined;
+  // 3. Fallback / Cookie session check (e.g. from session cookie or role cookie):
+  let roleCookie = request.cookies.get('hms_role')?.value as UserRole | undefined;
+  if (!roleCookie) {
+    const sessionCookie = request.cookies.get('hms_session_user')?.value;
+    if (sessionCookie) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(sessionCookie));
+        if (parsed?.role) {
+          roleCookie = parsed.role as UserRole;
+        }
+      } catch {
+        // invalid cookie
+      }
+    }
+  }
 
   // If no session and no role cookie on protected path, redirect to login
-  if (!roleCookie && !PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (!roleCookie && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
@@ -108,6 +135,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icon-.*\\.png|.*\\.svg).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest\\.webmanifest|manifest\\.json|sw\\.js|[^/]+\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
   ],
 };

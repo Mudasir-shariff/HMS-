@@ -35,7 +35,10 @@ export interface User {
   opd_timings?: string;
   is_active: boolean;
   created_at: string;
+  password?: string;
 }
+
+export type UserAccount = User;
 
 export interface Doctor {
   id: string;

@@ -48,7 +48,8 @@ A modern, fast, paperless Hospital Management System built with **Next.js 16**, 
 - **UI Library**: [React 19](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Backend / Database**: Supabase SSR ready + LocalStorage offline-first resilience
+- **Backend / Database**: Supabase SSR + Supabase Realtime live synchronization
+- **State & Caching**: TanStack React Query v5 (zero-latency, query invalidation on mutation)
 - **Package Manager**: [pnpm](https://pnpm.io/)
 
 ---
@@ -71,7 +72,7 @@ Copy the example environment configuration:
 ```bash
 cp .env.local.example .env.local
 ```
-Add your Supabase project URL and Anon key if connecting to a cloud database, or run completely offline with built-in resilient local storage.
+Add your Supabase project URL and Anon key to connect to your Supabase Postgres database.
 
 ### 4. Run Development Server
 ```bash

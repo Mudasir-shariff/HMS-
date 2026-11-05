@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/client';
-import { HMSStore } from '@/lib/store/hms-store';
 import type {
   Patient,
   Visit,
@@ -15,10 +14,13 @@ import type {
   HospitalSettings,
 } from '@/lib/types/database';
 
+function isValidUUID(id?: string | null): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 /**
  * Fast network timeout helper (7 seconds).
- * Safely catches network rejections (DNS failure, offline, timeouts) so
- * promises never throw and always cleanly fall back to local store.
  */
 async function withTimeout<T>(promise: PromiseLike<T>, ms = 7000): Promise<T | null> {
   let timer: any;
@@ -33,7 +35,7 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms = 7000): Promise<T | n
       })
       .catch((err) => {
         clearTimeout(timer);
-        console.debug('Network query caught error / offline:', err?.message || err);
+        console.warn('Network query error:', err?.message || err);
         return null;
       }),
     timeoutPromise,
@@ -50,45 +52,11 @@ export async function fetchUserProfiles(): Promise<User[]> {
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
     );
-    const data = res?.data;
-    const error = res?.error;
-
-    if (error || !data) {
-      const local = HMSStore.getUsers();
-      return (local || []).map((u) => ({
-        id: u.id,
-        email: u.email,
-        full_name: u.full_name,
-        role: u.role,
-        phone: u.phone,
-        specialization: u.specialization,
-        consultation_room: u.consultation_room,
-        consultation_fee: u.consultation_fee,
-        opd_timings: u.opd_timings,
-        is_active: u.is_active,
-        created_at: u.created_at,
-      }));
-    }
-
-    if (data.length > 0) {
-      HMSStore.setUsers(data as any);
-    }
-    return data;
-  } catch {
-    const local = HMSStore.getUsers();
-    return (local || []).map((u) => ({
-      id: u.id,
-      email: u.email,
-      full_name: u.full_name,
-      role: u.role,
-      phone: u.phone,
-      specialization: u.specialization,
-      consultation_room: u.consultation_room,
-      consultation_fee: u.consultation_fee,
-      opd_timings: u.opd_timings,
-      is_active: u.is_active,
-      created_at: u.created_at,
-    }));
+    if (!res || res.error || !res.data) return [];
+    return res.data as User[];
+  } catch (err) {
+    console.error('fetchUserProfiles error:', err);
+    return [];
   }
 }
 
@@ -105,28 +73,13 @@ export async function fetchDoctors(): Promise<Doctor[]> {
     const docsRes = res?.[0]?.status === 'fulfilled' ? res[0].value : null;
     const profilesRes = res?.[1]?.status === 'fulfilled' ? res[1].value : null;
 
-    const docs = docsRes?.data;
-    const profiles = profilesRes?.data;
-
-    if (!docs && !profiles) {
-      const localDocs = HMSStore.getDoctors();
-      return (localDocs || []).map((d) => ({
-        id: d.id,
-        user_id: d.id,
-        full_name: d.full_name,
-        specialization: d.specialization,
-        consultation_room: d.consultation_room,
-        consultation_fee: d.consultation_fee ?? 500,
-        opd_timings: d.opd_timings,
-        is_available: (d as any).is_available ?? d.is_active ?? true,
-        created_at: d.created_at,
-      }));
-    }
+    const docs = docsRes?.data || [];
+    const profiles = profilesRes?.data || [];
 
     const doctorMap = new Map<string, Doctor>();
 
-    for (const doc of docs || []) {
-      const user = (profiles || []).find((p: any) => p.id === doc.user_id || p.id === doc.id);
+    for (const doc of docs) {
+      const user = profiles.find((p: any) => p.id === doc.user_id || p.id === doc.id);
       const key = doc.id || doc.user_id;
       doctorMap.set(key, {
         id: doc.id,
@@ -156,7 +109,7 @@ export async function fetchDoctors(): Promise<Doctor[]> {
       });
     }
 
-    for (const prof of profiles || []) {
+    for (const prof of profiles) {
       if (!doctorMap.has(prof.id)) {
         doctorMap.set(prof.id, {
           id: prof.id,
@@ -185,35 +138,10 @@ export async function fetchDoctors(): Promise<Doctor[]> {
       }
     }
 
-    const result = Array.from(doctorMap.values());
-    if (result.length === 0) {
-      const localDocs = HMSStore.getDoctors();
-      return (localDocs || []).map((d) => ({
-        id: d.id,
-        user_id: d.id,
-        full_name: d.full_name,
-        specialization: d.specialization,
-        consultation_room: d.consultation_room,
-        consultation_fee: d.consultation_fee ?? 500,
-        opd_timings: d.opd_timings,
-        is_available: (d as any).is_available ?? d.is_active ?? true,
-        created_at: d.created_at,
-      }));
-    }
-    return result;
-  } catch {
-    const localDocs = HMSStore.getDoctors();
-    return (localDocs || []).map((d) => ({
-      id: d.id,
-      user_id: d.id,
-      full_name: d.full_name,
-      specialization: d.specialization,
-      consultation_room: d.consultation_room,
-      consultation_fee: d.consultation_fee ?? 500,
-      opd_timings: d.opd_timings,
-      is_available: (d as any).is_available ?? d.is_active ?? true,
-      created_at: d.created_at,
-    }));
+    return Array.from(doctorMap.values());
+  } catch (err) {
+    console.error('fetchDoctors error:', err);
+    return [];
   }
 }
 
@@ -222,54 +150,20 @@ export async function fetchPatients(search?: string): Promise<Patient[]> {
     const supabase = createClient();
     let query = supabase.from('patients').select('*').is('deleted_at', null).order('created_at', { ascending: false });
 
-    if (search && search.trim()) {
-      const s = search.trim();
-      query = query.or(`name.ilike.%${s}%,phone.ilike.%${s}%,uhid.ilike.%${s}%`);
+    if (search !== undefined && search.trim() !== '') {
+      const sanitized = search.trim().replace(/[,()]/g, '');
+      if (!sanitized) {
+        return [];
+      }
+      query = query.or(`name.ilike.%${sanitized}%,phone.ilike.%${sanitized}%,uhid.ilike.%${sanitized}%`);
     }
 
     const res = await withTimeout(query);
-    const data = res?.data;
-    const error = res?.error;
-
-    if (error || !data) {
-      const local = HMSStore.getPatients();
-      if (search && search.trim()) {
-        const s = search.trim().toLowerCase();
-        return local.filter(
-          (p) =>
-            p.name.toLowerCase().includes(s) ||
-            p.phone.includes(s) ||
-            p.uhid.toLowerCase().includes(s)
-        );
-      }
-      return local || [];
-    }
-
-    // Merge with local patients so newly registered patients on this device appear instantly
-    const localPatients = HMSStore.getPatients();
-    const patMap = new Map<string, Patient>();
-    data.forEach((p) => patMap.set(p.id, p));
-    localPatients.forEach((lp) => {
-      if (!patMap.has(lp.id)) patMap.set(lp.id, lp);
-    });
-
-    const merged = Array.from(patMap.values());
-    if (!search) {
-      HMSStore.setPatients(merged);
-    }
-    return merged;
-  } catch {
-    const local = HMSStore.getPatients();
-    if (search && search.trim()) {
-      const s = search.trim().toLowerCase();
-      return local.filter(
-        (p) =>
-          p.name.toLowerCase().includes(s) ||
-          p.phone.includes(s) ||
-          p.uhid.toLowerCase().includes(s)
-      );
-    }
-    return local || [];
+    if (!res || res.error || !res.data) return [];
+    return res.data as Patient[];
+  } catch (err) {
+    console.error('fetchPatients error:', err);
+    return [];
   }
 }
 
@@ -293,7 +187,7 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
       .is('deleted_at', null)
       .order('token_number', { ascending: true });
 
-    if (filters?.doctorId) {
+    if (filters?.doctorId && isValidUUID(filters.doctorId)) {
       query = query.eq('doctor_id', filters.doctorId);
     }
     if (filters?.status) {
@@ -301,17 +195,9 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
     }
 
     const res = await withTimeout(query);
-    const data = res?.data;
-    const error = res?.error;
+    if (!res || res.error || !res.data) return [];
 
-    if (error || !data) {
-      let local = HMSStore.getVisits();
-      if (filters?.doctorId) local = local.filter((v) => v.doctor_id === filters.doctorId);
-      if (filters?.status) local = local.filter((v) => v.status === filters.status);
-      return local || [];
-    }
-
-    const dbVisits: Visit[] = data.map((v: any) => ({
+    return res.data.map((v: any) => ({
       id: v.id,
       visit_number: v.visit_number,
       patient_id: v.patient_id,
@@ -323,44 +209,9 @@ export async function fetchVisits(filters?: { doctorId?: string; status?: string
       created_at: v.created_at,
       updated_at: v.updated_at || v.created_at,
     }));
-
-    // Guaranteed consistency: Merge local visits with DB
-    // If a visit was moved to 'prescribed' by Doctor, KEEP 'prescribed' so Pharmacy queue sees it!
-    const localVisits = HMSStore.getVisits();
-    const visitMap = new Map<string, Visit>();
-    dbVisits.forEach((v) => visitMap.set(v.id, v));
-
-    localVisits.forEach((lv) => {
-      const existing = visitMap.get(lv.id);
-      if (!existing) {
-        visitMap.set(lv.id, lv);
-      } else {
-        if (
-          lv.status === 'prescribed' &&
-          existing.status !== 'prescribed' &&
-          existing.status !== 'dispensed' &&
-          existing.status !== 'completed'
-        ) {
-          visitMap.set(lv.id, { ...existing, status: 'prescribed' });
-        }
-      }
-    });
-
-    const finalVisits = Array.from(visitMap.values()).sort((a, b) => a.token_number - b.token_number);
-    if (!filters?.doctorId && !filters?.status) {
-      HMSStore.setVisits(finalVisits);
-    }
-
-    let results = finalVisits;
-    if (filters?.doctorId) results = results.filter((v) => v.doctor_id === filters.doctorId);
-    if (filters?.status) results = results.filter((v) => v.status === filters.status);
-    return results;
   } catch (err) {
-    console.warn('fetchVisits exception, using local store:', err);
-    let local = HMSStore.getVisits();
-    if (filters?.doctorId) local = local.filter((v) => v.doctor_id === filters.doctorId);
-    if (filters?.status) local = local.filter((v) => v.status === filters.status);
-    return local || [];
+    console.error('fetchVisits error:', err);
+    return [];
   }
 }
 
@@ -368,7 +219,7 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
   try {
     const supabase = createClient();
     let rxQuery = supabase.from('prescriptions').select('*').is('deleted_at', null).order('created_at', { ascending: false });
-    if (visitId) {
+    if (visitId && isValidUUID(visitId)) {
       rxQuery = rxQuery.eq('visit_id', visitId);
     }
 
@@ -385,15 +236,13 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     const labsSettled = res?.[2]?.status === 'fulfilled' ? res[2].value : null;
 
     if (!rxSettled || rxSettled.error || !rxSettled.data) {
-      let local = HMSStore.getPrescriptions();
-      if (visitId) local = local.filter((p) => p.visit_id === visitId);
-      return local || [];
+      return [];
     }
 
     const allItems = itemsSettled?.data || [];
     const allLabs = labsSettled?.data || [];
 
-    const dbPrescriptions: Prescription[] = rxSettled.data.map((r: any) => ({
+    return rxSettled.data.map((r: any) => ({
       id: r.id,
       visit_id: r.visit_id,
       doctor_id: r.doctor_id,
@@ -432,30 +281,9 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
           created_at: lt.created_at,
         })),
     }));
-
-    // Merge with local store so any prescription created by Doctor on this system is NEVER lost
-    const local = HMSStore.getPrescriptions();
-    const rxMap = new Map<string, Prescription>();
-    dbPrescriptions.forEach((r) => rxMap.set(r.id, r));
-    local.forEach((lr) => {
-      const existing = rxMap.get(lr.id);
-      if (!existing) {
-        rxMap.set(lr.id, lr);
-      } else if ((!existing.items || existing.items.length === 0) && lr.items && lr.items.length > 0) {
-        rxMap.set(lr.id, { ...existing, items: lr.items });
-      }
-    });
-
-    const merged = Array.from(rxMap.values());
-    if (!visitId) {
-      HMSStore.setPrescriptions(merged);
-    }
-    return visitId ? merged.filter((p) => p.visit_id === visitId) : merged;
   } catch (err) {
-    console.warn('fetchPrescriptions exception, using local store:', err);
-    let local = HMSStore.getPrescriptions();
-    if (visitId) local = local.filter((p) => p.visit_id === visitId);
-    return local || [];
+    console.error('fetchPrescriptions error:', err);
+    return [];
   }
 }
 
@@ -465,14 +293,9 @@ export async function fetchDrugs(): Promise<Drug[]> {
     const res = await withTimeout(
       supabase.from('drugs').select('*').is('deleted_at', null).order('name', { ascending: true })
     );
-    const data = res?.data;
-    const error = res?.error;
+    if (!res || res.error || !res.data) return [];
 
-    if (error || !data) {
-      return HMSStore.getDrugs() || [];
-    }
-
-    const mappedDrugs: Drug[] = data.map((d: any) => ({
+    return res.data.map((d: any) => ({
       id: d.id,
       name: d.name,
       drug_type: d.drug_type,
@@ -494,13 +317,9 @@ export async function fetchDrugs(): Promise<Drug[]> {
       created_at: d.created_at,
       updated_at: d.updated_at || d.created_at,
     }));
-
-    if (mappedDrugs.length > 0) {
-      HMSStore.setDrugs(mappedDrugs);
-    }
-    return mappedDrugs;
-  } catch {
-    return HMSStore.getDrugs() || [];
+  } catch (err) {
+    console.error('fetchDrugs error:', err);
+    return [];
   }
 }
 
@@ -518,11 +337,11 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
     const itemsSettled = res?.[1]?.status === 'fulfilled' ? res[1].value : null;
 
     if (!dispSettled || dispSettled.error || !dispSettled.data) {
-      return HMSStore.getDispensings() || [];
+      return [];
     }
 
     const allItems = itemsSettled?.data || [];
-    const mappedDisp = dispSettled.data.map((d: any) => ({
+    return dispSettled.data.map((d: any) => ({
       id: d.id,
       prescription_id: d.prescription_id || undefined,
       patient_id: d.patient_id || undefined,
@@ -550,20 +369,9 @@ export async function fetchDispensings(): Promise<Dispensing[]> {
           created_at: it.created_at,
         })),
     }));
-
-    // Merge with local dispensings so recent sales remain visible
-    const localDisp = HMSStore.getDispensings();
-    const dispMap = new Map<string, Dispensing>();
-    mappedDisp.forEach((d) => dispMap.set(d.id, d));
-    localDisp.forEach((ld) => {
-      if (!dispMap.has(ld.id)) dispMap.set(ld.id, ld);
-    });
-
-    const finalDisp = Array.from(dispMap.values());
-    HMSStore.setDispensings(finalDisp);
-    return finalDisp;
-  } catch {
-    return HMSStore.getDispensings() || [];
+  } catch (err) {
+    console.error('fetchDispensings error:', err);
+    return [];
   }
 }
 
@@ -571,13 +379,11 @@ export async function fetchWards(): Promise<Ward[]> {
   try {
     const supabase = createClient();
     const res = await withTimeout(supabase.from('wards').select('*').order('name', { ascending: true }));
-    const data = res?.data;
-    const error = res?.error;
-    if (error || !data) return HMSStore.getWards() || [];
-    HMSStore.setWards(data);
-    return data;
-  } catch {
-    return HMSStore.getWards() || [];
+    if (!res || res.error || !res.data) return [];
+    return res.data as Ward[];
+  } catch (err) {
+    console.error('fetchWards error:', err);
+    return [];
   }
 }
 
@@ -585,10 +391,8 @@ export async function fetchBeds(): Promise<Bed[]> {
   try {
     const supabase = createClient();
     const res = await withTimeout(supabase.from('beds').select('*').order('bed_number', { ascending: true }));
-    const data = res?.data;
-    const error = res?.error;
-    if (error || !data) return HMSStore.getBeds() || [];
-    const beds = data.map((b: any) => ({
+    if (!res || res.error || !res.data) return [];
+    return res.data.map((b: any) => ({
       id: b.id,
       ward_id: b.ward_id,
       bed_number: b.bed_number,
@@ -596,10 +400,9 @@ export async function fetchBeds(): Promise<Bed[]> {
       is_occupied: Boolean(b.is_occupied),
       created_at: b.created_at,
     }));
-    HMSStore.setBeds(beds);
-    return beds;
-  } catch {
-    return HMSStore.getBeds() || [];
+  } catch (err) {
+    console.error('fetchBeds error:', err);
+    return [];
   }
 }
 
@@ -607,13 +410,11 @@ export async function fetchAdmissions(): Promise<Admission[]> {
   try {
     const supabase = createClient();
     const res = await withTimeout(supabase.from('admissions').select('*').order('created_at', { ascending: false }));
-    const data = res?.data;
-    const error = res?.error;
-    if (error || !data) return HMSStore.getAdmissions() || [];
-    HMSStore.setAdmissions(data);
-    return data;
-  } catch {
-    return HMSStore.getAdmissions() || [];
+    if (!res || res.error || !res.data) return [];
+    return res.data as Admission[];
+  } catch (err) {
+    console.error('fetchAdmissions error:', err);
+    return [];
   }
 }
 
@@ -621,12 +422,9 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
   try {
     const supabase = createClient();
     const res = await withTimeout(supabase.from('hospital_settings').select('*').limit(1).maybeSingle());
-    const data = res?.data;
-    const error = res?.error;
-    if (error || !data) {
-      return HMSStore.getSettings();
-    }
-    const settings: HospitalSettings = {
+    if (!res || res.error || !res.data) return null;
+    const data = res.data;
+    return {
       id: data.id,
       hospital_name: data.hospital_name || 'RADHAKRISHNA HOSPITAL',
       address: data.address || '',
@@ -644,9 +442,8 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
       expiry_days_warning: data.expiry_days_warning || [90, 60, 30],
       updated_at: data.updated_at || new Date().toISOString(),
     };
-    HMSStore.saveSettings(settings);
-    return settings;
-  } catch {
-    return HMSStore.getSettings();
+  } catch (err) {
+    console.error('fetchSettings error:', err);
+    return null;
   }
 }

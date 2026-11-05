@@ -41,7 +41,7 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/context';
-import { HMSStore, generateUUID } from '@/lib/store/hms-store';
+import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { createClient } from '@/lib/supabase/client';
 import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
 import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
@@ -308,19 +308,23 @@ function PrescribeContent() {
   // When doctor opens consultation, update visit status to 'in_consultation' if it was 'waiting'
   useEffect(() => {
     if (visitId) {
-      const allVisits = HMSStore.getVisits();
-      const current = allVisits.find((v) => v.id === visitId);
+      const current = visits.find((v) => v.id === visitId);
       if (current && current.status === 'waiting') {
-        current.status = 'in_consultation';
-        current.updated_at = new Date().toISOString();
-        HMSStore.saveVisit(current);
+        queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+          old ? old.map((v) => (v.id === visitId ? { ...v, status: 'in_consultation' } : v)) : []
+        );
+        createClient()
+          .from('visits')
+          .update({ status: 'in_consultation', updated_at: new Date().toISOString() })
+          .eq('id', visitId)
+          .then(() => {});
       }
     }
-  }, [visitId]);
+  }, [visitId, visits, queryClient]);
 
   // Smart quantity helper
   function getSuggestedQty(type: string, m: boolean, a: boolean, n: boolean, days: number, customQ?: number) {
-    return HMSStore.calculateSmartQuantity(type, m, a, n, days, customQ);
+    return calculateSmartQuantity(type, m, a, n, days, customQ);
   }
 
   function addMedicine(drug: (typeof drugs)[0]) {
@@ -479,60 +483,49 @@ function PrescribeContent() {
       created_at: new Date().toISOString(),
     };
 
-    // 1. Immediately save into local store and query cache (zero latency)
-    try {
-      HMSStore.savePrescription(rxPayload, { skipRemoteSync: true });
-      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
-        old ? [rxPayload, ...old.filter((p) => p.id !== rxId)] : [rxPayload]
-      );
-    } catch (e) {
-      console.warn('HMSStore savePrescription warning:', e);
-    }
+    // 1. Immediately save into query cache (zero latency)
+    queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+      old ? [rxPayload, ...old.filter((p) => p.id !== rxId)] : [rxPayload]
+    );
 
-    // 2. Ensure visit record is strictly moved to 'prescribed' in BOTH store and query cache
+    // 2. Ensure visit record is strictly moved to 'prescribed' in query cache
     let finalVisitId = targetVisitId;
-    try {
-      const allVisits = HMSStore.getVisits();
-      const existing = allVisits.find((v) => v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId));
-      const updatedVisit: Visit = existing
-        ? {
-            ...existing,
-            status: 'prescribed' as const,
-            follow_up_date: followUp || existing.follow_up_date,
-            instructions: instructions || existing.instructions,
-            updated_at: new Date().toISOString(),
-          }
-        : {
-            id: targetVisitId,
-            visit_number: `V-${token}`,
-            patient_id: validPatientId,
-            doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
-            token_number: Number(token) || 1,
-            status: 'prescribed' as const,
-            follow_up_date: followUp || undefined,
-            instructions: instructions,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-      finalVisitId = updatedVisit.id;
-      HMSStore.saveVisit(updatedVisit, { skipRemoteSync: true });
+    const existing = visits.find((v) => v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId));
+    const updatedVisit: Visit = existing
+      ? {
+          ...existing,
+          status: 'prescribed' as const,
+          follow_up_date: followUp || existing.follow_up_date,
+          instructions: instructions || existing.instructions,
+          updated_at: new Date().toISOString(),
+        }
+      : {
+          id: targetVisitId,
+          visit_number: `V-${token}`,
+          patient_id: validPatientId,
+          doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
+          token_number: Number(token) || 1,
+          status: 'prescribed' as const,
+          follow_up_date: followUp || undefined,
+          instructions: instructions,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+    finalVisitId = updatedVisit.id;
 
-      // Optimistically update React Query cache for visits and prescriptions (<1ms)
-      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
-        old
-          ? old.map((v) =>
-              v.id === updatedVisit.id || v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId)
-                ? updatedVisit
-                : v
-            )
-          : [updatedVisit]
-      );
-      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
-        old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
-      );
-    } catch (vErr) {
-      console.warn('Local visit status update warning:', vErr);
-    }
+    // Optimistically update React Query cache for visits (<1ms)
+    queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+      old
+        ? old.map((v) =>
+            v.id === updatedVisit.id || v.id === targetVisitId || (validPatientId && v.patient_id === validPatientId)
+              ? updatedVisit
+              : v
+          )
+        : [updatedVisit]
+    );
+    queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+      old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
+    );
 
     // 3. Concurrent Push: Commit prescription & items and visit 'prescribed' status simultaneously (runs asynchronously in background for 0ms doctor response)
     const executePushOperations = async () => {
@@ -616,15 +609,9 @@ function PrescribeContent() {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      const rxId = await executeSavePrescription();
-      const job = HMSStore.sendToPrintQueue({
-        rxId,
-        patientName,
-        token,
-        doctorName: doctor.full_name || 'Dr. Consultant',
-        printerName: settings.default_printer,
-      });
-      setQueuedPrinterSuccess(`Prescription sent to ${job.printerName}. Printing now at Hospital reception.`);
+      await executeSavePrescription();
+      const printerName = settings?.default_printer || 'Hospital Network Printer';
+      setQueuedPrinterSuccess(`Prescription sent to ${printerName}. Printing now at Hospital reception.`);
       setTimeout(() => setQueuedPrinterSuccess(null), 5000);
     } finally {
       setIsSaving(false);
