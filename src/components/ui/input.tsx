@@ -13,11 +13,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, hint, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs text-[var(--text-muted)]"
+            className="text-[13px] font-medium text-[var(--text-strong)]"
           >
             {label}
           </label>
@@ -26,22 +26,22 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-body)]',
-            'border transition-all duration-150',
+            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-strong)]',
+            'border shadow-2xs transition-all duration-150',
             'placeholder:text-[var(--text-faint)]',
-            'focus:outline-none focus:ring-[3px]',
+            'focus:outline-none focus:ring-2',
             error
-              ? 'border-[var(--danger)] focus:ring-[var(--danger-bg)]'
-              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(122,154,95,0.25)]',
+              ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[rgba(220,38,38,0.25)]'
+              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(13,148,136,0.25)]',
             className
           )}
           {...props}
         />
         {error && (
-          <p className="text-xs text-[var(--danger)]">{error}</p>
+          <p className="text-xs font-medium text-[var(--danger)] flex items-center gap-1">{error}</p>
         )}
         {hint && !error && (
-          <p className="text-xs text-[var(--text-faint)]">{hint}</p>
+          <p className="text-xs text-[var(--text-muted)]">{hint}</p>
         )}
       </div>
     );
@@ -61,11 +61,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ label, error, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs text-[var(--text-muted)]"
+            className="text-[13px] font-medium text-[var(--text-strong)]"
           >
             {label}
           </label>
@@ -74,19 +74,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'w-full rounded-[var(--r-control)] bg-white p-3 text-base sm:text-sm text-[var(--text-body)]',
-            'border transition-all duration-150 resize-y min-h-[88px]',
+            'w-full rounded-[var(--r-control)] bg-white p-3 text-base sm:text-sm text-[var(--text-strong)]',
+            'border shadow-2xs transition-all duration-150 resize-y min-h-[88px]',
             'placeholder:text-[var(--text-faint)]',
-            'focus:outline-none focus:ring-[3px]',
+            'focus:outline-none focus:ring-2',
             error
-              ? 'border-[var(--danger)] focus:ring-[var(--danger-bg)]'
-              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(122,154,95,0.25)]',
+              ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[rgba(220,38,38,0.25)]'
+              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(13,148,136,0.25)]',
             className
           )}
           {...props}
         />
         {error && (
-          <p className="text-xs text-[var(--danger)]">{error}</p>
+          <p className="text-xs font-medium text-[var(--danger)] flex items-center gap-1">{error}</p>
         )}
       </div>
     );
@@ -108,11 +108,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ label, error, options, placeholder, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs text-[var(--text-muted)]"
+            className="text-[13px] font-medium text-[var(--text-strong)]"
           >
             {label}
           </label>
@@ -121,14 +121,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-body)]',
-            'border transition-all duration-150 appearance-none',
-            'bg-[url("data:image/svg+xml,%3csvg%20xmlns%3d%27http%3a%2f%2fwww.w3.org%2f2000%2fsvg%27%20fill%3d%27none%27%20viewBox%3d%270%200%2020%2020%27%3e%3cpath%20stroke%3d%27%236F776B%27%20stroke-linecap%3d%27round%27%20stroke-linejoin%3d%27round%27%20stroke-width%3d%271.5%27%20d%3d%27M6%208l4%204%204-4%27%2f%3e%3c%2fsvg%3e")]',
-            'bg-[length:20px_20px] bg-[right_8px_center] bg-no-repeat pr-8',
-            'focus:outline-none focus:ring-[3px]',
+            'h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-base sm:text-sm text-[var(--text-strong)]',
+            'border shadow-2xs transition-all duration-150 appearance-none',
+            'bg-[url("data:image/svg+xml,%3csvg%20xmlns%3d%27http%3a%2f%2fwww.w3.org%2f2000%2fsvg%27%20fill%3d%27none%27%20viewBox%3d%270%200%2020%2020%27%3e%3cpath%20stroke%3d%27%23475569%27%20stroke-linecap%3d%27round%27%20stroke-linejoin%3d%27round%27%20stroke-width%3d%271.5%27%20d%3d%27M6%208l4%204%204-4%27%2f%3e%3c%2fsvg%3e")]',
+            'bg-[length:20px_20px] bg-[right_10px_center] bg-no-repeat pr-9 cursor-pointer',
+            'focus:outline-none focus:ring-2',
             error
-              ? 'border-[var(--danger)] focus:ring-[var(--danger-bg)]'
-              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(122,154,95,0.25)]',
+              ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[rgba(220,38,38,0.25)]'
+              : 'border-[var(--line-soft)] focus:border-[var(--green-600)] focus:ring-[rgba(13,148,136,0.25)]',
             className
           )}
           {...(props as React.SelectHTMLAttributes<HTMLSelectElement>)}
@@ -145,7 +145,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ))}
         </select>
         {error && (
-          <p className="text-xs text-[var(--danger)]">{error}</p>
+          <p className="text-xs font-medium text-[var(--danger)] flex items-center gap-1">{error}</p>
         )}
       </div>
     );
@@ -166,7 +166,7 @@ export function Checkbox({ label, className, id, ...props }: CheckboxProps) {
     <label
       htmlFor={inputId}
       className={clsx(
-        'inline-flex items-center gap-2 cursor-pointer select-none',
+        'inline-flex items-center gap-2.5 cursor-pointer select-none py-0.5',
         className
       )}
     >
@@ -174,14 +174,14 @@ export function Checkbox({ label, className, id, ...props }: CheckboxProps) {
         type="checkbox"
         id={inputId}
         className={clsx(
-          'h-5 w-5 rounded-[6px] border border-[var(--line-soft)]',
+          'h-5 w-5 rounded-[6px] border border-[var(--line-strong)]',
           'checked:bg-[var(--green-900)] checked:border-[var(--green-900)]',
           'focus:ring-2 focus:ring-[var(--green-600)] focus:ring-offset-2',
           'transition-all duration-150 cursor-pointer accent-[var(--green-900)]'
         )}
         {...props}
       />
-      <span className="text-sm text-[var(--text-body)]">{label}</span>
+      <span className="text-sm font-medium text-[var(--text-strong)]">{label}</span>
     </label>
   );
 }

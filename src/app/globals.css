@@ -1,51 +1,66 @@
 @import "tailwindcss";
 
-/* ── Design Tokens (from Design.md "Soft Sage Clinical") ── */
+/* ── Design Tokens (Modern Premium Clinical Palette) ── */
 :root {
   /* surfaces */
-  --bg-canvas: #EDEDEA;
-  --bg-card:   #F8F8F6;
-  --bg-tile:   #EFEFEC;
+  --bg-canvas: #F8FAFC;
+  --bg-card:   #FFFFFF;
+  --bg-tile:   #F1F5F9;
   --bg-raised: #FFFFFF;
-  --line-soft: #E4E4DF;
+  --line-soft: #E2E8F0;
+  --line-strong: #CBD5E1;
 
-  /* text */
-  --text-strong: #10200F;
-  --text-body:   #3C463A;
-  --text-muted:  #6F776B;
-  --text-faint:  #9BA296;
+  /* text (WCAG AA/AAA compliant) */
+  --text-strong: #0F172A;
+  --text-body:   #334155;
+  --text-muted:  #64748B;
+  --text-faint:  #94A3B8;
 
-  /* brand greens */
-  --green-900: #12301A;
-  --green-700: #5F7F45;
-  --green-600: #7A9A5F;
-  --green-300: #B7C79A;
-  --sage-200:  #CDD6B5;
-  --sage-100:  #E3E9D3;
+  /* brand deep teal / medical greens */
+  --green-900: #0D5C52;
+  --green-700: #0F766E;
+  --green-600: #0D9488;
+  --green-300: #5EEAD4;
+  --sage-200:  #CCFBF1;
+  --sage-100:  #F0FDFA;
 
   /* data / chart */
-  --gold-500:  #D9B93E;
-  --lilac-300: #D9AEE0;
-  --leaf-400:  #A9C46A;
+  --gold-500:  #D97706;
+  --lilac-300: #C084FC;
+  --leaf-400:  #34D399;
 
-  /* status */
-  --info:       #4DB6E8;
-  --info-bg:    #E3F1FA;
-  --success:    #6BBF59;
-  --success-bg: #E5F2DF;
-  --danger:     #E5483D;
-  --danger-bg:  #FBE9E7;
-  --warning:    #E8A93A;
-  --warning-bg: #FBF1DC;
+  /* semantic status */
+  --info:           #0284C7;
+  --info-bg:        #F0F9FF;
+  --info-border:    #BAE6FD;
+  --info-text:      #075985;
+
+  --success:        #059669;
+  --success-bg:     #ECFDF5;
+  --success-border: #A7F3D0;
+  --success-text:   #065F46;
+
+  --danger:         #DC2626;
+  --danger-bg:      #FEF2F2;
+  --danger-border:  #FECACA;
+  --danger-text:    #991B1B;
+
+  --warning:        #D97706;
+  --warning-bg:     #FFFBEB;
+  --warning-border: #FDE68A;
+  --warning-text:   #92400E;
 
   /* shape */
-  --r-card:    24px;
-  --r-tile:    16px;
-  --r-control: 12px;
-  --r-pill:    999px;
+  --r-card:    16px;
+  --r-tile:    12px;
+  --r-control: 10px;
+  --r-pill:    9999px;
 
-  /* shadow */
-  --shadow-float: 0 4px 16px rgba(16, 32, 15, 0.08);
+  /* elevation shadows */
+  --shadow-subtle: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-card:   0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 25px -5px rgba(15, 23, 42, 0.03);
+  --shadow-float:  0 4px 20px -2px rgba(15, 23, 42, 0.08);
+  --shadow-hover:  0 10px 30px -4px rgba(15, 23, 42, 0.1);
 
   /* professional typography */
   --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -85,12 +100,14 @@
   --color-warning:    var(--warning);
   --color-warning-bg: var(--warning-bg);
 
-  --shadow-float: 0 4px 16px rgba(16, 32, 15, 0.08);
+  --shadow-float:  var(--shadow-float);
+  --shadow-card:   var(--shadow-card);
+  --shadow-subtle: var(--shadow-subtle);
 
-  --radius-card:    24px;
-  --radius-tile:    16px;
-  --radius-control: 12px;
-  --radius-pill:    999px;
+  --radius-card:    var(--r-card);
+  --radius-tile:    var(--r-tile);
+  --radius-control: var(--r-control);
+  --radius-pill:    var(--r-pill);
 
   --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-heading: var(--font-heading), var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -158,6 +175,16 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Respect Prefers-Reduced-Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Scrollbar styling ── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -167,25 +194,28 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--text-faint);
+  background: var(--line-strong);
   border-radius: var(--r-pill);
 }
 
 /* ── Selection ── */
 ::selection {
-  background: var(--sage-100);
+  background: var(--sage-200);
   color: var(--text-strong);
 }
 
 /* ── Utility classes for the design system ── */
 .card {
   background: var(--bg-card);
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
   padding: 24px;
 }
 
 .tile {
   background: var(--bg-tile);
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-tile);
   padding: 16px;
 }

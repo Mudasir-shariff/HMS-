@@ -252,16 +252,16 @@ export default function DoctorPage() {
               return (
                 <div
                   key={p.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3 sm:p-4 border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle transition-all"
                 >
                   {/* Left: Token + Avatar + Info */}
-                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                     {/* Token */}
-                    <div className="shrink-0 w-12 text-center bg-white rounded-[var(--r-control)] py-1.5 px-1 border border-[var(--line-soft)] shadow-2xs">
-                      <p className="text-[20px] leading-none font-bold text-[var(--green-900)] tabular-nums">
+                    <div className="shrink-0 w-14 text-center bg-[var(--sage-100)] rounded-[var(--r-tile)] py-2 px-1 border-2 border-[var(--green-600)] shadow-2xs">
+                      <p className="text-[22px] leading-none font-black text-[var(--green-900)] tabular-nums">
                         {String(p.token_number).padStart(2, '0')}
                       </p>
-                      <p className="text-[9px] text-[var(--text-faint)] mt-1 font-medium">{timeStr}</p>
+                      <p className="text-[9px] text-[var(--green-700)] mt-1 font-bold">{timeStr}</p>
                     </div>
 
                     <div className="w-px h-10 bg-[var(--line-soft)] shrink-0 hidden sm:block" />
@@ -271,20 +271,20 @@ export default function DoctorPage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{p.patientName}</span>
-                        <span className="text-xs text-[var(--text-muted)] tabular-nums">{p.patientAge}y</span>
+                        <span className="text-base font-bold text-[var(--text-strong)] leading-tight">{p.patientName}</span>
+                        <span className="text-xs text-[var(--text-muted)] font-medium tabular-nums">{p.patientAge}y</span>
                         {p.hasBP && <StatusPill variant="warning" label="BP" />}
                         {p.hasSugar && <StatusPill variant="info" label="Sugar" />}
                       </div>
 
                       <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                        <span className="font-mono text-[var(--text-strong)]">{p.patientUhid}</span>
+                        <span className="font-mono font-semibold text-[var(--text-strong)]">{p.patientUhid}</span>
                         <span>·</span>
                         <span>Visit: {p.visit_number}</span>
                         {p.pastVisits > 0 && (
                           <>
                             <span>·</span>
-                            <span className="text-[var(--green-700)] font-semibold">
+                            <span className="text-[var(--green-700)] font-bold">
                               {p.pastVisits} past visit{p.pastVisits !== 1 ? 's' : ''}
                             </span>
                           </>
@@ -300,16 +300,16 @@ export default function DoctorPage() {
                   </div>
 
                   {/* Action */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]">
                     {tab === 'queue' ? (
                       <>
                         <div className="flex items-center justify-between sm:justify-start gap-2">
                           {p.status === 'in_consultation' ? (
-                            <span className="text-[11px] bg-blue-100 text-blue-800 font-bold px-2.5 py-1 rounded-full border border-blue-300 animate-pulse">
-                              In Consultation
+                            <span className="text-xs bg-[#F0F9FF] text-[#075985] font-bold px-3 py-1 rounded-full border border-[#BAE6FD]">
+                              ● In Consultation
                             </span>
                           ) : (
-                            <span className="text-[11px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full border border-amber-200">
+                            <span className="text-xs bg-[#FFFBEB] text-[#92400E] font-semibold px-2.5 py-1 rounded-full border border-[#FDE68A]">
                               Waiting in Lobby
                             </span>
                           )}
@@ -317,7 +317,7 @@ export default function DoctorPage() {
                         <Button
                           size="sm"
                           onClick={() => handleStartConsultation(p)}
-                          className={`w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px] ${p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}`}
+                          className={`w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[38px] font-semibold shadow-xs ${p.status === 'in_consultation' ? 'bg-[var(--green-900)] text-white' : ''}`}
                           icon={<ChevronRight size={14} />}
                           iconPosition="right"
                         >
@@ -325,14 +325,14 @@ export default function DoctorPage() {
                         </Button>
                       </>
                     ) : (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto">
                         <div className="flex items-center justify-between sm:justify-start gap-2">
                           {p.status === 'prescribed' ? (
-                            <span className="text-[11px] bg-amber-100 text-amber-900 font-bold px-2.5 py-1 rounded-full border border-amber-300">
+                            <span className="text-xs bg-[#FFFBEB] text-[#92400E] font-bold px-3 py-1 rounded-full border border-[#FDE68A]">
                               💊 At Pharmacy
                             </span>
                           ) : (
-                            <span className="text-[11px] bg-emerald-100 text-emerald-900 font-bold px-2.5 py-1 rounded-full border border-emerald-300">
+                            <span className="text-xs bg-[#ECFDF5] text-[#065F46] font-bold px-3 py-1 rounded-full border border-[#A7F3D0]">
                               ✅ Dispensed
                             </span>
                           )}
@@ -343,7 +343,7 @@ export default function DoctorPage() {
                           )}&uhid=${p.patientUhid}&age=${p.patientAge}&doctorId=${activeDoctorId}`}
                           className="w-full sm:w-auto"
                         >
-                          <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]" icon={<FileText size={13} />}>
+                          <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[38px] font-semibold" icon={<FileText size={13} />}>
                             View Rx
                           </Button>
                         </Link>

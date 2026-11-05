@@ -186,82 +186,85 @@ export default function RegisterPatientPage() {
 
     return (
       <div className="py-6 max-w-xl mx-auto">
-        <PageHeader title="Patient Registered & Token Issued" />
+        <PageHeader title="Patient Registered & Token Issued" subtitle="Token issued successfully and assigned to live OPD queue" />
 
-        <Card className="text-center shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
-          <div className="flex flex-col items-center gap-4 py-4">
-            <div className="h-14 w-14 rounded-full bg-[var(--success-bg)] flex items-center justify-center">
-              <CheckCircle size={30} className="text-[var(--success)]" />
+        <Card className="text-center shadow-[var(--shadow-card)] border border-[var(--line-soft)]">
+          <div className="flex flex-col items-center gap-4 py-4 sm:py-6">
+            <div className="h-14 w-14 rounded-full bg-[var(--success-bg)] border border-[var(--success-border)] flex items-center justify-center shadow-xs">
+              <CheckCircle size={32} className="text-[var(--success)]" />
             </div>
 
-            {/* Large Token Number on Screen */}
-            <div>
-              <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+            {/* Hero Token Display on Screen */}
+            <div className="w-full flex flex-col items-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[var(--bg-tile)] border border-[var(--line-soft)] text-[var(--text-muted)]">
                 Daily Token Number
-              </p>
-              <div className="my-2 py-3 px-6 sm:px-8 bg-[var(--sage-100)] border-2 border-[var(--green-600)] rounded-[var(--r-tile)] inline-block">
-                <span className="text-5xl sm:text-7xl leading-none font-bold tabular-nums text-[var(--green-900)] tracking-tight">
+              </span>
+              <div className="my-3 py-5 px-8 sm:px-12 bg-gradient-to-b from-[var(--sage-100)] to-white border-2 border-[var(--green-600)] rounded-3xl shadow-sm inline-flex flex-col items-center justify-center ring-4 ring-[var(--sage-200)]/60">
+                <span className="text-6xl sm:text-8xl leading-none font-black tabular-nums text-[var(--green-900)] tracking-tight">
                   {tokenDisplay}
                 </span>
               </div>
-              <p className="text-sm sm:text-base font-medium text-[var(--text-strong)] mt-1">
-                Tell Patient: <strong className="text-[var(--green-700)]">Token #{tokenDisplay}</strong>
+              <p className="text-base sm:text-lg font-bold text-[var(--text-strong)] mt-1">
+                Announce / Tell Patient: <span className="text-[var(--green-700)] underline decoration-2 underline-offset-4 font-extrabold">Token #{tokenDisplay}</span>
               </p>
-              <p className="text-xs text-[var(--text-muted)]">
-                Assigned to <strong>{doctorName}</strong> in <strong>{room}</strong>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Assigned to <strong className="text-[var(--text-strong)] font-semibold">{doctorName}</strong> · Room: <strong className="text-[var(--text-strong)] font-semibold">{room}</strong>
               </p>
             </div>
 
             {/* Patient & Visit Details Tile */}
-            <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 w-full text-left space-y-2 border border-[var(--line-soft)] text-xs">
-              <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
-                <span className="font-semibold text-sm text-[var(--text-strong)]">{createdResult.patient.name}</span>
-                <span className="text-[11px] font-mono font-medium text-[var(--green-700)] bg-white px-2 py-0.5 rounded border border-[var(--line-soft)]">
+            <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 sm:p-5 w-full text-left space-y-2.5 border border-[var(--line-soft)] text-xs shadow-2xs">
+              <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2.5">
+                <span className="font-bold text-sm text-[var(--text-strong)]">{createdResult.patient.name}</span>
+                <span className="text-[11px] font-mono font-bold text-[var(--green-700)] bg-white px-2.5 py-0.5 rounded-full border border-[var(--line-soft)] shadow-2xs">
                   UHID: {createdResult.patient.uhid}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-[var(--text-body)]">
+              <div className="grid grid-cols-2 gap-3 text-[var(--text-body)]">
                 <div>
-                  <span className="text-[var(--text-muted)]">Age / Phone: </span>
-                  <span className="font-medium">{createdResult.patient.age}y · {createdResult.patient.phone}</span>
+                  <span className="text-[var(--text-muted)] font-medium">Age / Phone: </span>
+                  <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.age}y · {createdResult.patient.phone}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Blood Group: </span>
-                  <span className="font-medium">{createdResult.patient.blood_group || 'Not recorded'}</span>
+                  <span className="text-[var(--text-muted)] font-medium">Blood Group: </span>
+                  <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.blood_group || 'Not recorded'}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Visit Number: </span>
-                  <span className="font-medium font-mono">{createdResult.visit.visit_number}</span>
+                  <span className="text-[var(--text-muted)] font-medium">Visit Number: </span>
+                  <span className="font-semibold font-mono text-[var(--text-strong)]">{createdResult.visit.visit_number}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Doctor Queue: </span>
-                  <span className="font-semibold text-[var(--green-700)]">Waiting (# {tokenDisplay})</span>
+                  <span className="text-[var(--text-muted)] font-medium">Queue Status: </span>
+                  <span className="font-bold text-[var(--green-700)]">Waiting in OPD (# {tokenDisplay})</span>
                 </div>
               </div>
             </div>
 
-            {/* Note: No Paper Slip Reminder */}
-            <div className="bg-[#FAF8F2] border border-[#E8DCC4] rounded-[var(--r-control)] px-3 py-2 text-[11px] text-[#7A6020] text-left w-full">
-              ℹ️ <strong>Paperless Reception (PRD v1.1):</strong> No token slip is printed at reception. Inform the patient verbally or send the token via WhatsApp below.
+            {/* Note: Paperless Reminder */}
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[var(--r-control)] px-3.5 py-2.5 text-xs text-[#92400E] text-left w-full shadow-2xs flex items-center gap-2">
+              <span className="text-sm shrink-0">ℹ️</span>
+              <p className="leading-relaxed">
+                <strong>Paperless Reception (PRD v1.1):</strong> No physical slip is printed at reception. Communicate the token verbally or click below to WhatsApp the patient.
+              </p>
             </div>
 
-            {/* WhatsApp Send Button */}
+            {/* WhatsApp Send Button (Prominent) */}
             <a
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 h-11 px-5 rounded-[var(--r-pill)] bg-[#25D366] hover:bg-[#20BD5A] text-white text-xs font-semibold shadow-sm transition-colors"
+              className="w-full flex items-center justify-center gap-2.5 h-12 px-6 rounded-[var(--r-pill)] bg-[#25D366] hover:bg-[#20BD5A] text-white text-sm font-semibold shadow-xs hover:shadow-md transition-all duration-150 active:scale-[0.99] cursor-pointer"
             >
-              <MessageSquare size={16} />
+              <MessageSquare size={18} />
               Send Token to Patient on WhatsApp
             </a>
 
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full">
+            {/* Secondary Actions (Quieter) */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full pt-1">
               <Button
                 variant="secondary"
                 icon={<Plus size={16} />}
-                className="flex-1 w-full justify-center min-h-[42px]"
+                className="flex-1 w-full justify-center min-h-[44px]"
                 onClick={() => {
                   setCreatedResult(null);
                   setMatchedPatient(null);
@@ -283,9 +286,9 @@ export default function RegisterPatientPage() {
               </Button>
               <Link
                 href="/reception"
-                className="flex-1 w-full min-h-[42px] px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+                className="flex-1 w-full min-h-[44px] px-4 text-xs font-semibold rounded-[var(--r-control)] bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center cursor-pointer"
               >
-                Back to Reception Desk
+                Return to Reception Desk
               </Link>
             </div>
           </div>
@@ -326,14 +329,20 @@ export default function RegisterPatientPage() {
       <form onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column: Patient Details */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="lg:col-span-2 flex flex-col gap-5">
             <Card>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[20px] font-medium text-[var(--text-strong)]">Patient Identification</h3>
-                <span className="text-xs text-[var(--text-muted)]">Type phone or UHID to find existing</span>
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <div>
+                  <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                    1. Patient Identification & Demographics
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Enter phone or UHID to auto-lookup returning patients.
+                  </p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4.5">
                 <div className="sm:col-span-2">
                   <Input
                     label="Mobile Phone Number *"
@@ -383,25 +392,39 @@ export default function RegisterPatientPage() {
             </Card>
 
             <Card>
-              <h3 className="text-[20px] font-medium text-[var(--text-strong)] mb-4">Medical Flags & Comorbidities</h3>
-              <div className="flex flex-col gap-3">
-                <Checkbox
-                  label="Blood Pressure (Hypertension)"
-                  checked={form.hasBP}
-                  onChange={(e) => update('hasBP', e.target.checked)}
-                />
-                <Checkbox
-                  label="Diabetes / Blood Sugar"
-                  checked={form.hasSugar}
-                  onChange={(e) => update('hasSugar', e.target.checked)}
-                />
-                <Checkbox
-                  label="Other existing medical conditions or allergies"
-                  checked={form.hasOther}
-                  onChange={(e) => update('hasOther', e.target.checked)}
-                />
+              <div className="mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                  2. Medical Flags & Comorbidities
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Flags will be displayed prominently on the doctor&apos;s consultation queue.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3.5">
+                <div className="p-3 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] hover:border-[var(--green-600)]/40 transition-colors">
+                  <Checkbox
+                    label="Blood Pressure (Hypertension)"
+                    checked={form.hasBP}
+                    onChange={(e) => update('hasBP', e.target.checked)}
+                  />
+                </div>
+                <div className="p-3 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] hover:border-[var(--green-600)]/40 transition-colors">
+                  <Checkbox
+                    label="Diabetes / Blood Sugar"
+                    checked={form.hasSugar}
+                    onChange={(e) => update('hasSugar', e.target.checked)}
+                  />
+                </div>
+                <div className="p-3 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] hover:border-[var(--green-600)]/40 transition-colors">
+                  <Checkbox
+                    label="Other existing medical conditions or allergies"
+                    checked={form.hasOther}
+                    onChange={(e) => update('hasOther', e.target.checked)}
+                  />
+                </div>
                 {form.hasOther && (
-                  <div className="ml-7">
+                  <div className="ml-2 sm:ml-4 pl-3 border-l-2 border-[var(--green-600)]">
                     <Textarea
                       placeholder="Specify conditions, known drug allergies or medical notes..."
                       value={form.otherCondition}
@@ -415,18 +438,22 @@ export default function RegisterPatientPage() {
           </div>
 
           {/* Right Column: Doctor Assignment & Token Generation */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             <Card>
-              <h3 className="text-[18px] font-medium text-[var(--text-strong)] mb-3">Consultant Doctor</h3>
-              <p className="text-xs text-[var(--text-muted)] mb-4">
-                Select the doctor to assign this patient to. Patient will appear in their live queue immediately.
-              </p>
+              <div className="mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                  3. Consultant Doctor
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Assign doctor to immediately queue this patient.
+                </p>
+              </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3.5">
                 {doctorOptions.length === 0 ? (
-                  <div className="bg-[var(--warning-bg)] border border-[var(--warning)] p-3.5 rounded-[var(--r-control)] text-xs space-y-2">
-                    <p className="font-semibold flex items-center gap-1.5 text-[var(--text-strong)]">
-                      <AlertCircle size={14} className="text-[var(--warning)]" />
+                  <div className="bg-[var(--warning-bg)] border border-[var(--warning-border)] p-3.5 rounded-[var(--r-control)] text-xs space-y-2">
+                    <p className="font-semibold flex items-center gap-1.5 text-[var(--warning-text)]">
+                      <AlertCircle size={14} className="text-[var(--warning)] shrink-0" />
                       No Doctors Registered Yet
                     </p>
                     <p className="text-[var(--text-muted)]">
@@ -449,17 +476,23 @@ export default function RegisterPatientPage() {
                 )}
 
                 {assignedDoctor && (
-                  <div className="bg-[var(--bg-tile)] rounded-[var(--r-control)] p-3 text-xs space-y-1 border border-[var(--line-soft)]">
-                    <p className="font-semibold text-[var(--text-strong)]">{assignedDoctor.full_name}</p>
-                    <p className="text-[var(--text-muted)]">Specialization: {assignedDoctor.specialization || 'Consultant'}</p>
-                    <p className="text-[var(--text-muted)]">Room: {assignedDoctor.consultation_room || 'OPD Room'}</p>
-                    <p className="text-[var(--green-700)] font-medium">Timings: {assignedDoctor.opd_timings || '09:00 AM - 01:00 PM'}</p>
+                  <div className="bg-[var(--sage-100)] rounded-[var(--r-tile)] p-3.5 text-xs space-y-1.5 border border-[var(--sage-200)] shadow-2xs">
+                    <p className="font-bold text-sm text-[var(--green-900)]">{assignedDoctor.full_name}</p>
+                    <p className="text-[var(--text-muted)]">
+                      Specialization: <strong className="text-[var(--text-strong)]">{assignedDoctor.specialization || 'Consultant'}</strong>
+                    </p>
+                    <p className="text-[var(--text-muted)]">
+                      Room / Cabin: <strong className="text-[var(--text-strong)]">{assignedDoctor.consultation_room || 'OPD Room'}</strong>
+                    </p>
+                    <p className="text-[var(--green-700)] font-semibold pt-0.5">
+                      Timings: {assignedDoctor.opd_timings || '09:00 AM - 01:00 PM'}
+                    </p>
                   </div>
                 )}
               </div>
 
               <div className="mt-6 pt-4 border-t border-[var(--line-soft)] flex flex-col gap-2.5">
-                <Button type="submit" size="lg" className="w-full min-h-[44px]" loading={isSubmitting} disabled={isSubmitting}>
+                <Button type="submit" size="lg" className="w-full min-h-[46px] shadow-sm font-semibold" loading={isSubmitting} disabled={isSubmitting}>
                   {isSubmitting ? 'Registering...' : 'Save & Generate Token'}
                 </Button>
                 <a
@@ -468,12 +501,12 @@ export default function RegisterPatientPage() {
                     e.preventDefault();
                     window.location.href = '/reception';
                   }}
-                  className="w-full min-h-[44px] px-4 text-sm font-medium rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] active:bg-[var(--bg-canvas)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer"
+                  className="w-full min-h-[42px] px-4 text-xs font-semibold rounded-[var(--r-control)] bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center cursor-pointer"
                 >
                   Cancel & Return to Reception
                 </a>
-                <p className="text-[11px] text-[var(--text-muted)] text-center mt-1">
-                  Token displays immediately on screen (no slip printed).
+                <p className="text-[11px] text-[var(--text-muted)] text-center mt-0.5">
+                  Token displays immediately on screen (paperless flow).
                 </p>
               </div>
             </Card>

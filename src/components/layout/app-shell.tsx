@@ -119,14 +119,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-[var(--bg-canvas)]">
       {/* ── Top Bar ── */}
-      <header className="sticky top-0 z-40 h-16 bg-[var(--bg-card)] border-b border-[var(--line-soft)] pt-safe">
+      <header className="sticky top-0 z-40 h-16 bg-white/95 backdrop-blur-md border-b border-[var(--line-soft)] pt-safe shadow-xs">
         <div className="flex items-center justify-between h-full px-3 sm:px-4 lg:px-8">
           {/* Left: Brand + Mobile Toggle */}
           <div className="flex items-center gap-2 sm:gap-3">
             {navItems.length > 1 && (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] shadow-xs shrink-0"
+                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] shadow-xs shrink-0 cursor-pointer hover:bg-[var(--bg-tile)] transition-colors"
                 aria-label="Toggle menu"
               >
                 {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
@@ -141,7 +141,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="text-sm font-bold text-[var(--text-strong)] leading-tight block sm:hidden">
                   RK HMS
                 </span>
-                <span className="text-sm font-bold text-[var(--text-strong)] leading-tight hidden sm:block">
+                <span className="text-sm font-bold text-[var(--text-strong)] leading-tight hidden sm:block font-[family-name:var(--font-heading)]">
                   Radha Krishna HMS
                 </span>
                 <span className="text-[10px] text-[var(--text-muted)] font-medium hidden sm:block mt-0.5">
@@ -153,19 +153,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Center: Role-filtered Pill Navigation (Desktop) */}
           {pillNavItems.length > 1 && (
-            <nav className="hidden lg:flex items-center bg-white rounded-[var(--r-pill)] p-1 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
+            <nav className="hidden lg:flex items-center bg-white rounded-[var(--r-pill)] p-1 shadow-subtle border border-[var(--line-soft)]">
               {pillNavItems.map((item) => {
                 const Icon = ICON_MAP[item.iconName] ?? Activity;
-                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                const isExactActive = pathname === item.href;
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
                     className={clsx(
-                      'flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--r-pill)] text-xs font-medium transition-all duration-150',
-                      isActive
-                        ? 'bg-[var(--green-600)] text-white shadow-sm'
-                        : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+                      'flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--r-pill)] text-xs font-semibold transition-all duration-150',
+                      isExactActive
+                        ? 'bg-[var(--green-900)] text-white shadow-xs'
+                        : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:text-[var(--text-strong)]'
                     )}
                   >
                     <Icon size={14} />
@@ -184,15 +184,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen((v) => !v)}
-                className="flex items-center gap-2 h-10 w-10 sm:w-auto px-0 sm:px-3.5 rounded-[var(--r-pill)] bg-[var(--green-900)] text-white text-xs font-medium hover:brightness-95 transition-all shadow-sm shrink-0 justify-center min-h-[40px]"
+                className="flex items-center gap-2 h-10 w-10 sm:w-auto px-0 sm:px-3.5 rounded-[var(--r-pill)] bg-[var(--green-900)] hover:bg-[var(--green-700)] text-white text-xs font-medium transition-all shadow-xs shrink-0 justify-center min-h-[40px] cursor-pointer"
                 aria-label="User profile menu"
               >
                 <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center font-bold text-[11px]">
                   {user.fullName.charAt(0)}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="leading-tight truncate max-w-[120px] font-medium">{user.fullName}</p>
-                  <p className="text-[9px] text-white/75 leading-tight">{roleLabels[user.role]}</p>
+                  <p className="leading-tight truncate max-w-[120px] font-semibold">{user.fullName}</p>
+                  <p className="text-[9px] text-white/80 leading-tight">{roleLabels[user.role]}</p>
                 </div>
               </button>
 
@@ -309,18 +309,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <nav className="p-3 flex flex-col gap-1 flex-1 overflow-y-auto no-scrollbar">
+        <nav className="p-3 flex flex-col gap-1.5 flex-1 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = ICON_MAP[item.iconName] ?? Activity;
-            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            const isExactActive = pathname === item.href;
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={clsx(
-                  'flex items-center gap-3 px-3.5 py-3 rounded-[var(--r-tile)] text-sm font-medium transition-colors min-h-[44px]',
-                  isActive ? 'bg-[var(--green-600)] text-white shadow-xs' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+                  'flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--r-tile)] text-sm font-medium transition-all min-h-[44px]',
+                  isExactActive ? 'bg-[var(--green-900)] text-white shadow-xs font-semibold' : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
                 )}
               >
                 <Icon size={18} />

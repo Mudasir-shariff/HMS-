@@ -537,7 +537,7 @@ export default function PharmacyPage() {
       )}
 
       {/* Pill Tab Switcher */}
-      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-full sm:w-fit shadow-[var(--shadow-float)] mb-5 overflow-x-auto no-scrollbar snap-x border border-[var(--line-soft)]">
+      <div className="flex gap-1.5 bg-white rounded-[var(--r-pill)] p-1.5 w-full sm:w-fit shadow-subtle mb-5 overflow-x-auto no-scrollbar snap-x border border-[var(--line-soft)]">
         {[
           { id: 'queue' as Tab, label: 'Dispensing Queue', count: pendingQueue.length },
           { id: 'dispensed' as Tab, label: "Today's Patient List", count: todayDispensed.length },
@@ -550,15 +550,15 @@ export default function PharmacyPage() {
             className={clsx(
               'flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-[var(--r-pill)] text-xs sm:text-sm font-semibold transition-all duration-150 shrink-0 min-h-[40px] snap-start touch-manipulation cursor-pointer',
               tab === t.id
-                ? 'bg-[var(--green-600)] text-white shadow-xs'
-                : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)]'
+                ? 'bg-[var(--green-900)] text-white shadow-xs'
+                : 'text-[var(--text-body)] hover:bg-[var(--bg-tile)] hover:text-[var(--text-strong)]'
             )}
           >
             {t.label}
             <span
               className={clsx(
                 'inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-bold tabular-nums',
-                tab === t.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-tile)] text-[var(--text-muted)]'
+                tab === t.id ? 'bg-white/20 text-white' : 'bg-[var(--sage-100)] border border-[var(--sage-200)] text-[var(--green-900)]'
               )}
             >
               {t.count}
@@ -784,16 +784,16 @@ export default function PharmacyPage() {
                 return (
                   <div
                     key={drug.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px] border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-[var(--r-tile)] p-3.5 sm:p-4 min-h-[60px] border border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle transition-all"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
-                        <span className="text-[10px] uppercase font-semibold bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] text-[var(--text-muted)]">
+                        <span className="text-sm font-bold text-[var(--text-strong)]">{drug.name}</span>
+                        <span className="text-[10px] uppercase font-bold bg-[var(--bg-tile)] px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] text-[var(--text-muted)]">
                           {drug.drug_type}
                         </span>
                         {drug.schedule_h && (
-                          <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
+                          <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold border border-red-200">
                             SCH H
                           </span>
                         )}
@@ -801,7 +801,7 @@ export default function PharmacyPage() {
                       <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                         <span>
                           Stock:{' '}
-                          <strong className={isLowStock ? 'text-[var(--danger)] font-bold' : 'text-[var(--text-strong)]'}>
+                          <strong className={drug.stock_quantity === 0 ? 'text-[var(--danger)] font-bold' : isLowStock ? 'text-[var(--warning)] font-bold' : 'text-[var(--text-strong)]'}>
                             {drug.stock_quantity} {drug.drug_type === 'syrup' ? 'bottles' : drug.drug_type === 'injection' ? 'vials' : 'tablets/units'}
                           </strong>
                         </span>
@@ -818,13 +818,15 @@ export default function PharmacyPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
-                      {isLowStock ? (
-                        <StatusPill variant="danger" label="Low Stock" />
+                    <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]">
+                      {drug.stock_quantity === 0 ? (
+                        <StatusPill variant="danger" label="Out of Stock" />
+                      ) : isLowStock ? (
+                        <StatusPill variant="warning" label="Low Stock" />
                       ) : isExpiring ? (
                         <StatusPill variant="warning" label="Near Expiry" />
                       ) : (
-                        <StatusPill variant="success" label="In Stock" />
+                        <StatusPill variant="success" label="In Stock (OK)" />
                       )}
 
                       <div className="flex items-center gap-2">

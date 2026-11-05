@@ -470,13 +470,13 @@ export default function ReceptionPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3 sm:px-4 sm:py-3 border border-[var(--line-soft)]/60 hover:border-[var(--green-600)]/40 hover:bg-white transition-all shadow-xs"
+                  className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white rounded-[var(--r-tile)] p-3.5 sm:px-4 sm:py-3.5 border border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle transition-all"
                 >
                   {/* Patient Details Row / Block */}
                   <div className="flex items-start sm:items-center gap-3 min-w-0">
                     {/* Token Number */}
-                    <div className="shrink-0 h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-[var(--sage-100)] flex flex-col items-center justify-center border-2 border-[var(--green-600)] shadow-xs">
-                      <span className="text-base sm:text-lg font-bold text-[var(--green-900)] leading-none tabular-nums">
+                    <div className="shrink-0 h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-[var(--sage-100)] flex flex-col items-center justify-center border-2 border-[var(--green-600)] shadow-2xs">
+                      <span className="text-base sm:text-lg font-extrabold text-[var(--green-900)] leading-none tabular-nums">
                         {String(item.token_number).padStart(2, '0')}
                       </span>
                       <span className="text-[7px] sm:text-[8px] font-bold text-[var(--green-700)] mt-0.5 tracking-wider">TOKEN</span>

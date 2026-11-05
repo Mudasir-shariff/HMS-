@@ -256,7 +256,7 @@ export default function InPatientPage() {
                 return (
                   <div
                     key={adm.id}
-                    className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shadow-xs"
+                    className="bg-white rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4"
                   >
                     <div className="flex items-start gap-3">
                       <div className="h-11 w-11 rounded-full bg-[var(--sage-100)] text-[var(--green-900)] font-bold flex flex-col items-center justify-center shrink-0 border border-[var(--green-300)] shadow-2xs">

@@ -14,15 +14,15 @@ export function StatTile({ icon, label, value, className }: StatTileProps) {
   return (
     <div
       className={clsx(
-        'bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 flex flex-col items-center gap-2',
+        'bg-[var(--bg-card)] border border-[var(--line-soft)] rounded-[var(--r-tile)] p-4 flex flex-col items-center gap-2 shadow-2xs',
         className
       )}
     >
-      <div className="flex items-center justify-center h-10 w-10 rounded-full border-[1.5px] border-[var(--green-600)] bg-white">
-        <span className="text-[var(--green-700)]">{icon}</span>
+      <div className="flex items-center justify-center h-10 w-10 rounded-full border border-[var(--sage-200)] bg-[var(--sage-100)]">
+        <span className="text-[var(--green-900)]">{icon}</span>
       </div>
-      <p className="text-sm font-medium text-[var(--text-strong)]">{label}</p>
-      <p className="text-sm text-[var(--text-muted)]">{value}</p>
+      <p className="text-sm font-semibold text-[var(--text-strong)]">{label}</p>
+      <p className="text-sm text-[var(--text-muted)] font-medium">{value}</p>
     </div>
   );
 }
@@ -49,13 +49,13 @@ export function Avatar({ name, imageUrl, size = 'md', className }: AvatarProps) 
     <img
       src={imageUrl}
       alt={name}
-      className={clsx('rounded-full object-cover', sizeMap[size], className)}
+      className={clsx('rounded-full object-cover border border-[var(--line-soft)]', sizeMap[size], className)}
     />
   ) : (
     <div
       className={clsx(
-        'rounded-full flex items-center justify-center',
-        'bg-[var(--sage-100)] text-[var(--green-900)] font-medium',
+        'rounded-full flex items-center justify-center font-bold tracking-tight',
+        'bg-[var(--sage-100)] border border-[var(--sage-200)] text-[var(--green-900)]',
         sizeMap[size],
         className
       )}
@@ -77,12 +77,12 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <div className="flex items-center justify-center h-12 w-12 rounded-full bg-[var(--bg-tile)] text-[var(--text-muted)] mb-3">
+      <div className="flex items-center justify-center h-12 w-12 rounded-full bg-[var(--sage-100)] border border-[var(--sage-200)] text-[var(--green-900)] mb-3 shadow-2xs">
         {icon}
       </div>
-      <h3 className="text-sm font-medium text-[var(--text-strong)] mb-1">{title}</h3>
+      <h3 className="text-sm font-semibold text-[var(--text-strong)] mb-1 font-[family-name:var(--font-heading)]">{title}</h3>
       {description && (
-        <p className="text-xs text-[var(--text-muted)] max-w-[280px] mb-4">{description}</p>
+        <p className="text-xs text-[var(--text-muted)] max-w-[280px] mb-4 leading-relaxed">{description}</p>
       )}
       {action}
     </div>
@@ -102,11 +102,11 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', classN
   return (
     <div className={clsx('relative', className)}>
       <svg
-        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-faint)]"
+        className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-faint)]"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
-        strokeWidth={1.5}
+        strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -119,10 +119,10 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', classN
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={clsx(
-          'h-11 w-full rounded-[var(--r-pill)] bg-white pl-9 pr-3 text-base sm:text-sm',
-          'border border-[var(--line-soft)] text-[var(--text-body)]',
+          'h-11 w-full rounded-[var(--r-pill)] bg-white pl-10 pr-4 text-base sm:text-sm',
+          'border border-[var(--line-soft)] text-[var(--text-strong)] shadow-2xs',
           'placeholder:text-[var(--text-faint)]',
-          'focus:outline-none focus:border-[var(--green-600)] focus:ring-[3px] focus:ring-[rgba(122,154,95,0.25)]',
+          'focus:outline-none focus:border-[var(--green-600)] focus:ring-2 focus:ring-[rgba(13,148,136,0.25)]',
           'transition-all duration-150'
         )}
       />

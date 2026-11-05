@@ -11,6 +11,7 @@ import { generateUUID } from '@/lib/utils/quantity';
 import { pushDrugToSupabase } from '@/lib/supabase/sync';
 import { saveDrugMutation } from '@/lib/api/mutations';
 import type { DrugType, Drug } from '@/lib/types/database';
+import { clsx } from 'clsx';
 
 const DEFAULT_SUPPLIERS = [
   'Cipla Healthcare',
@@ -349,9 +350,14 @@ export default function AddDrugPage() {
           <div className="lg:col-span-2 flex flex-col gap-5">
             {/* 1. Identification & Type */}
             <Card>
-              <h3 className="text-[18px] font-medium text-[var(--text-strong)] mb-4">
-                Drug Identification & Classification
-              </h3>
+              <div className="mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                  1. Basic Drug Information & Identification
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Name, therapeutic formulation type, batch details and supplier.
+                </p>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
@@ -366,7 +372,7 @@ export default function AddDrugPage() {
 
                 {/* PRD v1.1 Rule: Select-and-type box for Drug Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
+                  <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
                     Drug Type * (Pick or Type)
                   </label>
                   <input
@@ -375,7 +381,7 @@ export default function AddDrugPage() {
                     value={form.drugType}
                     onChange={(e) => update('drugType', e.target.value)}
                     placeholder="Tablet, Capsule, Syrup, Injection..."
-                    className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs text-[var(--text-body)] focus:outline-none focus:border-[var(--green-600)]"
+                    className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-sm text-[var(--text-strong)] shadow-2xs focus:outline-none focus:border-[var(--green-600)] focus:ring-2 focus:ring-[rgba(13,148,136,0.25)] transition-all"
                   />
                   <datalist id="drug-types-list">
                     <option value="tablet">Tablet</option>
@@ -386,14 +392,14 @@ export default function AddDrugPage() {
                     <option value="drops">Eye / Ear Drops</option>
                     <option value="inhaler">Inhaler / Respule</option>
                   </datalist>
-                  <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                  <span className="text-xs text-[var(--text-muted)] mt-1 block">
                     Choose from list or type custom
                   </span>
                 </div>
 
                 {/* PRD v1.1 Rule: Select-and-type box for Supplier */}
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
+                  <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
                     Supplier / Manufacturer
                   </label>
                   <input
@@ -402,13 +408,16 @@ export default function AddDrugPage() {
                     value={form.supplier}
                     onChange={(e) => update('supplier', e.target.value)}
                     placeholder="Pick or type company..."
-                    className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs text-[var(--text-body)] focus:outline-none focus:border-[var(--green-600)]"
+                    className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-sm text-[var(--text-strong)] shadow-2xs focus:outline-none focus:border-[var(--green-600)] focus:ring-2 focus:ring-[rgba(13,148,136,0.25)] transition-all"
                   />
                   <datalist id="suppliers-list">
                     {DEFAULT_SUPPLIERS.map((s) => (
                       <option key={s} value={s} />
                     ))}
                   </datalist>
+                  <span className="text-xs text-[var(--text-muted)] mt-1 block">
+                    Pick supplier or enter vendor name
+                  </span>
                 </div>
 
                 <Input
@@ -430,85 +439,96 @@ export default function AddDrugPage() {
 
             {/* 2. Packaging & Auto-Calculated Unit Cost */}
             <Card>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[18px] font-medium text-[var(--text-strong)]">
-                  Packaging & Unit Conversion
-                </h3>
-                <span className="text-xs text-[var(--green-700)] font-medium flex items-center gap-1">
-                  <Calculator size={14} /> Auto-converts to smallest unit
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <div>
+                  <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                    2. Packaging, Unit Conversion & Pricing
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Enter strip/box dimensions for automatic per-tablet cost & MRP calculation.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-[var(--green-700)] bg-[var(--sage-100)] px-2.5 py-1 rounded-full border border-[var(--sage-200)] flex items-center gap-1 shrink-0">
+                  <Calculator size={13} /> Auto-converts
                 </span>
               </div>
 
               {isOralSolid && (
-                <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs space-y-3">
-                  <p className="font-semibold text-[var(--text-strong)]">
+                <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-5 text-xs space-y-3">
+                  <p className="font-bold text-sm text-[var(--text-strong)]">
                     Strip / Sheet Packaging & Pricing Auto-Conversion (PRD v1.1):
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     <div>
-                      <label className="block text-[11px] text-[var(--text-muted)] mb-1">Number of Boxes</label>
+                      <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">Number of Boxes</label>
                       <input
                         type="number"
                         min={0}
                         value={form.boxes}
                         onChange={(e) => update('boxes', Number(e.target.value) || 0)}
-                        className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold"
+                        className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold text-[var(--text-strong)] shadow-2xs focus:border-[var(--green-600)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-[var(--text-muted)] mb-1">Sheets per Box</label>
+                      <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">Sheets per Box</label>
                       <input
                         type="number"
                         min={0}
                         value={form.sheetsPerBox}
                         onChange={(e) => update('sheetsPerBox', Number(e.target.value) || 0)}
-                        className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold"
+                        className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold text-[var(--text-strong)] shadow-2xs focus:border-[var(--green-600)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-[var(--text-muted)] mb-1">Tablets per Sheet</label>
+                      <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">Tablets per Sheet</label>
                       <input
                         type="number"
                         min={0}
                         value={form.tabletsPerSheet}
                         onChange={(e) => update('tabletsPerSheet', Number(e.target.value) || 0)}
-                        className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold"
+                        className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold text-[var(--text-strong)] shadow-2xs focus:border-[var(--green-600)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-[var(--text-muted)] mb-1">Cost per Sheet (₹)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={form.costPerSheet}
-                        onChange={(e) => update('costPerSheet', Number(e.target.value) || 0)}
-                        className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold text-[var(--green-700)]"
-                      />
+                      <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">Cost per Sheet (₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={form.costPerSheet}
+                          onChange={(e) => update('costPerSheet', Number(e.target.value) || 0)}
+                          className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-6 pr-2 text-xs text-center font-bold text-[var(--green-700)] shadow-2xs focus:border-[var(--green-600)]"
+                        />
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-[var(--text-muted)] mb-1">MRP per Sheet (₹)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={form.sellingPricePerSheet}
-                        onChange={(e) => update('sellingPricePerSheet', Number(e.target.value) || 0)}
-                        className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2.5 text-xs text-center font-bold text-[var(--green-900)]"
-                      />
+                      <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">MRP per Sheet (₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={form.sellingPricePerSheet}
+                          onChange={(e) => update('sellingPricePerSheet', Number(e.target.value) || 0)}
+                          className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-6 pr-2 text-xs text-center font-bold text-[var(--green-900)] shadow-2xs focus:border-[var(--green-600)]"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
               {isSyrup && (
-                <div className="bg-[var(--bg-tile)] p-3 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs">
+                <div className="bg-[var(--bg-tile)] p-3 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs text-[var(--text-body)]">
                   ℹ️ <strong>Syrup Packaging Rule (PRD v1.1):</strong> Syrups are counted and tracked per bottle. Selling and purchase prices apply per individual bottle.
                 </div>
               )}
 
               {isInjection && (
-                <div className="bg-[var(--bg-tile)] p-3 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs">
+                <div className="bg-[var(--bg-tile)] p-3 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs text-[var(--text-body)]">
                   ℹ️ <strong>Injection Packaging Rule (PRD v1.1):</strong> Injections are tracked per vial or ampoule. Enter unit cost and stock quantity directly.
                 </div>
               )}
@@ -516,18 +536,26 @@ export default function AddDrugPage() {
               {/* Pricing & Stock Fields (All numbers start at 0) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                    Cost Price per Unit (₹) *
+                  <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
+                    Cost Price per Unit *
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={form.purchasePrice}
-                    onChange={(e) => update('purchasePrice', Number(e.target.value) || 0)}
-                    className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold"
-                  />
-                  <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={form.purchasePrice}
+                      onChange={(e) => update('purchasePrice', Number(e.target.value) || 0)}
+                      className={clsx(
+                        'h-11 w-full rounded-[var(--r-control)] border border-[var(--line-soft)] pl-7 pr-3 text-xs font-bold transition-all shadow-2xs',
+                        isOralSolid && form.costPerSheet > 0
+                          ? 'bg-[var(--bg-tile)] text-[var(--green-900)]'
+                          : 'bg-white text-[var(--text-strong)] focus:border-[var(--green-600)]'
+                      )}
+                    />
+                  </div>
+                  <span className="text-xs text-[var(--text-muted)] mt-1 block">
                     {isOralSolid && form.costPerSheet > 0
                       ? `Auto: ₹${form.costPerSheet} / ${form.tabletsPerSheet || 1} = ₹${form.purchasePrice} / tablet`
                       : 'Hospital acquisition cost'}
@@ -537,78 +565,92 @@ export default function AddDrugPage() {
                 {isOralSolid ? (
                   <>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                        Selling / MRP per Sheet (₹) *
+                      <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
+                        Selling / MRP per Sheet *
                       </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={form.sellingPricePerSheet}
-                        onChange={(e) => update('sellingPricePerSheet', Number(e.target.value) || 0)}
-                        className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold text-[var(--green-900)] focus:border-[var(--green-600)]"
-                      />
-                      <span className="text-[10px] text-[var(--green-700)] font-medium mt-1 block">
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={form.sellingPricePerSheet}
+                          onChange={(e) => update('sellingPricePerSheet', Number(e.target.value) || 0)}
+                          className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-7 pr-3 text-xs font-bold text-[var(--green-900)] shadow-2xs focus:border-[var(--green-600)]"
+                        />
+                      </div>
+                      <span className="text-xs text-[var(--green-700)] font-medium mt-1 block">
                         Enter strip MRP to auto-calculate per tablet
                       </span>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                        Selling Price / MRP per Unit (₹) *
+                      <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
+                        Selling Price / MRP per Unit *
                       </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={form.sellingPrice}
-                        onChange={(e) => update('sellingPrice', Number(e.target.value) || 0)}
-                        className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold text-[var(--green-900)]"
-                      />
-                      <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={form.sellingPrice}
+                          onChange={(e) => update('sellingPrice', Number(e.target.value) || 0)}
+                          className={clsx(
+                            'h-11 w-full rounded-[var(--r-control)] border border-[var(--line-soft)] pl-7 pr-3 text-xs font-bold shadow-2xs transition-all',
+                            form.sellingPricePerSheet > 0 && form.tabletsPerSheet > 0
+                              ? 'bg-[var(--bg-tile)] text-[var(--green-900)]'
+                              : 'bg-white text-[var(--green-900)] focus:border-[var(--green-600)]'
+                          )}
+                        />
+                      </div>
+                      <span className="text-xs text-[var(--text-muted)] mt-1 block">
                         {form.sellingPricePerSheet > 0 && form.tabletsPerSheet > 0
-                          ? `✨ Auto: ₹${form.sellingPricePerSheet} / ${form.tabletsPerSheet} tabs = ₹${form.sellingPrice} / ${form.unit} (editable)`
+                          ? `✨ Auto: ₹${form.sellingPricePerSheet} / ${form.tabletsPerSheet} tabs = ₹${form.sellingPrice} / ${form.unit}`
                           : `Per ${form.unit} billed to patients`}
                       </span>
                     </div>
                   </>
                 ) : (
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                      Selling Price / MRP per Unit (₹) *
+                    <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
+                      Selling Price / MRP per Unit *
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      value={form.sellingPrice}
-                      onChange={(e) => update('sellingPrice', Number(e.target.value) || 0)}
-                      className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold text-[var(--green-900)]"
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)] pointer-events-none">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={form.sellingPrice}
+                        onChange={(e) => update('sellingPrice', Number(e.target.value) || 0)}
+                        className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-7 pr-3 text-xs font-bold text-[var(--green-900)] shadow-2xs focus:border-[var(--green-600)]"
+                      />
+                    </div>
+                    <span className="text-xs text-[var(--text-muted)] mt-1 block">
                       Billed to patients per {form.unit}
                     </span>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                    Total Starting Stock Quantity *
+                  <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
+                    Starting Stock Quantity *
                   </label>
                   <input
                     type="number"
                     min={0}
                     value={form.stockQuantity}
                     onChange={(e) => update('stockQuantity', Number(e.target.value) || 0)}
-                    className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold"
+                    className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold shadow-2xs focus:border-[var(--green-600)]"
                   />
-                  <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                  <span className="text-xs text-[var(--text-muted)] mt-1 block">
                     Smallest sellable unit ({form.unit || 'units'})
                   </span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
+                  <label className="block text-[13px] font-medium text-[var(--text-strong)] mb-1.5">
                     Low Stock Reorder Limit
                   </label>
                   <input
@@ -616,9 +658,9 @@ export default function AddDrugPage() {
                     min={0}
                     value={form.lowStockLimit}
                     onChange={(e) => update('lowStockLimit', Number(e.target.value) || 0)}
-                    className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold"
+                    className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs font-bold shadow-2xs focus:border-[var(--green-600)]"
                   />
-                  <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                  <span className="text-xs text-[var(--text-muted)] mt-1 block">
                     Triggers reorder warning when stock hits this
                   </span>
                 </div>
@@ -627,48 +669,59 @@ export default function AddDrugPage() {
 
             {/* 3. Regulatory Flags */}
             <Card>
-              <h3 className="text-[18px] font-medium text-[var(--text-strong)] mb-3">
-                Regulatory Classifications
-              </h3>
-              <div className="flex flex-col gap-3">
-                <Checkbox
-                  label="Schedule H Drug (Prescription Required Warning)"
-                  checked={form.scheduleH}
-                  onChange={(e) => update('scheduleH', e.target.checked)}
-                />
-                <Checkbox
-                  label="Schedule H1 Drug (Strict Narcotics / High-Potency Audit)"
-                  checked={form.scheduleH1}
-                  onChange={(e) => update('scheduleH1', e.target.checked)}
-                />
+              <div className="mb-4 pb-3 border-b border-[var(--line-soft)]">
+                <h3 className="text-base sm:text-lg font-semibold text-[var(--text-strong)] font-[family-name:var(--font-heading)]">
+                  3. Regulatory & Safety Classifications
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Applies prescription-mandate warnings or narcotic audit trail requirements.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3.5">
+                <div className="p-3.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] hover:border-[var(--green-600)]/40 transition-colors">
+                  <Checkbox
+                    label="Schedule H Drug (Prescription Required Warning)"
+                    checked={form.scheduleH}
+                    onChange={(e) => update('scheduleH', e.target.checked)}
+                  />
+                </div>
+                <div className="p-3.5 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)] hover:border-[var(--green-600)]/40 transition-colors">
+                  <Checkbox
+                    label="Schedule H1 Drug (Strict Narcotics / High-Potency Audit)"
+                    checked={form.scheduleH1}
+                    onChange={(e) => update('scheduleH1', e.target.checked)}
+                  />
+                </div>
               </div>
             </Card>
           </div>
 
           {/* Right Action Sidebar */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             <Card>
-              <h4 className="text-sm font-semibold text-[var(--text-strong)] mb-2">Inventory Summary</h4>
+              <h4 className="text-sm font-bold text-[var(--text-strong)] mb-1 font-[family-name:var(--font-heading)]">
+                Inventory Summary
+              </h4>
               <p className="text-xs text-[var(--text-muted)] mb-4">
                 Verify values before saving to the central drug master.
               </p>
 
-              <div className="bg-[var(--bg-tile)] p-3 rounded-[var(--r-control)] text-xs space-y-2 mb-4 border border-[var(--line-soft)]">
-                <div className="flex justify-between">
+              <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] text-xs space-y-2.5 mb-5 border border-[var(--line-soft)] shadow-2xs">
+                <div className="flex justify-between items-center">
                   <span className="text-[var(--text-muted)]">Category:</span>
-                  <span className="font-semibold capitalize">{form.drugType}</span>
+                  <span className="font-semibold capitalize text-[var(--text-strong)]">{form.drugType}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-[var(--text-muted)]">Selling Rate:</span>
                   <span className="font-bold text-[var(--green-700)]">₹{form.sellingPrice.toFixed(2)} / unit</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Total Units:</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-[var(--text-muted)]">Total Starting Units:</span>
                   <span className="font-bold text-[var(--text-strong)]">{form.stockQuantity} units</span>
                 </div>
               </div>
 
-              <Button type="submit" size="lg" className="w-full min-h-[44px]" disabled={submitting}>
+              <Button type="submit" size="lg" className="w-full min-h-[46px] shadow-sm font-semibold" disabled={submitting}>
                 {submitting ? 'Saving to Catalog...' : 'Save Drug to Catalog'}
               </Button>
             </Card>

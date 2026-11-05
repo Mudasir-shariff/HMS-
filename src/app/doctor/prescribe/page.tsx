@@ -749,16 +749,16 @@ function PrescribeContent() {
         )}
 
         {/* Hand-off Confirmation Banner */}
-        <div className="no-print mb-4 p-4 rounded-[var(--r-tile)] bg-[var(--sage-100)] border border-[var(--green-600)] text-xs text-[var(--green-900)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-full bg-[var(--green-900)] text-white flex items-center justify-center shrink-0">
-              <CheckCircle size={18} />
+        <div className="no-print mb-5 p-4 sm:p-5 rounded-[var(--r-tile)] bg-[#ECFDF5] border-2 border-[#A7F3D0] text-xs text-[#065F46] flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-[#059669] text-white flex items-center justify-center shadow-xs shrink-0">
+              <CheckCircle size={22} />
             </div>
             <div>
-              <p className="font-bold text-sm text-[var(--green-900)]">
+              <p className="font-bold text-sm sm:text-base text-[#065F46] leading-tight">
                 Hand-off Complete: Transferred to Pharmacy Queue
               </p>
-              <p className="text-[var(--text-muted)] text-xs">
+              <p className="text-[#047857] text-xs mt-0.5 font-medium">
                 Patient Token #{String(token).padStart(2, '0')} ({patientName}) is now in the Pharmacy Dispensing Queue.
               </p>
             </div>
@@ -767,7 +767,7 @@ function PrescribeContent() {
             size="sm"
             onClick={handleNextPatient}
             loading={isNavigatingNext}
-            className="bg-[var(--green-900)] text-white shrink-0 min-h-[40px] px-4 font-semibold hover:brightness-110 shadow-xs cursor-pointer"
+            className="bg-[#0D5C52] hover:bg-[#0A4D44] text-white shrink-0 min-h-[42px] px-5 font-bold shadow-xs cursor-pointer"
           >
             Next Patient in Queue →
           </Button>
@@ -1242,11 +1242,11 @@ function PrescribeContent() {
           )}
 
           {/* Unified Type-and-Select Medicine Combobox */}
-          <div ref={searchRef} className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4">
-            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <label className="text-xs font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-                <Pill size={15} className="text-[var(--green-700)]" />
-                <span>Select Medicine entered by Pharmacist ({drugs.length} total in inventory):</span>
+          <div ref={searchRef} className="bg-white p-4 sm:p-5 rounded-[var(--r-tile)] border-2 border-[var(--line-soft)] focus-within:border-[var(--green-600)] focus-within:ring-2 focus-within:ring-[rgba(13,148,136,0.2)] shadow-xs transition-all mb-5">
+            <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
+              <label className="text-xs sm:text-[13px] font-bold text-[var(--text-strong)] flex items-center gap-1.5">
+                <Pill size={16} className="text-[var(--green-700)]" />
+                <span>Search & Add Medicines from Pharmacy Stock ({drugs.length} total):</span>
               </label>
               <div className="flex items-center gap-2">
                 <button
@@ -1255,10 +1255,10 @@ function PrescribeContent() {
                     setCustomName(drugSearch);
                     setShowCustomItemModal(true);
                   }}
-                  className="text-xs text-[var(--green-700)] hover:text-[var(--green-900)] font-semibold inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs hover:bg-[var(--green-50)]"
+                  className="text-xs text-[var(--green-700)] hover:text-[var(--green-900)] font-semibold inline-flex items-center gap-1 bg-[var(--sage-100)] px-2.5 py-1 rounded-[var(--r-control)] border border-[var(--sage-200)] shadow-2xs hover:bg-[var(--sage-200)] transition-colors cursor-pointer"
                 >
                   <Syringe size={12} />
-                  <span>+ Custom Injection / Item</span>
+                  <span>+ Custom Item / Injection</span>
                 </button>
               </div>
             </div>
@@ -1266,7 +1266,7 @@ function PrescribeContent() {
             {/* Combobox Search & Select Input */}
             <div className="relative">
               <div className="relative flex items-center">
-                <Search size={16} className="absolute left-3.5 text-[var(--text-faint)] pointer-events-none" />
+                <Search size={18} className="absolute left-3.5 text-[var(--text-faint)] pointer-events-none" />
                 <input
                   type="text"
                   value={drugSearch}
@@ -1299,10 +1299,10 @@ function PrescribeContent() {
                   }}
                   placeholder={
                     drugs.length > 0
-                      ? 'Type medicine name or click arrow to choose...'
+                      ? 'Type brand or chemical name (e.g. Paracetamol, Pantoprazole, Amoxicillin)...'
                       : 'No medicines in pharmacy inventory yet — Add stock in Pharmacy portal'
                   }
-                  className="h-11 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] pl-10 pr-20 text-sm text-[var(--text-body)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--green-600)] focus:ring-1 focus:ring-[var(--green-600)] font-medium shadow-xs"
+                  className="h-12 w-full rounded-[var(--r-control)] bg-[var(--bg-canvas)] border border-[var(--line-soft)] pl-11 pr-20 text-sm font-medium text-[var(--text-strong)] placeholder:text-[var(--text-faint)] focus:bg-white focus:outline-none focus:border-[var(--green-600)] transition-all shadow-2xs"
                 />
                 <div className="absolute right-2 flex items-center gap-1">
                   {drugSearch && (
@@ -1541,7 +1541,7 @@ function PrescribeContent() {
               {medicines.map((m) => (
                 <div
                   key={m.id}
-                  className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 border border-[var(--line-soft)]"
+                  className="bg-white rounded-[var(--r-tile)] p-4 sm:p-4.5 border border-[var(--line-soft)] shadow-2xs hover:border-[var(--line-strong)] transition-all"
                 >
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
@@ -1765,8 +1765,8 @@ function PrescribeContent() {
       {/* Mobile Sticky Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--line-soft)] p-3 sm:p-4 pb-safe shadow-[var(--shadow-float)]">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <div className="hidden sm:block text-xs text-[var(--text-muted)]">
-            Token #{String(token).padStart(2, '0')} · {medicines.length} medicines · {labTests.length} tests
+          <div className="hidden sm:block text-xs font-semibold text-[var(--text-strong)]">
+            Token #{String(token).padStart(2, '0')} · <span className="font-normal text-[var(--text-muted)]">{medicines.length} medicines · {labTests.length} tests</span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -1776,7 +1776,7 @@ function PrescribeContent() {
               onClick={handleSaveOnly}
               loading={isSaving}
               disabled={isSaving}
-              className="flex-1 sm:flex-initial justify-center min-h-[44px]"
+              className="flex-1 sm:flex-initial justify-center min-h-[44px] font-medium"
             >
               {isSaving ? 'Sending...' : 'Send to Pharmacy'}
             </Button>
@@ -1786,9 +1786,9 @@ function PrescribeContent() {
               onClick={handleSaveAndPrint}
               loading={isSaving}
               disabled={isSaving}
-              className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white justify-center min-h-[44px]"
+              className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white justify-center min-h-[44px] shadow-sm font-bold"
             >
-              {isSaving ? 'Sending...' : 'Send & Print'}
+              {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
             </Button>
           </div>
         </div>
