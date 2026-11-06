@@ -14,6 +14,7 @@ import {
   Pill,
   ChevronRight,
   Check,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar, EmptyState } from '@/components/ui';
@@ -22,6 +23,7 @@ import { useVisits, usePatients, useDoctors } from '@/lib/query/hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { deleteVisitsFromSupabase } from '@/lib/supabase/sync';
 import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus, Visit } from '@/lib/types/database';
@@ -54,6 +56,66 @@ export default function ReceptionPage() {
   }
 
   const [updatingVisitId, setUpdatingVisitId] = useState<string | null>(null);
+  const [selectedVisitIds, setSelectedVisitIds] = useState<string[]>([]);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: 'single' | 'bulk';
+    visit?: (typeof todayVisits)[0];
+    visitIds: string[];
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  function handleToggleSelect(visitId: string) {
+    setSelectedVisitIds((prev) =>
+      prev.includes(visitId) ? prev.filter((id) => id !== visitId) : [...prev, visitId]
+    );
+  }
+
+  function handleToggleSelectAll() {
+    const currentFilteredIds = filtered.map((v) => v.id);
+    const allSelected = currentFilteredIds.length > 0 && currentFilteredIds.every((id) => selectedVisitIds.includes(id));
+    if (allSelected) {
+      setSelectedVisitIds((prev) => prev.filter((id) => !currentFilteredIds.includes(id)));
+    } else {
+      setSelectedVisitIds((prev) => Array.from(new Set([...prev, ...currentFilteredIds])));
+    }
+  }
+
+  async function executeDelete() {
+    if (!deleteConfirmTarget || isDeleting) return;
+    setIsDeleting(true);
+
+    const idsToDelete = deleteConfirmTarget.visitIds;
+    const count = idsToDelete.length;
+
+    // 1. Optimistic Query Cache Update (<5ms)
+    queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
+      old ? old.filter((v) => !idsToDelete.includes(v.id)) : []
+    );
+
+    // 2. Remove deleted IDs from current selection
+    setSelectedVisitIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+
+    // 3. Instant Peer Broadcast across all hospital devices
+    broadcastChange('visits_deleted', { visitIds: idsToDelete });
+
+    // 4. Instant UI Toast
+    triggerToast(
+      count === 1
+        ? 'Patient visit removed from the queue.'
+        : `${count} patient visits removed from the queue.`
+    );
+
+    // 5. Background Supabase deletion & query invalidation
+    try {
+      await deleteVisitsFromSupabase(idsToDelete);
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    } catch (err) {
+      console.warn('Failed to delete visits from Supabase:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmTarget(null);
+    }
+  }
 
   // Optimized O(1) map lookups and memoized todayVisits
   const { todayVisits, waitingOnly, consultingOnly, pharmacyOnly, dispensedOnly, countWaitingTotal } = useMemo(() => {
@@ -438,6 +500,67 @@ export default function ReceptionPage() {
           }
         />
 
+        {/* Bulk Selection & Queue Management Toolbar */}
+        {filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3 py-2.5 mb-2 bg-[var(--bg-canvas)]/60 rounded-[var(--r-control)] border border-[var(--line-soft)]">
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[var(--text-strong)] hover:text-[var(--green-900)] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={filtered.length > 0 && filtered.every((v) => selectedVisitIds.includes(v.id))}
+                  onChange={handleToggleSelectAll}
+                  className="h-4 w-4 rounded border-[var(--line-soft)] text-[var(--green-900)] focus:ring-[var(--green-600)] accent-[var(--green-900)] cursor-pointer"
+                />
+                <span>Select All ({filtered.length})</span>
+              </label>
+
+              {selectedVisitIds.length > 0 && (
+                <span className="text-xs text-[var(--green-800)] font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  {selectedVisitIds.length} of {filtered.length} selected
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedVisitIds.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVisitIds([])}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-strong)] font-medium px-2.5 py-1.5 rounded-[var(--r-control)] hover:bg-white border border-transparent hover:border-[var(--line-soft)] transition-colors cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmTarget({ type: 'bulk', visitIds: selectedVisitIds })}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-[var(--r-control)] bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={13} />
+                    {selectedVisitIds.length === filtered.length
+                      ? `Delete All (${selectedVisitIds.length})`
+                      : `Delete Selected (${selectedVisitIds.length})`}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = filtered.map((v) => v.id);
+                    setSelectedVisitIds(allIds);
+                    setDeleteConfirmTarget({ type: 'bulk', visitIds: allIds });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium px-2.5 py-1 rounded-[var(--r-control)] border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                  title="Select all and delete all visits currently in this queue"
+                >
+                  <Trash2 size={13} />
+                  Delete All ({filtered.length})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <EmptyState
             icon={<Hash size={20} />}
@@ -470,10 +593,28 @@ export default function ReceptionPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white rounded-[var(--r-tile)] p-3.5 sm:px-4 sm:py-3.5 border border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle transition-all"
+                  className={clsx(
+                    'flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-[var(--r-tile)] p-3.5 sm:px-4 sm:py-3.5 border transition-all',
+                    selectedVisitIds.includes(item.id)
+                      ? 'bg-emerald-50/50 border-[var(--green-600)] shadow-2xs'
+                      : 'bg-white border-[var(--line-soft)] hover:border-[var(--green-600)]/50 hover:shadow-subtle'
+                  )}
                 >
                   {/* Patient Details Row / Block */}
-                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                  <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+                    {/* Row Select Checkbox */}
+                    <label
+                      className="shrink-0 flex items-center justify-center p-1 cursor-pointer"
+                      title={selectedVisitIds.includes(item.id) ? 'Deselect patient' : 'Select patient'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedVisitIds.includes(item.id)}
+                        onChange={() => handleToggleSelect(item.id)}
+                        className="h-4 w-4 rounded border-[var(--line-soft)] text-[var(--green-900)] focus:ring-[var(--green-600)] accent-[var(--green-900)] cursor-pointer"
+                      />
+                    </label>
+
                     {/* Token Number */}
                     <div className="shrink-0 h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-[var(--sage-100)] flex flex-col items-center justify-center border-2 border-[var(--green-600)] shadow-2xs">
                       <span className="text-base sm:text-lg font-extrabold text-[var(--green-900)] leading-none tabular-nums">
@@ -629,6 +770,18 @@ export default function ReceptionPage() {
                           <CheckCircle size={14} /> Completed
                         </span>
                       )}
+
+                      {/* Individual Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmTarget({ type: 'single', visit: item, visitIds: [item.id] })}
+                        className="col-span-2 sm:col-span-1 h-9 sm:h-8 px-2 sm:px-2 rounded-[var(--r-control)] text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors flex items-center justify-center gap-1 cursor-pointer touch-manipulation text-xs font-medium"
+                        title={`Delete visit for ${item.patientName}`}
+                        aria-label={`Delete visit for ${item.patientName}`}
+                      >
+                        <Trash2 size={14} />
+                        <span className="sm:hidden">Delete</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -637,6 +790,83 @@ export default function ReceptionPage() {
           </div>
         )}
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmTarget && (
+        <div
+          onClick={() => {
+            if (!isDeleting) setDeleteConfirmTarget(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-[var(--line-soft)] shadow-xl max-w-md w-full p-5 space-y-4 animate-scaleUp"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="h-10 w-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-bold text-[var(--text-strong)] leading-snug">
+                  {deleteConfirmTarget.type === 'single'
+                    ? `Delete Visit for ${deleteConfirmTarget.visit?.patientName || 'Patient'}?`
+                    : `Delete ${deleteConfirmTarget.visitIds.length} Patient Visit${deleteConfirmTarget.visitIds.length > 1 ? 's' : ''}?`}
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                  {deleteConfirmTarget.type === 'single' && deleteConfirmTarget.visit ? (
+                    <>
+                      Are you sure you want to delete token{' '}
+                      <strong className="text-[var(--text-strong)]">
+                        #{String(deleteConfirmTarget.visit.token_number).padStart(2, '0')}
+                      </strong>{' '}
+                      for <strong className="text-[var(--text-strong)]">{deleteConfirmTarget.visit.patientName}</strong> (UHID: {deleteConfirmTarget.visit.patientUhid})?
+                    </>
+                  ) : (
+                    <>
+                      Are you sure you want to delete{' '}
+                      <strong className="text-[var(--text-strong)]">
+                        {deleteConfirmTarget.visitIds.length} selected visit{deleteConfirmTarget.visitIds.length > 1 ? 's' : ''}
+                      </strong>{' '}
+                      from the queue?
+                    </>
+                  )}
+                  <br />
+                  <span className="text-rose-600 font-medium block mt-1">
+                    This will remove the record from the OPD Reception Queue, Doctor Queue, and Pharmacy Queue.
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--line-soft)]">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!isDeleting) setDeleteConfirmTarget(null);
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={executeDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-[var(--r-control)] bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <div className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                <span>{isDeleting ? 'Deleting...' : 'Confirm Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

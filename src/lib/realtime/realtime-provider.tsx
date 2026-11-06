@@ -119,6 +119,18 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       });
     });
 
+    // 1b. Visits Deleted (Reception/Admin Queue Deletion)
+    channel.on('broadcast', { event: 'visits_deleted' }, ({ payload }) => {
+      setLastSyncedAt(new Date());
+      const ids: string[] = payload?.visitIds || (payload?.visitId ? [payload.visitId] : []);
+      if (!ids.length) return;
+      queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
+        if (!old) return [];
+        return old.filter((v) => !ids.includes(v.id));
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    });
+
     // 2. Patient Registered (Reception -> Instant Doctor Cabin Queue)
     channel.on('broadcast', { event: 'patient_registered' }, ({ payload }) => {
       setLastSyncedAt(new Date());

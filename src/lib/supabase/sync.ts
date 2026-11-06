@@ -168,6 +168,21 @@ export async function deleteVisitFromSupabase(visitId: string) {
   }
 }
 
+export async function deleteVisitsFromSupabase(visitIds: string[]) {
+  if (!isSupabaseConfigured() || !Array.isArray(visitIds) || visitIds.length === 0) return;
+  try {
+    const supabase = createClient();
+    const validIds = visitIds.filter(isValidUUID);
+    if (!validIds.length) return;
+    await supabase.from('dispensings').delete().in('prescription_id', validIds);
+    await supabase.from('prescription_items').delete().in('prescription_id', validIds);
+    await supabase.from('prescriptions').delete().in('visit_id', validIds);
+    await supabase.from('visits').delete().in('id', validIds);
+  } catch (err) {
+    console.warn('Failed to delete visits from Supabase:', err);
+  }
+}
+
 export async function deletePrescriptionFromSupabase(rxId: string) {
   if (!isSupabaseConfigured() || !isValidUUID(rxId)) return;
   try {
