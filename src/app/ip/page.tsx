@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   BedDouble,
   Plus,
@@ -15,6 +15,9 @@ import {
   Edit2,
   DollarSign,
   Calendar,
+  ChevronDown,
+  Check,
+  Search,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, Avatar, EmptyState } from '@/components/ui';
@@ -63,12 +66,39 @@ export default function InPatientPage() {
 
   // New admission form
   const [admitPatientId, setAdmitPatientId] = useState(patients[0]?.id || '');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const patientDropdownRef = useRef<HTMLDivElement>(null);
+
   const [admitBedId, setAdmitBedId] = useState('');
   const [admitDoctorId, setAdmitDoctorId] = useState(doctors[0]?.id || '');
   const [admitDiagnosis, setAdmitDiagnosis] = useState('');
   const [hasBP, setHasBP] = useState(false);
   const [hasSugar, setHasSugar] = useState(false);
   const [isAdmitting, setIsAdmitting] = useState(false);
+
+  // Filtered patients for admission search & selection
+  const filteredAdmissionPatients = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.uhid.toLowerCase().includes(q) ||
+        p.phone.includes(q)
+    );
+  }, [patients, patientSearch]);
+
+  // Click outside to close patient dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (patientDropdownRef.current && !patientDropdownRef.current.contains(event.target as Node)) {
+        setShowPatientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Synchronize default selections when async TanStack query data resolves
   useEffect(() => {
@@ -78,10 +108,16 @@ export default function InPatientPage() {
   }, [wards, newBedWardId]);
 
   useEffect(() => {
-    if (!admitPatientId && patients.length > 0) {
+    if (admitPatientId) {
+      const p = patients.find((pat) => pat.id === admitPatientId);
+      if (p && !patientSearch) {
+        setPatientSearch(`${p.name} (${p.uhid})`);
+      }
+    } else if (patients.length > 0 && !admitPatientId) {
       setAdmitPatientId(patients[0].id);
+      setPatientSearch(`${patients[0].name} (${patients[0].uhid})`);
     }
-  }, [patients, admitPatientId]);
+  }, [patients, admitPatientId, patientSearch]);
 
   useEffect(() => {
     if (!admitDoctorId && doctors.length > 0) {
@@ -99,7 +135,8 @@ export default function InPatientPage() {
 
   async function handleAdmit(e: React.FormEvent) {
     e.preventDefault();
-    const effectivePatientId = admitPatientId || (patients.length > 0 ? patients[0].id : '');
+    const matchedFromSearch = filteredAdmissionPatients.length > 0 ? filteredAdmissionPatients[0].id : '';
+    const effectivePatientId = admitPatientId || matchedFromSearch || (patients.length > 0 ? patients[0].id : '');
     const effectiveDoctorId = admitDoctorId || (doctors.length > 0 ? doctors[0].id : '');
     const effectiveBedId = admitBedId || (availableBeds.length > 0 ? availableBeds[0].id : '');
 
@@ -612,20 +649,80 @@ export default function InPatientPage() {
             <h3 className="text-lg font-semibold text-[var(--text-strong)] mb-4">Admit In-Patient (IP)</h3>
 
             <form onSubmit={handleAdmit} className="flex flex-col gap-3.5 text-xs">
-              <div>
+              <div className="relative" ref={patientDropdownRef}>
                 <label className="text-[var(--text-muted)] block mb-1">Select Patient *</label>
-                <select
-                  value={admitPatientId}
-                  onChange={(e) => setAdmitPatientId(e.target.value)}
-                  className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs bg-white"
-                  required
-                >
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.uhid} · {p.age}y · {p.phone})
-                    </option>
-                  ))}
-                </select>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={patientSearch}
+                    onChange={(e) => {
+                      setPatientSearch(e.target.value);
+                      setShowPatientDropdown(true);
+                      const match = patients.find(
+                        (p) =>
+                          p.name.toLowerCase() === e.target.value.trim().toLowerCase() ||
+                          p.uhid.toLowerCase() === e.target.value.trim().toLowerCase()
+                      );
+                      if (match) {
+                        setAdmitPatientId(match.id);
+                      }
+                    }}
+                    onFocus={() => setShowPatientDropdown(true)}
+                    placeholder="Type patient name, UHID, or phone to search..."
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 pr-9 text-xs bg-white text-[var(--text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--green-700)] shadow-2xs"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPatientDropdown((prev) => !prev)}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] rounded transition-colors cursor-pointer"
+                    title="Select patient from list"
+                    tabIndex={-1}
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={clsx('transition-transform duration-200 text-[var(--green-800)]', showPatientDropdown && 'rotate-180')}
+                    />
+                  </button>
+                </div>
+
+                {/* Dropdown Options */}
+                {showPatientDropdown && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white rounded-[var(--r-card)] border border-[var(--line-soft)] shadow-[var(--shadow-float)] py-1 divide-y divide-[var(--line-soft)]/50">
+                    {filteredAdmissionPatients.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-[var(--text-muted)]">
+                        No patients found matching &quot;{patientSearch}&quot;
+                      </div>
+                    ) : (
+                      filteredAdmissionPatients.map((p) => {
+                        const isSelected = p.id === admitPatientId;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setAdmitPatientId(p.id);
+                              setPatientSearch(`${p.name} (${p.uhid} · ${p.age}y · ${p.phone})`);
+                              setShowPatientDropdown(false);
+                            }}
+                            className={clsx(
+                              'w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer',
+                              isSelected ? 'bg-[var(--sage-100)] text-[var(--green-900)] font-semibold' : 'hover:bg-[var(--bg-tile)] text-[var(--text-strong)]'
+                            )}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <p className="font-semibold text-sm leading-tight text-[var(--text-strong)]">{p.name}</p>
+                              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                UHID: <span className="font-mono font-semibold">{p.uhid}</span> · {p.age}y · {p.phone}
+                              </p>
+                            </div>
+                            {isSelected && <Check size={14} className="text-[var(--green-700)] shrink-0" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
