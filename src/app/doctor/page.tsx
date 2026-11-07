@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { broadcastChange } from '@/lib/realtime/realtime-provider';
+import { isTodayOrWithin24Hours } from '@/lib/utils/date';
 import type { Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -106,12 +107,18 @@ export default function DoctorPage() {
         prescribedVisitIds.has(v.id);
 
       if (isAlreadyPrescribed) {
-        completed.push({
-          ...enriched,
-          status: v.status === 'waiting' || v.status === 'in_consultation' ? 'prescribed' : v.status,
-        });
+        // Only show today's consulted patients (disappears after 24 hours)
+        if (isTodayOrWithin24Hours(v.updated_at || v.created_at)) {
+          completed.push({
+            ...enriched,
+            status: v.status === 'waiting' || v.status === 'in_consultation' ? 'prescribed' : v.status,
+          });
+        }
       } else if (v.status === 'waiting' || v.status === 'in_consultation') {
-        waiting.push(enriched);
+        // Doctor queue: show today's / active patients (within 24 hours)
+        if (isTodayOrWithin24Hours(v.created_at)) {
+          waiting.push(enriched);
+        }
       }
     });
 

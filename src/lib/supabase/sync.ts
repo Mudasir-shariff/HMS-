@@ -174,8 +174,16 @@ export async function deleteVisitsFromSupabase(visitIds: string[]) {
     const supabase = createClient();
     const validIds = visitIds.filter(isValidUUID);
     if (!validIds.length) return;
-    await supabase.from('dispensings').delete().in('prescription_id', validIds);
-    await supabase.from('prescription_items').delete().in('prescription_id', validIds);
+
+    // Look up associated prescription IDs first to cleanly delete all prescription_items & dispensings
+    const { data: rxList } = await supabase.from('prescriptions').select('id').in('visit_id', validIds);
+    const rxIds = (rxList || []).map((r: any) => r.id).filter(isValidUUID);
+    const allRxIds = Array.from(new Set([...validIds, ...rxIds]));
+
+    if (allRxIds.length > 0) {
+      await supabase.from('dispensings').delete().in('prescription_id', allRxIds);
+      await supabase.from('prescription_items').delete().in('prescription_id', allRxIds);
+    }
     await supabase.from('prescriptions').delete().in('visit_id', validIds);
     await supabase.from('visits').delete().in('id', validIds);
   } catch (err) {
@@ -625,19 +633,20 @@ export async function pushDispensingToSupabase(disp: Dispensing) {
   }
 }
 
-export async function pushAdmissionToSupabase(adm: Admission) {
-  if (!isSupabaseConfigured()) return;
+export async function pushAdmissionToSupabase(adm: Admission): Promise<{ success: boolean; error?: any }> {
+  if (!isSupabaseConfigured()) return { success: true };
   try {
     const supabase = createClient();
-    await supabase.from('admissions').upsert({
-      id: adm.id,
+    const admId = isValidUUID(adm.id) ? adm.id : generateUUID();
+    const { error } = await supabase.from('admissions').upsert({
+      id: admId,
       uaid: adm.uaid,
-      patient_id: adm.patient_id,
-      bed_id: adm.bed_id,
-      doctor_id: adm.doctor_id,
+      patient_id: isValidUUID(adm.patient_id) ? adm.patient_id : null,
+      bed_id: adm.bed_id && isValidUUID(adm.bed_id) ? adm.bed_id : null,
+      doctor_id: adm.doctor_id && isValidUUID(adm.doctor_id) ? adm.doctor_id : null,
       diagnosis: adm.diagnosis || null,
-      has_bp: adm.has_bp,
-      has_sugar: adm.has_sugar,
+      has_bp: Boolean(adm.has_bp),
+      has_sugar: Boolean(adm.has_sugar),
       other_conditions: adm.other_conditions || null,
       status: adm.status,
       admitted_at: adm.admitted_at,
@@ -647,31 +656,43 @@ export async function pushAdmissionToSupabase(adm: Admission) {
       total_pharmacy_charges: adm.total_pharmacy_charges || 0,
       total_lab_charges: adm.total_lab_charges || 0,
     });
+    if (error) {
+      console.error('Error pushing admission to Supabase:', error);
+      return { success: false, error };
+    }
 
     // Keep bed occupancy state synchronized in Supabase
     if (adm.bed_id && isValidUUID(adm.bed_id)) {
       const isOccupied = adm.status === 'admitted';
       await supabase.from('beds').update({ is_occupied: isOccupied }).eq('id', adm.bed_id);
     }
+    return { success: true };
   } catch (e) {
     console.warn('Failed to push admission to Supabase:', e);
+    return { success: false, error: e };
   }
 }
 
-export async function pushWardToSupabase(ward: Ward) {
-  if (!isSupabaseConfigured()) return;
+export async function pushWardToSupabase(ward: Ward): Promise<{ success: boolean; data?: Ward; error?: any }> {
+  if (!isSupabaseConfigured()) return { success: true, data: ward };
   try {
     const supabase = createClient();
     const wardId = isValidUUID(ward.id) ? ward.id : generateUUID();
-    const { error } = await supabase.from('wards').upsert({
+    const payload = {
       id: wardId,
       name: ward.name.trim(),
       is_active: ward.is_active ?? true,
       created_at: ward.created_at || new Date().toISOString(),
-    });
-    if (error) console.error('Error pushing ward to Supabase:', error);
+    };
+    const { error } = await supabase.from('wards').upsert(payload);
+    if (error) {
+      console.error('Error pushing ward to Supabase:', error);
+      return { success: false, error };
+    }
+    return { success: true, data: { ...ward, id: wardId } };
   } catch (e) {
     console.warn('Failed to push ward to Supabase:', e);
+    return { success: false, error: e };
   }
 }
 
@@ -685,22 +706,27 @@ export async function deleteWardFromSupabase(wardId: string) {
   }
 }
 
-export async function pushBedToSupabase(bed: Bed) {
-  if (!isSupabaseConfigured()) return;
+export async function pushBedToSupabase(bed: Bed): Promise<{ success: boolean; error?: any }> {
+  if (!isSupabaseConfigured()) return { success: true };
   try {
     const supabase = createClient();
     const bedId = isValidUUID(bed.id) ? bed.id : generateUUID();
     const { error } = await supabase.from('beds').upsert({
       id: bedId,
-      ward_id: bed.ward_id,
+      ward_id: isValidUUID(bed.ward_id) ? bed.ward_id : null,
       bed_number: bed.bed_number.trim(),
       price_per_day: Number(bed.price_per_day) || 500,
       is_occupied: Boolean(bed.is_occupied),
       created_at: bed.created_at || new Date().toISOString(),
     });
-    if (error) console.error('Error pushing bed to Supabase:', error);
+    if (error) {
+      console.error('Error pushing bed to Supabase:', error);
+      return { success: false, error };
+    }
+    return { success: true };
   } catch (e) {
     console.warn('Failed to push bed to Supabase:', e);
+    return { success: false, error: e };
   }
 }
 

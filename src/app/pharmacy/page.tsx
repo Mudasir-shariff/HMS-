@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/auth/context';
 import { createClient } from '@/lib/supabase/client';
 import { dispensePrescriptionAtomic } from '@/lib/api/mutations';
 import { pushDrugToSupabase, deleteDrugFromSupabase } from '@/lib/supabase/sync';
+import { isTodayOrWithin24Hours } from '@/lib/utils/date';
 import type { Dispensing, Drug, Visit, Prescription } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -211,6 +212,11 @@ export default function PharmacyPage() {
         return;
       }
 
+      // Filter to today's active pending consultations (within 24 hours)
+      if (!isTodayOrWithin24Hours(v.updated_at || v.created_at)) {
+        return;
+      }
+
       // Match prescription by visit_id
       const rx = allPrescriptionsMerged.find(
         (p) => p.visit_id && p.visit_id === v.id
@@ -252,6 +258,7 @@ export default function PharmacyPage() {
       if (matchedRxIds.has(rx.id) || dispensedRxIds.has(rx.id)) return;
       if (rx.visit_id && (matchedVisitIds.has(rx.visit_id) || dispensedVisitIds.has(rx.visit_id))) return;
       if (!rx.items || rx.items.length === 0) return;
+      if (!isTodayOrWithin24Hours(rx.created_at)) return;
 
       matchedRxIds.add(rx.id);
       const patient = patientMap.get(rx.patient_id);
@@ -283,9 +290,12 @@ export default function PharmacyPage() {
     return queue;
   }, [allVisitsMerged, allPrescriptionsMerged, allDispensingsMerged, patients, doctors]);
 
-  // 2. Today's Dispensed Patients (PRD v1.1: Remains in today's patient list, editable with auto stock correction)
+  // 2. Today's Dispensed Patients (PRD v1.1: After 24 hours it disappears from daily view)
   const todayDispensed = useMemo(() => {
     return allDispensingsMerged.filter((d) => {
+      if (!isTodayOrWithin24Hours(d.delivered_at || d.created_at)) {
+        return false;
+      }
       const matchesSearch =
         (d.patient_name || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||
         (d.patient_uhid || '').toLowerCase().includes(dispensedSearch.toLowerCase()) ||

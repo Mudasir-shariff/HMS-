@@ -13,6 +13,7 @@ import {
   useDispensings,
   useBeds,
 } from '@/lib/query/hooks';
+import { isTodayOrWithin24Hours } from '@/lib/utils/date';
 import Link from 'next/link';
 
 export default function HomePage() {
@@ -35,11 +36,15 @@ export default function HomePage() {
 
   // Doctor specific metrics
   const myVisits = visits.filter((v) => v.doctor_id === (user.doctorId || user.id));
-  const myWaiting = myVisits.filter((v) => v.status === 'waiting' || v.status === 'in_consultation');
-  const myCompleted = myVisits.filter((v) => v.status === 'prescribed' || v.status === 'dispensed');
+  const myWaiting = myVisits.filter((v) => (v.status === 'waiting' || v.status === 'in_consultation') && isTodayOrWithin24Hours(v.created_at));
+  const myCompleted = myVisits.filter((v) => (v.status === 'prescribed' || v.status === 'dispensed' || v.status === 'completed') && isTodayOrWithin24Hours(v.updated_at || v.created_at));
+
+  // Today hospital metrics
+  const todayVisitsCount = visits.filter((v) => isTodayOrWithin24Hours(v.created_at)).length;
+  const todayDispensedCount = dispensings.filter((d) => isTodayOrWithin24Hours(d.delivered_at || d.created_at)).length;
 
   // Pharmacy metrics
-  const pendingRx = visits.filter((v) => v.status === 'prescribed');
+  const pendingRx = visits.filter((v) => v.status === 'prescribed' && isTodayOrWithin24Hours(v.updated_at || v.created_at));
   const lowStock = drugs.filter((d) => d.stock_quantity <= d.low_stock_limit);
 
   return (
@@ -75,7 +80,7 @@ export default function HomePage() {
         {isAdmin && (
           <>
             <StatCard label="Total Staff Logins" value={doctors.length + 3} sub="Doctors, Reception, Pharmacy" />
-            <StatCard label="OPD Patients Today" value={visits.length} sub="Active registrations" />
+            <StatCard label="OPD Patients Today" value={todayVisitsCount} sub="Active registrations today" />
             <StatCard label="In-Patients (IP)" value={admissions.filter((a) => a.status === 'admitted').length} sub="Occupied beds" />
             <StatCard label="Pharmacy Items" value={drugs.length} sub={`${lowStock.length} low stock`} />
           </>
@@ -83,17 +88,17 @@ export default function HomePage() {
 
         {isDoctor && (
           <>
-            <StatCard label="Waiting in Your Queue" value={myWaiting.length} sub="Assigned to you" highlight />
-            <StatCard label="Consulted Today" value={myCompleted.length} sub="Prescriptions generated" />
-            <StatCard label="Total Hospital Queue" value={visits.length} sub="All doctors" />
+            <StatCard label="Waiting in Your Queue" value={myWaiting.length} sub="Assigned to you today" highlight />
+            <StatCard label="Consulted Today" value={myCompleted.length} sub="Completed in last 24h" />
+            <StatCard label="Total Hospital Queue" value={todayVisitsCount} sub="All doctors today" />
             <StatCard label="Your Specialization" value={user.specialization || 'Consultant'} sub={user.consultationRoom || 'OPD'} />
           </>
         )}
 
         {isReception && (
           <>
-            <StatCard label="Registered Today" value={visits.length} sub="Tokens issued" />
-            <StatCard label="Waiting for Doctors" value={visits.filter((v) => v.status === 'waiting').length} sub="In waiting area" highlight />
+            <StatCard label="Registered Today" value={todayVisitsCount} sub="Tokens issued today" />
+            <StatCard label="Waiting for Doctors" value={visits.filter((v) => v.status === 'waiting' && isTodayOrWithin24Hours(v.created_at)).length} sub="In waiting area" highlight />
             <StatCard label="Active In-Patients (IP)" value={admissions.filter((a) => a.status === 'admitted').length} sub="Occupied beds" highlight />
             <StatCard label="Available Free Beds" value={beds.filter((b) => !b.is_occupied).length} sub={`${beds.length} total hospital beds`} />
           </>
@@ -102,7 +107,7 @@ export default function HomePage() {
         {isPharmacist && (
           <>
             <StatCard label="Prescriptions to Dispense" value={pendingRx.length} sub="Pending queue" highlight />
-            <StatCard label="Dispensed Today" value={dispensings.length} sub="Completed deliveries" />
+            <StatCard label="Dispensed Today" value={todayDispensedCount} sub="Completed in last 24h" />
             <StatCard label="Total Drugs in Catalog" value={drugs.length} sub="Pharmacy inventory" />
             <StatCard label="Low Stock Alerts" value={lowStock.length} sub="Below reorder threshold" />
           </>

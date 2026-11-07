@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus,
   Pencil,
@@ -19,6 +19,9 @@ import {
   AlertTriangle,
   Check,
   X,
+  Printer,
+  Calendar,
+  FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar } from '@/components/ui';
@@ -32,6 +35,7 @@ import {
   useDrugs,
   usePrescriptions,
   useDoctors,
+  useHospitalSettings,
 } from '@/lib/query/hooks';
 import type { UserAccount } from '@/lib/types/database';
 import {
@@ -40,11 +44,13 @@ import {
   pushPatientToSupabase,
   deletePatientFromSupabase,
   deleteVisitFromSupabase,
+  deleteVisitsFromSupabase,
   deletePrescriptionFromSupabase,
   deleteDrugFromSupabase,
   purgeAllRecordsFromSupabase,
 } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
+import { getYearMonth, formatMonthName, isOlderThanDays } from '@/lib/utils/date';
 import type { Patient, Visit, Drug, Prescription, UserRole } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -74,9 +80,57 @@ export default function AdminPage() {
   const { data: drugs = [] } = useDrugs();
   const { data: prescriptions = [] } = usePrescriptions();
   const { data: doctors = [] } = useDoctors();
+  const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [tab, setTab] = useState<TabId>('staff');
   const [search, setSearch] = useState('');
+
+  // Monthly reporting & cleanup state
+  const [selectedMonth, setSelectedMonth] = useState<string>('all'); // 'all' or 'YYYY-MM'
+  const [showMonthlyReportModal, setShowMonthlyReportModal] = useState(false);
+  const [showMonthlyDeleteModal, setShowMonthlyDeleteModal] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'month' | 'older30'>('month');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingMonthlyData, setIsDeletingMonthlyData] = useState(false);
+
+  // Distinct months from visits
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    visits.forEach((v) => {
+      const ym = getYearMonth(v.created_at);
+      if (ym) set.add(ym);
+    });
+    return Array.from(set).sort().reverse();
+  }, [visits]);
+
+  // Visits filtered by selected month
+  const visitsForSelectedPeriod = useMemo(() => {
+    if (selectedMonth === 'all') return visits;
+    return visits.filter((v) => getYearMonth(v.created_at) === selectedMonth);
+  }, [visits, selectedMonth]);
+
+  // Statistics for the selected month/period
+  const monthStats = useMemo(() => {
+    let waiting = 0, consulting = 0, prescribed = 0, dispensed = 0;
+    visitsForSelectedPeriod.forEach((v) => {
+      if (v.status === 'waiting') waiting++;
+      else if (v.status === 'in_consultation') consulting++;
+      else if (v.status === 'prescribed') prescribed++;
+      else if (v.status === 'dispensed' || v.status === 'completed') dispensed++;
+    });
+    return {
+      total: visitsForSelectedPeriod.length,
+      waiting,
+      consulting,
+      prescribed,
+      dispensed,
+    };
+  }, [visitsForSelectedPeriod]);
+
+  // Count visits older than 30 days
+  const visitsOlderThan30Days = useMemo(() => {
+    return visits.filter((v) => isOlderThanDays(v.created_at, 30));
+  }, [visits]);
 
   // Modals state
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
@@ -107,17 +161,20 @@ export default function AdminPage() {
   );
 
   // Filtered visits (strictly sorted by Token ascending)
-  const filteredVisits = visits
-    .filter((v) => {
-      const pat = patients.find((p) => p.id === v.patient_id);
-      const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
-      return (
-        (pat && pat.name.toLowerCase().includes(search.toLowerCase())) ||
-        (doc && (doc.full_name || '').toLowerCase().includes(search.toLowerCase())) ||
-        v.visit_number.toLowerCase().includes(search.toLowerCase())
-      );
-    })
-    .sort((a, b) => a.token_number - b.token_number);
+  const filteredVisits = useMemo(() => {
+    return visitsForSelectedPeriod
+      .filter((v) => {
+        const pat = patients.find((p) => p.id === v.patient_id);
+        const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
+        return (
+          !search ||
+          (pat && pat.name.toLowerCase().includes(search.toLowerCase())) ||
+          (doc && (doc.full_name || '').toLowerCase().includes(search.toLowerCase())) ||
+          v.visit_number.toLowerCase().includes(search.toLowerCase())
+        );
+      })
+      .sort((a, b) => a.token_number - b.token_number);
+  }, [visitsForSelectedPeriod, search, patients, doctors]);
 
   // Filtered drugs
   const filteredDrugs = drugs.filter(
@@ -198,6 +255,47 @@ export default function AdminPage() {
       );
       await deleteVisitFromSupabase(v.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+    }
+  }
+
+  // Monthly bulk delete handler
+  async function handleExecuteMonthlyDelete() {
+    let targetIds: string[] = [];
+    if (deleteMode === 'older30') {
+      targetIds = visitsOlderThan30Days.map((v) => v.id);
+    } else {
+      if (selectedMonth === 'all') {
+        alert('Please select a specific month from the dropdown to delete monthly data.');
+        return;
+      }
+      targetIds = visitsForSelectedPeriod.map((v) => v.id);
+    }
+
+    if (targetIds.length === 0) {
+      alert('No visits found matching this deletion criterion.');
+      return;
+    }
+
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      alert('Please type DELETE in capital letters to confirm data removal.');
+      return;
+    }
+
+    setIsDeletingMonthlyData(true);
+    try {
+      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+        old ? old.filter((v) => !targetIds.includes(v.id)) : []
+      );
+      await deleteVisitsFromSupabase(targetIds);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+      setShowMonthlyDeleteModal(false);
+      setDeleteConfirmText('');
+    } catch (err) {
+      console.error('Failed to delete monthly visits:', err);
+      alert('Failed to delete visits from database.');
+    } finally {
+      setIsDeletingMonthlyData(false);
     }
   }
 
@@ -469,7 +567,219 @@ export default function AdminPage() {
                           <>
                             <span>·</span>
                             <span className="italic">{p.other_conditions}</span>
-                          </>
+                            {/* ────────────────── MODAL: MONTHLY REPORT ────────────────── */}
+      {showMonthlyReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-3xl shadow-[var(--shadow-float)] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
+                  <FileText size={18} className="text-[var(--green-700)]" />
+                  Monthly OPD & Patient Report
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {selectedMonth === 'all' ? 'All Time Database Summary' : formatMonthName(selectedMonth)} · {settings.hospital_name}
+                </p>
+              </div>
+              <button onClick={() => setShowMonthlyReportModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)]">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Printable summary card */}
+            <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs space-y-2">
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="font-bold text-sm text-[var(--text-strong)]">{settings.hospital_name}</span>
+                <span className="text-[var(--text-muted)]">Generated: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                <div>
+                  <span className="text-[var(--text-muted)]">Total Consultations:</span>
+                  <p className="text-sm font-bold text-[var(--text-strong)]">{monthStats.total}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Dispensed by Pharmacy:</span>
+                  <p className="text-sm font-bold text-[var(--green-700)]">{monthStats.dispensed}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Prescriptions Issued:</span>
+                  <p className="text-sm font-bold text-[#8A6520]">{monthStats.prescribed}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Active in Queue:</span>
+                  <p className="text-sm font-bold text-[var(--info)]">{monthStats.waiting + monthStats.consulting}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized Table */}
+            <div className="border border-[var(--line-soft)] rounded-[var(--r-tile)] overflow-hidden mb-4 text-xs">
+              <div className="max-h-80 overflow-y-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-[var(--bg-tile)] sticky top-0 border-b border-[var(--line-soft)] text-[var(--text-muted)] text-[11px]">
+                    <tr>
+                      <th className="p-2.5">Token</th>
+                      <th className="p-2.5">Patient Name</th>
+                      <th className="p-2.5">UHID</th>
+                      <th className="p-2.5">Consultant</th>
+                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5 text-right">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--line-soft)]">
+                    {visitsForSelectedPeriod.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-center text-[var(--text-muted)]">
+                          No patient records found for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      visitsForSelectedPeriod.map((v) => {
+                        const pat = patients.find((p) => p.id === v.patient_id);
+                        const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
+                        return (
+                          <tr key={v.id} className="hover:bg-[var(--bg-card)]">
+                            <td className="p-2.5 font-bold tabular-nums">#{String(v.token_number).padStart(2, '0')}</td>
+                            <td className="p-2.5 font-medium">{pat?.name || 'Patient'}</td>
+                            <td className="p-2.5 font-mono text-[11px]">{pat?.uhid || '—'}</td>
+                            <td className="p-2.5 text-[var(--green-800)]">{doc?.full_name || 'Doctor'}</td>
+                            <td className="p-2.5">
+                              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-gray-100">
+                                {v.status}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right text-[var(--text-muted)] tabular-nums">
+                              {new Date(v.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                icon={<Printer size={15} />}
+                onClick={() => window.print()}
+                className="flex-1"
+              >
+                Print Report
+              </Button>
+              <Button variant="secondary" onClick={() => setShowMonthlyReportModal(false)} className="flex-1">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── MODAL: MONTHLY DATA CLEAN-UP ────────────────── */}
+      {showMonthlyDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-md shadow-[var(--shadow-float)]">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-strong)]">Monthly Data Clean-Up</h3>
+                <p className="text-xs text-[var(--text-muted)]">Permanent database deletion of historical visits</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4 text-xs">
+              <p className="text-[var(--text-muted)]">
+                Select deletion scope. Prescriptions and dispensing history associated with the selected visits will also be cleaned up.
+              </p>
+
+              <div className="space-y-2 border border-[var(--line-soft)] rounded-[var(--r-control)] p-3 bg-[var(--bg-tile)]">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    checked={deleteMode === 'month'}
+                    onChange={() => setDeleteMode('month')}
+                    className="mt-0.5 accent-[var(--green-900)]"
+                  />
+                  <div>
+                    <span className="font-semibold block text-[var(--text-strong)]">
+                      Delete specific month: {selectedMonth === 'all' ? 'Select a month from dropdown first' : formatMonthName(selectedMonth)}
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[11px]">
+                      {selectedMonth === 'all'
+                        ? 'Disabled: Select a specific month from the period dropdown on the page'
+                        : `${visitsForSelectedPeriod.length} visits found for ${formatMonthName(selectedMonth)}`}
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-[var(--line-soft)]">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    checked={deleteMode === 'older30'}
+                    onChange={() => setDeleteMode('older30')}
+                    className="mt-0.5 accent-[var(--green-900)]"
+                  />
+                  <div>
+                    <span className="font-semibold block text-[var(--text-strong)]">
+                      Purge all records older than 30 days
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[11px]">
+                      {visitsOlderThan30Days.length} visits eligible for purge (&gt;30 days old)
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="bg-red-50 p-2.5 rounded-[var(--r-control)] border border-red-200 text-red-800 text-[11px]">
+                <strong className="block mb-0.5">Safety Confirmation:</strong>
+                To prevent accidental deletion, type <strong>DELETE</strong> in the box below to authorize.
+              </div>
+
+              <input
+                type="text"
+                placeholder="Type DELETE to confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs font-mono uppercase bg-white"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="danger"
+                disabled={
+                  deleteConfirmText.trim().toUpperCase() !== 'DELETE' ||
+                  isDeletingMonthlyData ||
+                  (deleteMode === 'month' && (selectedMonth === 'all' || visitsForSelectedPeriod.length === 0)) ||
+                  (deleteMode === 'older30' && visitsOlderThan30Days.length === 0)
+                }
+                onClick={handleExecuteMonthlyDelete}
+                className="flex-1"
+              >
+                {isDeletingMonthlyData ? 'Deleting Data...' : 'Permanently Delete'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={isDeletingMonthlyData}
+                onClick={() => {
+                  setShowMonthlyDeleteModal(false);
+                  setDeleteConfirmText('');
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
                         )}
                       </div>
                     </div>
@@ -505,18 +815,84 @@ export default function AdminPage() {
             title="All OPD Visits & Active Tokens"
             count={filteredVisits.length}
             action={
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Search patient or doctor..."
-                className="w-full sm:w-60"
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search patient or doctor..."
+                  className="w-full sm:w-52"
+                />
+              </div>
             }
           />
 
+          {/* Monthly Reporting & Cleanup Controls */}
+          <div className="bg-[var(--bg-tile)] p-3 sm:p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
+                <Calendar size={14} className="text-[var(--green-700)]" />
+                Select Period / Month:
+              </span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="h-9 rounded-[var(--r-control)] border border-[var(--line-soft)] px-3 text-xs bg-white font-medium text-[var(--text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--green-700)] cursor-pointer"
+              >
+                <option value="all">All Time (Complete Database History · {visits.length} records)</option>
+                {availableMonths.map((ym) => (
+                  <option key={ym} value={ym}>
+                    {formatMonthName(ym)} ({visits.filter((v) => getYearMonth(v.created_at) === ym).length} visits)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Printer size={13} />}
+                onClick={() => setShowMonthlyReportModal(true)}
+              >
+                Generate Monthly Report
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<Trash2 size={13} />}
+                onClick={() => {
+                  setDeleteConfirmText('');
+                  setShowMonthlyDeleteModal(true);
+                }}
+              >
+                Clean-up Monthly Data
+              </Button>
+            </div>
+          </div>
+
+          {/* Month Summary KPI Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+            <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
+              <span className="text-[11px] text-[var(--text-muted)] block">Period Total Visits</span>
+              <span className="text-lg font-bold text-[var(--text-strong)] tabular-nums">{monthStats.total}</span>
+            </div>
+            <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
+              <span className="text-[11px] text-[var(--text-muted)] block">Completed / Dispensed</span>
+              <span className="text-lg font-bold text-[var(--green-700)] tabular-nums">{monthStats.dispensed}</span>
+            </div>
+            <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
+              <span className="text-[11px] text-[var(--text-muted)] block">At Pharmacy / Rx</span>
+              <span className="text-lg font-bold text-[#8A6520] tabular-nums">{monthStats.prescribed}</span>
+            </div>
+            <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
+              <span className="text-[11px] text-[var(--text-muted)] block">Waiting / In Cabin</span>
+              <span className="text-lg font-bold text-[var(--info)] tabular-nums">{monthStats.waiting + monthStats.consulting}</span>
+            </div>
+          </div>
+
           {filteredVisits.length === 0 ? (
             <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
-              <p>No active patient visits or tokens in queue.</p>
+              <p>No patient visits found for this selection.</p>
               <Link href="/reception/register" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
                 + Register Patient Visit
               </Link>
@@ -555,7 +931,7 @@ export default function AdminPage() {
                             Doctor: <strong className="text-[var(--green-700)]">{doc?.full_name || 'Doctor'}</strong> ({doc?.specialization})
                           </span>
                           <span>·</span>
-                          <span className="tabular-nums">Time: {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="tabular-nums">Date: {new Date(v.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · {new Date(v.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
                           {v.follow_up_date && <span>· Follow-up: {v.follow_up_date}</span>}
                         </div>
                       </div>
@@ -929,6 +1305,218 @@ export default function AdminPage() {
                 Yes, Delete
               </Button>
               <Button variant="secondary" className="flex-1" onClick={() => setDeletingPatient(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ────────────────── MODAL: MONTHLY REPORT ────────────────── */}
+      {showMonthlyReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-3xl shadow-[var(--shadow-float)] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
+                  <FileText size={18} className="text-[var(--green-700)]" />
+                  Monthly OPD & Patient Report
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {selectedMonth === 'all' ? 'All Time Database Summary' : formatMonthName(selectedMonth)} · {settings.hospital_name}
+                </p>
+              </div>
+              <button onClick={() => setShowMonthlyReportModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)]">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Printable summary card */}
+            <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs space-y-2">
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="font-bold text-sm text-[var(--text-strong)]">{settings.hospital_name}</span>
+                <span className="text-[var(--text-muted)]">Generated: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                <div>
+                  <span className="text-[var(--text-muted)]">Total Consultations:</span>
+                  <p className="text-sm font-bold text-[var(--text-strong)]">{monthStats.total}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Dispensed by Pharmacy:</span>
+                  <p className="text-sm font-bold text-[var(--green-700)]">{monthStats.dispensed}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Prescriptions Issued:</span>
+                  <p className="text-sm font-bold text-[#8A6520]">{monthStats.prescribed}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)]">Active in Queue:</span>
+                  <p className="text-sm font-bold text-[var(--info)]">{monthStats.waiting + monthStats.consulting}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized Table */}
+            <div className="border border-[var(--line-soft)] rounded-[var(--r-tile)] overflow-hidden mb-4 text-xs">
+              <div className="max-h-80 overflow-y-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-[var(--bg-tile)] sticky top-0 border-b border-[var(--line-soft)] text-[var(--text-muted)] text-[11px]">
+                    <tr>
+                      <th className="p-2.5">Token</th>
+                      <th className="p-2.5">Patient Name</th>
+                      <th className="p-2.5">UHID</th>
+                      <th className="p-2.5">Consultant</th>
+                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5 text-right">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--line-soft)]">
+                    {visitsForSelectedPeriod.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-center text-[var(--text-muted)]">
+                          No patient records found for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      visitsForSelectedPeriod.map((v) => {
+                        const pat = patients.find((p) => p.id === v.patient_id);
+                        const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
+                        return (
+                          <tr key={v.id} className="hover:bg-[var(--bg-card)]">
+                            <td className="p-2.5 font-bold tabular-nums">#{String(v.token_number).padStart(2, '0')}</td>
+                            <td className="p-2.5 font-medium">{pat?.name || 'Patient'}</td>
+                            <td className="p-2.5 font-mono text-[11px]">{pat?.uhid || '—'}</td>
+                            <td className="p-2.5 text-[var(--green-800)]">{doc?.full_name || 'Doctor'}</td>
+                            <td className="p-2.5">
+                              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-gray-100">
+                                {v.status}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right text-[var(--text-muted)] tabular-nums">
+                              {new Date(v.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                icon={<Printer size={15} />}
+                onClick={() => window.print()}
+                className="flex-1"
+              >
+                Print Report
+              </Button>
+              <Button variant="secondary" onClick={() => setShowMonthlyReportModal(false)} className="flex-1">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── MODAL: MONTHLY DATA CLEAN-UP ────────────────── */}
+      {showMonthlyDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-md shadow-[var(--shadow-float)]">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-strong)]">Monthly Data Clean-Up</h3>
+                <p className="text-xs text-[var(--text-muted)]">Permanent database deletion of historical visits</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4 text-xs">
+              <p className="text-[var(--text-muted)]">
+                Select deletion scope. Prescriptions and dispensing history associated with the selected visits will also be cleaned up.
+              </p>
+
+              <div className="space-y-2 border border-[var(--line-soft)] rounded-[var(--r-control)] p-3 bg-[var(--bg-tile)]">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    checked={deleteMode === 'month'}
+                    onChange={() => setDeleteMode('month')}
+                    className="mt-0.5 accent-[var(--green-900)]"
+                  />
+                  <div>
+                    <span className="font-semibold block text-[var(--text-strong)]">
+                      Delete specific month: {selectedMonth === 'all' ? 'Select a month from dropdown first' : formatMonthName(selectedMonth)}
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[11px]">
+                      {selectedMonth === 'all'
+                        ? 'Disabled: Select a specific month from the period dropdown on the page'
+                        : `${visitsForSelectedPeriod.length} visits found for ${formatMonthName(selectedMonth)}`}
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-[var(--line-soft)]">
+                  <input
+                    type="radio"
+                    name="deleteMode"
+                    checked={deleteMode === 'older30'}
+                    onChange={() => setDeleteMode('older30')}
+                    className="mt-0.5 accent-[var(--green-900)]"
+                  />
+                  <div>
+                    <span className="font-semibold block text-[var(--text-strong)]">
+                      Purge all records older than 30 days
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[11px]">
+                      {visitsOlderThan30Days.length} visits eligible for purge (&gt;30 days old)
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="bg-red-50 p-2.5 rounded-[var(--r-control)] border border-red-200 text-red-800 text-[11px]">
+                <strong className="block mb-0.5">Safety Confirmation:</strong>
+                To prevent accidental deletion, type <strong>DELETE</strong> in the box below to authorize.
+              </div>
+
+              <input
+                type="text"
+                placeholder="Type DELETE to confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs font-mono uppercase bg-white"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="danger"
+                disabled={
+                  deleteConfirmText.trim().toUpperCase() !== 'DELETE' ||
+                  isDeletingMonthlyData ||
+                  (deleteMode === 'month' && (selectedMonth === 'all' || visitsForSelectedPeriod.length === 0)) ||
+                  (deleteMode === 'older30' && visitsOlderThan30Days.length === 0)
+                }
+                onClick={handleExecuteMonthlyDelete}
+                className="flex-1"
+              >
+                {isDeletingMonthlyData ? 'Deleting Data...' : 'Permanently Delete'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={isDeletingMonthlyData}
+                onClick={() => {
+                  setShowMonthlyDeleteModal(false);
+                  setDeleteConfirmText('');
+                }}
+                className="flex-1"
+              >
                 Cancel
               </Button>
             </div>

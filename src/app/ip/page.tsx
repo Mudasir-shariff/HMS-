@@ -50,11 +50,13 @@ export default function InPatientPage() {
   // Ward & Bed Management Modals
   const [showAddWardModal, setShowAddWardModal] = useState(false);
   const [newWardName, setNewWardName] = useState('');
+  const [isSavingWard, setIsSavingWard] = useState(false);
 
   const [showAddBedModal, setShowAddBedModal] = useState(false);
   const [newBedWardId, setNewBedWardId] = useState(wards[0]?.id || '');
   const [newBedNumber, setNewBedNumber] = useState('');
   const [newBedPrice, setNewBedPrice] = useState(1200);
+  const [isSavingBed, setIsSavingBed] = useState(false);
 
   const [editingBed, setEditingBed] = useState<Bed | null>(null);
   const [editBedPrice, setEditBedPrice] = useState(1200);
@@ -66,41 +68,94 @@ export default function InPatientPage() {
   const [admitDiagnosis, setAdmitDiagnosis] = useState('');
   const [hasBP, setHasBP] = useState(false);
   const [hasSugar, setHasSugar] = useState(false);
+  const [isAdmitting, setIsAdmitting] = useState(false);
+
+  // Synchronize default selections when async TanStack query data resolves
+  useEffect(() => {
+    if (!newBedWardId && wards.length > 0) {
+      setNewBedWardId(wards[0].id);
+    }
+  }, [wards, newBedWardId]);
+
+  useEffect(() => {
+    if (!admitPatientId && patients.length > 0) {
+      setAdmitPatientId(patients[0].id);
+    }
+  }, [patients, admitPatientId]);
+
+  useEffect(() => {
+    if (!admitDoctorId && doctors.length > 0) {
+      setAdmitDoctorId(doctors[0].id);
+    }
+  }, [doctors, admitDoctorId]);
 
   const availableBeds = beds.filter((b) => !b.is_occupied);
 
+  useEffect(() => {
+    if (!admitBedId && availableBeds.length > 0) {
+      setAdmitBedId(availableBeds[0].id);
+    }
+  }, [availableBeds, admitBedId]);
+
   async function handleAdmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!admitPatientId || !admitBedId || !admitDoctorId) {
-      alert('Please select patient, bed, and doctor.');
+    const effectivePatientId = admitPatientId || (patients.length > 0 ? patients[0].id : '');
+    const effectiveDoctorId = admitDoctorId || (doctors.length > 0 ? doctors[0].id : '');
+    const effectiveBedId = admitBedId || (availableBeds.length > 0 ? availableBeds[0].id : '');
+
+    if (!effectivePatientId || !effectiveBedId || !effectiveDoctorId) {
+      alert('Please select patient, available bed, and attending doctor.');
       return;
     }
 
-    const nextNum = admissions.length + 1;
-    const uaid = `IP-${String(nextNum).padStart(4, '0')}`;
-    const bed = beds.find((b) => b.id === admitBedId);
+    setIsAdmitting(true);
+    try {
+      const nextNum = admissions.length + 1;
+      const uaid = `IP-${String(nextNum).padStart(4, '0')}`;
+      const bed = beds.find((b) => b.id === effectiveBedId);
 
-    const newAdmission: Admission = {
-      id: `adm-${Date.now()}`,
-      uaid,
-      patient_id: admitPatientId,
-      bed_id: admitBedId,
-      doctor_id: admitDoctorId,
-      diagnosis: admitDiagnosis || 'In-patient clinical care',
-      has_bp: hasBP,
-      has_sugar: hasSugar,
-      status: 'admitted',
-      admitted_at: new Date().toISOString(),
-      hours_per_day: settings.ip_hours_per_day || 18,
-      total_bed_charges: bed?.price_per_day || 1200,
-      total_pharmacy_charges: 0,
-      total_lab_charges: 0,
-    };
+      const newAdmission: Admission = {
+        id: generateUUID(),
+        uaid,
+        patient_id: effectivePatientId,
+        bed_id: effectiveBedId,
+        doctor_id: effectiveDoctorId,
+        diagnosis: admitDiagnosis || 'In-patient clinical care',
+        has_bp: hasBP,
+        has_sugar: hasSugar,
+        status: 'admitted',
+        admitted_at: new Date().toISOString(),
+        hours_per_day: settings.ip_hours_per_day || 18,
+        total_bed_charges: bed?.price_per_day || 1200,
+        total_pharmacy_charges: 0,
+        total_lab_charges: 0,
+      };
 
-    await pushAdmissionToSupabase(newAdmission);
-    queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
-    setShowAdmitModal(false);
+      // Optimistic updates so UI responds instantly
+      queryClient.setQueriesData<Admission[]>({ queryKey: queryKeys.admissions.all }, (old) =>
+        old ? [newAdmission, ...old] : [newAdmission]
+      );
+      queryClient.setQueriesData<Bed[]>({ queryKey: queryKeys.beds.all }, (old) =>
+        old ? old.map((b) => (b.id === effectiveBedId ? { ...b, is_occupied: true } : b)) : []
+      );
+
+      const res = await pushAdmissionToSupabase(newAdmission);
+      if (!res.success) {
+        alert('Warning: Admission could not be saved to database: ' + (res.error?.message || 'Database error'));
+        return;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
+      setShowAdmitModal(false);
+      setAdmitDiagnosis('');
+      setAdmitBedId('');
+    } catch (err: any) {
+      console.error('Failed to admit patient:', err);
+      alert('Failed to admit patient: ' + (err?.message || 'Server error'));
+    } finally {
+      setIsAdmitting(false);
+    }
   }
 
   async function handleConfirmDischarge() {
@@ -137,33 +192,95 @@ export default function InPatientPage() {
   }
 
   async function handleAddWard() {
-    if (!newWardName.trim()) return;
-    const newWard: Ward = {
-      id: generateUUID(),
-      name: newWardName.trim(),
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
-    await pushWardToSupabase(newWard);
-    queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
-    setNewWardName('');
-    setShowAddWardModal(false);
+    if (!newWardName.trim()) {
+      alert('Please enter a ward name.');
+      return;
+    }
+    setIsSavingWard(true);
+    try {
+      const newWard: Ward = {
+        id: generateUUID(),
+        name: newWardName.trim(),
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+      queryClient.setQueriesData<Ward[]>({ queryKey: queryKeys.wards.all }, (old) =>
+        old ? [...old, newWard] : [newWard]
+      );
+      const res = await pushWardToSupabase(newWard);
+      if (!res.success) {
+        alert('Failed to save ward to database: ' + (res.error?.message || 'Database error'));
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
+      setNewBedWardId(newWard.id);
+      setNewWardName('');
+      setShowAddWardModal(false);
+    } catch (err: any) {
+      console.error('Failed to create ward:', err);
+      alert('Failed to create ward: ' + (err?.message || 'Error'));
+    } finally {
+      setIsSavingWard(false);
+    }
   }
 
   async function handleAddBed() {
-    if (!newBedNumber.trim() || !newBedWardId) return;
-    const newBed: Bed = {
-      id: generateUUID(),
-      ward_id: newBedWardId,
-      bed_number: newBedNumber.trim(),
-      price_per_day: newBedPrice || 1200,
-      is_occupied: false,
-      created_at: new Date().toISOString(),
-    };
-    await pushBedToSupabase(newBed);
-    queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
-    setNewBedNumber('');
-    setShowAddBedModal(false);
+    const trimmedNumber = newBedNumber.trim();
+    if (!trimmedNumber) {
+      alert('Please enter a bed number or identifier.');
+      return;
+    }
+
+    setIsSavingBed(true);
+    try {
+      let targetWardId = newBedWardId || (wards.length > 0 ? wards[0].id : '');
+
+      // If no wards exist yet, auto-create a default General Ward
+      if (!targetWardId) {
+        const defaultWard: Ward = {
+          id: generateUUID(),
+          name: 'General Ward',
+          is_active: true,
+          created_at: new Date().toISOString(),
+        };
+        const wardRes = await pushWardToSupabase(defaultWard);
+        targetWardId = defaultWard.id;
+        queryClient.setQueriesData<Ward[]>({ queryKey: queryKeys.wards.all }, (old) =>
+          old ? [...old, defaultWard] : [defaultWard]
+        );
+        queryClient.invalidateQueries({ queryKey: queryKeys.wards.all });
+        setNewBedWardId(defaultWard.id);
+      }
+
+      const newBed: Bed = {
+        id: generateUUID(),
+        ward_id: targetWardId,
+        bed_number: trimmedNumber,
+        price_per_day: Number(newBedPrice) > 0 ? Number(newBedPrice) : 1200,
+        is_occupied: false,
+        created_at: new Date().toISOString(),
+      };
+
+      // Optimistic cache update so bed appears immediately in Bed Matrix
+      queryClient.setQueriesData<Bed[]>({ queryKey: queryKeys.beds.all }, (old) =>
+        old ? [...old, newBed] : [newBed]
+      );
+
+      const res = await pushBedToSupabase(newBed);
+      if (!res.success) {
+        alert('Warning: Bed could not be saved to Supabase: ' + (res.error?.message || 'Check database permissions'));
+        return;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
+      setNewBedNumber('');
+      setShowAddBedModal(false);
+    } catch (err: any) {
+      console.error('Error saving bed:', err);
+      alert('Failed to save bed: ' + (err?.message || 'Unexpected error'));
+    } finally {
+      setIsSavingBed(false);
+    }
   }
 
   async function handleUpdateBedPrice() {
@@ -584,10 +701,10 @@ export default function InPatientPage() {
               </div>
 
               <div className="flex gap-2 pt-3 border-t mt-2">
-                <Button type="submit" className="flex-1" disabled={availableBeds.length === 0}>
-                  Confirm Admission & Start Timer
+                <Button type="submit" className="flex-1" disabled={availableBeds.length === 0 || isAdmitting}>
+                  {isAdmitting ? 'Admitting...' : 'Confirm Admission & Start Timer'}
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => setShowAdmitModal(false)} className="flex-1">
+                <Button type="button" variant="secondary" onClick={() => setShowAdmitModal(false)} disabled={isAdmitting} className="flex-1">
                   Cancel
                 </Button>
               </div>
@@ -609,8 +726,12 @@ export default function InPatientPage() {
               className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs mb-4"
             />
             <div className="flex gap-2">
-              <Button onClick={handleAddWard} className="flex-1">Create Ward</Button>
-              <Button variant="secondary" onClick={() => setShowAddWardModal(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleAddWard} disabled={isSavingWard} className="flex-1">
+                {isSavingWard ? 'Creating...' : 'Create Ward'}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowAddWardModal(false)} disabled={isSavingWard} className="flex-1">
+                Cancel
+              </Button>
             </div>
           </div>
         </div>
@@ -623,25 +744,32 @@ export default function InPatientPage() {
             <h3 className="text-base font-semibold text-[var(--text-strong)] mb-3">Add Hospital Bed</h3>
             <div className="space-y-3 mb-4 text-xs">
               <div>
-                <label className="text-[var(--text-muted)] block mb-1">Ward</label>
-                <select
-                  value={newBedWardId}
-                  onChange={(e) => setNewBedWardId(e.target.value)}
-                  className="h-9 w-full rounded-[var(--r-control)] border px-2.5 text-xs bg-white"
-                >
-                  {wards.map((w) => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
+                <label className="text-[var(--text-muted)] block mb-1">Ward *</label>
+                {wards.length === 0 ? (
+                  <div className="bg-[var(--bg-tile)] p-2 rounded-[var(--r-control)] border border-[var(--line-soft)] text-xs text-[var(--text-muted)] leading-relaxed">
+                    No wards registered yet. A default &quot;General Ward&quot; will be created automatically.
+                  </div>
+                ) : (
+                  <select
+                    value={newBedWardId || (wards[0]?.id || '')}
+                    onChange={(e) => setNewBedWardId(e.target.value)}
+                    className="h-9 w-full rounded-[var(--r-control)] border px-2.5 text-xs bg-white"
+                  >
+                    {wards.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
-                <label className="text-[var(--text-muted)] block mb-1">Bed Number / Name</label>
+                <label className="text-[var(--text-muted)] block mb-1">Bed Number / Name *</label>
                 <input
                   type="text"
                   value={newBedNumber}
                   onChange={(e) => setNewBedNumber(e.target.value)}
                   placeholder="e.g. Bed 105 / Deluxe Suite 3"
                   className="h-9 w-full rounded-[var(--r-control)] border px-2.5 text-xs"
+                  autoFocus
                 />
               </div>
               <div>
@@ -657,8 +785,12 @@ export default function InPatientPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleAddBed} className="flex-1">Save Bed</Button>
-              <Button variant="secondary" onClick={() => setShowAddBedModal(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleAddBed} disabled={isSavingBed} className="flex-1">
+                {isSavingBed ? 'Saving Bed...' : 'Save Bed'}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowAddBedModal(false)} disabled={isSavingBed} className="flex-1">
+                Cancel
+              </Button>
             </div>
           </div>
         </div>

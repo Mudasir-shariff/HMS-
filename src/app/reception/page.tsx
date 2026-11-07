@@ -25,6 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { deleteVisitsFromSupabase } from '@/lib/supabase/sync';
 import { broadcastChange } from '@/lib/realtime/realtime-provider';
+import { isTodayOrWithin24Hours } from '@/lib/utils/date';
 import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
@@ -129,6 +130,7 @@ export default function ReceptionPage() {
     });
 
     const tv = visits
+      .filter((v) => isTodayOrWithin24Hours(v.created_at))
       .map((v) => {
         const patient = patientMap.get(v.patient_id);
         const doc = doctorMap.get(v.doctor_id);
