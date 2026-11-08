@@ -67,6 +67,8 @@ export interface Patient {
   has_bp: boolean;
   has_sugar: boolean;
   other_conditions?: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -243,12 +245,20 @@ export interface Admission {
 
 export interface AuditLog {
   id: string;
-  user_id: string;
+  user_id?: string;
+  user_name?: string;
+  user_role?: string;
   action: string;
   table_name: string;
-  record_id: string;
-  old_values?: Record<string, unknown>;
-  new_values?: Record<string, unknown>;
+  record_id?: string;
+  entity_type?: string;
+  entity_id?: string;
+  details?: string;
+  old_values?: Record<string, unknown> | any;
+  new_values?: Record<string, unknown> | any;
+  old_data?: any;
+  new_data?: any;
+  ip_address?: string;
   created_at: string;
 }
 

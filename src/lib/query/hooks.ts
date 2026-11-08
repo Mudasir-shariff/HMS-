@@ -12,6 +12,8 @@ import {
   fetchAdmissions,
   fetchSettings,
   fetchDispensings,
+  fetchAuditLogs,
+  fetchDeletedPatients,
 } from '@/lib/api';
 
 export function useVisits(filters?: { doctorId?: string; status?: string; date?: string }) {
@@ -112,3 +114,22 @@ export function useHospitalSettings() {
     refetchInterval: false,
   });
 }
+
+export function useAuditLogs() {
+  return useQuery({
+    queryKey: queryKeys.auditLogs.all,
+    queryFn: fetchAuditLogs,
+    staleTime: 5000,
+    refetchInterval: 15000,
+  });
+}
+
+export function useDeletedPatients() {
+  return useQuery({
+    queryKey: queryKeys.deletedPatients.all,
+    queryFn: fetchDeletedPatients,
+    staleTime: 5000,
+    refetchInterval: 30000,
+  });
+}
+

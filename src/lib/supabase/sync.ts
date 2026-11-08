@@ -14,6 +14,7 @@ import type {
   UserAccount,
   Ward,
   Bed,
+  AuditLog,
 } from '../types/database';
 
 export function isSupabaseConfigured(): boolean {
@@ -107,10 +108,17 @@ export async function pushUserToSupabase(user: UserAccount) {
     };
     if (user.email) userPayload.email = user.email.toLowerCase().trim();
     if (user.password) userPayload.password = user.password;
-    if (user.specialization) userPayload.specialization = user.specialization;
-    if (user.consultation_room) userPayload.consultation_room = user.consultation_room;
-    if (user.consultation_fee) userPayload.consultation_fee = user.consultation_fee;
-    if (user.opd_timings) userPayload.opd_timings = user.opd_timings;
+    if (user.role === 'doctor') {
+      userPayload.specialization = user.specialization || 'General Medicine';
+      userPayload.consultation_room = user.consultation_room || 'Room 1';
+      userPayload.consultation_fee = user.consultation_fee ?? 500;
+      userPayload.opd_timings = user.opd_timings || null;
+    } else {
+      userPayload.specialization = null;
+      userPayload.consultation_room = null;
+      userPayload.consultation_fee = 0;
+      userPayload.opd_timings = null;
+    }
 
     const { error: pErr } = await supabase.from('user_profiles').upsert(userPayload);
     if (pErr) console.error('Error pushing user_profile to Supabase:', pErr);
@@ -139,6 +147,26 @@ export async function deleteUserFromSupabase(userId: string) {
     await supabase.from('user_profiles').delete().eq('id', userId);
   } catch (err) {
     console.warn('Failed to delete user from Supabase:', err);
+  }
+}
+
+export async function softDeletePatientInSupabase(patientId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(patientId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('patients').update({ deleted_at: new Date().toISOString() }).eq('id', patientId);
+  } catch (err) {
+    console.warn('Failed to soft delete patient in Supabase:', err);
+  }
+}
+
+export async function restorePatientInSupabase(patientId: string) {
+  if (!isSupabaseConfigured() || !isValidUUID(patientId)) return;
+  try {
+    const supabase = createClient();
+    await supabase.from('patients').update({ deleted_at: null }).eq('id', patientId);
+  } catch (err) {
+    console.warn('Failed to restore patient in Supabase:', err);
   }
 }
 
@@ -768,6 +796,29 @@ export async function pushSettingsToSupabase(settings: HospitalSettings) {
     console.warn('Failed to push settings to Supabase:', e);
   }
 }
+
+export async function pushAuditLogToSupabase(log: AuditLog) {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const supabase = createClient();
+    const payload: any = {
+      id: isValidUUID(log.id) ? log.id : generateUUID(),
+      table_name: log.table_name || 'system',
+      record_id: isValidUUID(log.record_id) ? log.record_id : null,
+      action: log.action,
+      user_id: isValidUUID(log.user_id) ? log.user_id : null,
+      user_role: log.user_role || null,
+      old_data: log.old_data || log.old_values || null,
+      new_data: log.new_data || log.new_values || (log.details ? { details: log.details, user_name: log.user_name } : null),
+      ip_address: log.ip_address || null,
+      created_at: log.created_at || new Date().toISOString(),
+    };
+    await supabase.from('audit_logs').insert(payload);
+  } catch (e) {
+    console.warn('Failed to push audit log to Supabase:', e);
+  }
+}
+
 
 
 

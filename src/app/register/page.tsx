@@ -13,6 +13,8 @@ import { ROLE_HOME } from '@/lib/auth/roles';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { BrandLogo } from '@/components/ui/brand-logo';
+import { isValidEmail, isValidIndianPhone, cleanIndianPhone } from '@/lib/utils/validation';
+import { recordAuditLog } from '@/lib/audit/logger';
 import type { UserRole } from '@/lib/types/database';
 
 const ROLES = [
@@ -90,11 +92,22 @@ export default function RegisterPage() {
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!form.fullName.trim()) errs.fullName = 'Full name is required.';
-    if (!form.email.trim() || !form.email.includes('@')) errs.email = 'Valid email is required.';
-    
-    // Check if email already registered
-    if (existingUsers.some((u) => u.email.toLowerCase() === form.email.trim().toLowerCase())) {
+
+    // Email validation (RFC-compliant)
+    if (!form.email.trim()) {
+      errs.email = 'Hospital email address is required.';
+    } else if (!isValidEmail(form.email.trim())) {
+      errs.email = 'Please enter a valid email address (e.g. doctor@hospital.com).';
+    } else if (existingUsers.some((u) => u.email.toLowerCase() === form.email.trim().toLowerCase())) {
       errs.email = 'An account with this email address already exists. Please sign in instead.';
+    }
+
+    // Phone validation (10-digit Indian mobile starting with 6-9)
+    const cleanedPhone = cleanIndianPhone(form.phone);
+    if (!cleanedPhone) {
+      errs.phone = '10-digit Indian mobile number is required.';
+    } else if (!isValidIndianPhone(cleanedPhone)) {
+      errs.phone = 'Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).';
     }
 
     if (form.password.length < 4) errs.password = 'Password must be at least 4 characters.';
@@ -121,6 +134,7 @@ export default function RegisterPage() {
 
     const supabase = createClient();
     const cleanEmail = form.email.trim().toLowerCase();
+    const cleanPhone = cleanIndianPhone(form.phone);
 
     // 1. Verify email uniqueness directly in Supabase
     try {
@@ -161,7 +175,7 @@ export default function RegisterPage() {
       password: form.password,
       full_name: form.fullName.trim(),
       role: form.role,
-      phone: form.phone.trim() || null,
+      phone: cleanPhone || null,
       specialization: form.role === 'doctor' ? (form.specialization || 'General Medicine') : null,
       consultation_room: form.role === 'doctor' ? (form.consultationRoom || 'Room 1') : null,
       consultation_fee: form.role === 'doctor' ? (Number(form.consultationFee) || 500) : 0,
@@ -203,7 +217,7 @@ export default function RegisterPage() {
       password: form.password,
       full_name: form.fullName.trim(),
       role: form.role,
-      phone: form.phone.trim() || undefined,
+      phone: cleanPhone || undefined,
       is_active: true,
       created_at: new Date().toISOString(),
       ...(form.role === 'doctor'
@@ -217,6 +231,30 @@ export default function RegisterPage() {
     };
 
     await pushUserToSupabase(newAccount);
+
+    // Record audit event for staff registration
+    recordAuditLog({
+      action: 'USER_REGISTERED',
+      entity_type: 'staff',
+      entity_id: assignedId,
+      user_id: assignedId,
+      user_name: form.fullName.trim(),
+      user_role: form.role,
+      details: `New ${form.role} account created for ${form.fullName.trim()} (${cleanEmail})`,
+      new_data: {
+        email: cleanEmail,
+        role: form.role,
+        phone: cleanPhone,
+        ...(form.role === 'doctor'
+          ? {
+              specialization: form.specialization,
+              consultation_room: form.consultationRoom,
+              consultation_fee: Number(form.consultationFee) || 500,
+            }
+          : {}),
+      },
+    });
+
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
 
@@ -419,14 +457,17 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-[var(--text-strong)] block mb-1">Mobile Phone</label>
+                <label className="text-xs font-medium text-[var(--text-strong)] block mb-1">Mobile Phone *</label>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={form.phone}
-                  onChange={(e) => update('phone', e.target.value)}
-                  placeholder="10-digit mobile number"
+                  onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="10-digit mobile number (e.g. 9876543210)"
+                  maxLength={10}
                   className="h-11 w-full rounded-[var(--r-control)] bg-white px-3 text-sm text-[var(--text-body)] border border-[var(--line-soft)] focus:outline-none focus:border-[var(--green-600)]"
                 />
+                {errors.phone && <p className="text-xs text-[var(--danger)] mt-1 font-medium">{errors.phone}</p>}
               </div>
             </div>
 

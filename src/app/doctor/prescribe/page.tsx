@@ -45,6 +45,7 @@ import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { createClient } from '@/lib/supabase/client';
 import { broadcastChange } from '@/lib/realtime/realtime-provider';
 import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
+import { recordAuditLog } from '@/lib/audit/logger';
 import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
@@ -581,6 +582,25 @@ function PrescribeContent() {
     // Push prescription & items in background
     pushPrescriptionToSupabase(rxPayload).catch((pErr) => {
       console.warn('Concurrent pushPrescriptionToSupabase warning:', pErr);
+    });
+
+    // Record audit log for prescription creation / update
+    recordAuditLog({
+      action: 'PRESCRIPTION_ISSUED',
+      entity_type: 'prescription',
+      entity_id: rxId,
+      user_id: user?.id,
+      user_name: user?.fullName || 'Consultant Doctor',
+      user_role: 'doctor',
+      details: `Prescription saved for ${activePatient?.name || patientName} (${rxItems.length} medicines, ${rxLabOrders.length} lab tests)`,
+      new_data: {
+        rx_id: rxId,
+        patient_name: activePatient?.name || patientName,
+        uhid: activePatient?.uhid || uhid,
+        items_count: rxItems.length,
+        lab_tests_count: rxLabOrders.length,
+        diagnosis: diagnosis || null,
+      },
     });
 
     queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });

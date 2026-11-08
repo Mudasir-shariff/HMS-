@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/context';
 import { createClient } from '@/lib/supabase/client';
 import { ROLE_HOME } from '@/lib/auth/roles';
 import { BrandLogo } from '@/components/ui/brand-logo';
+import { recordAuditLog } from '@/lib/audit/logger';
 import type { UserRole } from '@/lib/types/database';
 
 function LoginForm() {
@@ -52,6 +53,14 @@ function LoginForm() {
       setLoading(false);
       return;
     }
+
+    recordAuditLog({
+      action: 'USER_LOGIN',
+      entity_type: 'auth',
+      user_name: targetEmail,
+      user_role: res.role,
+      details: `Successful sign-in as ${res.role || 'staff'} (${targetEmail})`,
+    });
 
     // Redirect to user's assigned role dashboard
     if (res.role) {

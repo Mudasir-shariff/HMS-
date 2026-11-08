@@ -44,4 +44,10 @@ export const queryKeys = {
     all: ['settings'] as const,
     current: ['settings'] as const,
   },
+  auditLogs: {
+    all: ['audit_logs'] as const,
+  },
+  deletedPatients: {
+    all: ['deleted_patients'] as const,
+  },
 };

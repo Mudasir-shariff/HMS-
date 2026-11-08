@@ -11,6 +11,8 @@ import { queryKeys } from '@/lib/query/keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { pushPatientToSupabase, pushVisitToSupabase } from '@/lib/supabase/sync';
 import { registerPatientAndVisitAtomic } from '@/lib/api/mutations';
+import { isValidIndianPhone, cleanIndianPhone } from '@/lib/utils/validation';
+import { recordAuditLog } from '@/lib/audit/logger';
 import type { Patient, Visit } from '@/lib/types/database';
 
 const BLOOD_GROUPS = [
@@ -69,12 +71,12 @@ export default function RegisterPatientPage() {
 
   // Auto-search existing patient when typing phone (10 digits) or UHID
   useEffect(() => {
-    const cleanedPhone = form.phone.trim();
+    const cleanedPhone = cleanIndianPhone(form.phone);
     const cleanedUhid = form.uhidLookup.trim().toUpperCase();
 
     let found: Patient | undefined;
-    if (cleanedPhone.length >= 10) {
-      found = patients.find((p) => p.phone === cleanedPhone);
+    if (cleanedPhone.length === 10) {
+      found = patients.find((p) => cleanIndianPhone(p.phone) === cleanedPhone);
     }
     if (!found && cleanedUhid.length >= 3) {
       found = patients.find((p) => p.uhid.toUpperCase() === cleanedUhid);
@@ -122,8 +124,11 @@ export default function RegisterPatientPage() {
     if (!form.age || isNaN(Number(form.age)) || Number(form.age) < 0 || Number(form.age) > 120) {
       errs.age = 'Enter a valid age (0-120).';
     }
-    if (!form.phone.trim() || form.phone.length < 10) {
-      errs.phone = 'Enter a valid 10-digit mobile number.';
+    const cleanedPhone = cleanIndianPhone(form.phone);
+    if (!cleanedPhone) {
+      errs.phone = '10-digit Indian mobile number is required.';
+    } else if (!isValidIndianPhone(cleanedPhone)) {
+      errs.phone = 'Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).';
     }
     if (!form.doctorId) {
       errs.doctorId = 'Please select a consultant doctor.';
@@ -138,17 +143,35 @@ export default function RegisterPatientPage() {
     setIsSubmitting(true);
 
     try {
+      const cleanedPhone = cleanIndianPhone(form.phone);
       // 1. Attempt atomic DB registration with advisory locking & sequences (Phase 2)
       const res = await registerPatientAndVisitAtomic({
         name: form.name.trim(),
         age: Number(form.age),
-        phone: form.phone.trim(),
+        phone: cleanedPhone,
         doctorId: form.doctorId,
         bloodGroup: form.bloodGroup || undefined,
         hasBP: form.hasBP,
         hasSugar: form.hasSugar,
         otherConditions: form.hasOther ? form.otherCondition.trim() : undefined,
         uhid: form.uhidLookup.trim() || undefined,
+      });
+
+      // Record audit log for patient registration & OPD token creation
+      recordAuditLog({
+        action: 'PATIENT_REGISTERED',
+        entity_type: 'patient',
+        entity_id: res.patient.id,
+        user_name: 'Reception Desk',
+        user_role: 'receptionist',
+        details: `Registered OPD patient ${form.name.trim()} (UHID: ${res.patient.uhid}, Token #${res.visit.token_number})`,
+        new_data: {
+          uhid: res.patient.uhid,
+          name: form.name.trim(),
+          phone: cleanedPhone,
+          age: Number(form.age),
+          token: res.visit.token_number,
+        },
       });
 
       queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
@@ -389,7 +412,7 @@ export default function RegisterPatientPage() {
                     autoComplete="tel"
                     placeholder="10-digit mobile number (e.g. 9876543210)"
                     value={form.phone}
-                    onChange={(e) => update('phone', e.target.value)}
+                    onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                     error={errors.phone}
                     maxLength={10}
                     hint="Lookup runs automatically as you enter 10 digits"

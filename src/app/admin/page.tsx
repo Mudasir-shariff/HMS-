@@ -6,6 +6,7 @@ import {
   Pencil,
   Trash2,
   Shield,
+  ShieldCheck,
   Eye,
   EyeOff,
   Search,
@@ -22,6 +23,11 @@ import {
   Printer,
   Calendar,
   FileText,
+  Archive,
+  RefreshCw,
+  Clock,
+  Lock,
+  History,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar } from '@/components/ui';
@@ -36,6 +42,8 @@ import {
   usePrescriptions,
   useDoctors,
   useHospitalSettings,
+  useAuditLogs,
+  useDeletedPatients,
 } from '@/lib/query/hooks';
 import type { UserAccount } from '@/lib/types/database';
 import {
@@ -43,6 +51,8 @@ import {
   deleteUserFromSupabase,
   pushPatientToSupabase,
   deletePatientFromSupabase,
+  softDeletePatientInSupabase,
+  restorePatientInSupabase,
   deleteVisitFromSupabase,
   deleteVisitsFromSupabase,
   deletePrescriptionFromSupabase,
@@ -51,10 +61,12 @@ import {
 } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import { getYearMonth, formatMonthName, isOlderThanDays } from '@/lib/utils/date';
-import type { Patient, Visit, Drug, Prescription, UserRole } from '@/lib/types/database';
+import { isValidEmail, isValidIndianPhone, cleanIndianPhone, formatPhoneDisplay } from '@/lib/utils/validation';
+import { recordAuditLog } from '@/lib/audit/logger';
+import type { Patient, Visit, Drug, Prescription, UserRole, AuditLog } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
-type TabId = 'staff' | 'patients' | 'visits' | 'prescriptions' | 'inventory';
+type TabId = 'staff' | 'patients' | 'visits' | 'prescriptions' | 'inventory' | 'audit';
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
   { id: 'staff', label: 'Staff Logins & Accounts', icon: Users },
@@ -62,6 +74,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
   { id: 'visits', label: 'OPD Visits & Queue', icon: Stethoscope },
   { id: 'prescriptions', label: 'Prescriptions Master', icon: Shield },
   { id: 'inventory', label: 'Pharmacy Drug Catalog', icon: Pill },
+  { id: 'audit', label: 'Audit Trail & Activity Log', icon: ShieldCheck },
 ];
 
 const ROLE_PILL: Record<string, { variant: 'info' | 'success' | 'warning' | 'danger'; label: string }> = {
@@ -71,19 +84,46 @@ const ROLE_PILL: Record<string, { variant: 'info' | 'success' | 'warning' | 'dan
   pharmacist: { variant: 'warning', label: 'Pharmacist' },
 };
 
+interface DestructiveActionConfig {
+  type: 'purge' | 'delete_staff' | 'permanent_delete_patient' | 'delete_visit' | 'delete_rx' | 'delete_drug';
+  title: string;
+  description: string;
+  confirmWord: 'PURGE' | 'DELETE';
+  targetId?: string;
+  targetName?: string;
+}
+
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   const { data: users = [] } = useUserProfiles();
   const { data: patients = [] } = usePatients();
+  const { data: deletedPatients = [] } = useDeletedPatients();
   const { data: visits = [] } = useVisits();
   const { data: drugs = [] } = useDrugs();
   const { data: prescriptions = [] } = usePrescriptions();
   const { data: doctors = [] } = useDoctors();
+  const { data: auditLogs = [], refetch: refetchAuditLogs } = useAuditLogs();
   const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [tab, setTab] = useState<TabId>('staff');
   const [search, setSearch] = useState('');
+
+  // Patients subview: active vs trash (soft-delete with 30-day restore window)
+  const [patientSubView, setPatientSubView] = useState<'active' | 'trash'>('active');
+
+  // Audit tab filters
+  const [auditCategory, setAuditCategory] = useState<'all' | 'auth' | 'staff' | 'patient' | 'prescription' | 'system'>('all');
+
+  // High-security destructive action state (PURGE/DELETE + Admin Password)
+  const [destructiveAction, setDestructiveAction] = useState<DestructiveActionConfig | null>(null);
+  const [typedConfirmWord, setTypedConfirmWord] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [destructiveError, setDestructiveError] = useState('');
+  const [isExecutingDestructive, setIsExecutingDestructive] = useState(false);
+
+  // Soft delete target state (moves patient to trash)
+  const [softDeleteTarget, setSoftDeleteTarget] = useState<Patient | null>(null);
 
   // Monthly reporting & cleanup state
   const [selectedMonth, setSelectedMonth] = useState<string>('all'); // 'all' or 'YYYY-MM'
@@ -152,13 +192,43 @@ export default function AdminPage() {
       (u.specialization && u.specialization.toLowerCase().includes(search.toLowerCase()))
   );
 
-  // Filtered patients
+  // Filtered active patients
   const filteredPatients = patients.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.phone.includes(search) ||
       p.uhid.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Filtered trash / deleted patients
+  const filteredDeletedPatients = deletedPatients.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.phone.includes(search) ||
+      p.uhid.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Filtered audit logs
+  const filteredAuditLogs = useMemo(() => {
+    return auditLogs.filter((log) => {
+      if (auditCategory !== 'all') {
+        if (auditCategory === 'auth' && log.action !== 'USER_LOGIN') return false;
+        if (auditCategory === 'staff' && !['USER_REGISTERED', 'STAFF_UPDATED', 'STAFF_DELETED'].includes(log.action)) return false;
+        if (auditCategory === 'patient' && !['PATIENT_REGISTERED', 'PATIENT_UPDATED', 'PATIENT_SOFT_DELETED', 'PATIENT_RESTORED', 'PATIENT_PERMANENTLY_DELETED'].includes(log.action)) return false;
+        if (auditCategory === 'prescription' && !['PRESCRIPTION_ISSUED', 'PRESCRIPTION_UPDATED', 'PRESCRIPTION_DELETED'].includes(log.action)) return false;
+        if (auditCategory === 'system' && !['DATABASE_PURGED', 'SYSTEM_PURGE', 'RECORD_DELETED', 'VISIT_DELETED', 'DRUG_DELETED'].includes(log.action)) return false;
+      }
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return (
+        (log.user_name && log.user_name.toLowerCase().includes(s)) ||
+        (log.user_role && log.user_role.toLowerCase().includes(s)) ||
+        (log.action && log.action.toLowerCase().includes(s)) ||
+        (log.details && log.details.toLowerCase().includes(s)) ||
+        (log.entity_type && log.entity_type.toLowerCase().includes(s))
+      );
+    });
+  }, [auditLogs, auditCategory, search]);
 
   // Filtered visits (strictly sorted by Token ascending)
   const filteredVisits = useMemo(() => {
@@ -195,6 +265,14 @@ export default function AdminPage() {
   async function handleToggleUserActive(user: UserAccount) {
     const updated = { ...user, is_active: !user.is_active };
     await pushUserToSupabase(updated);
+    recordAuditLog({
+      action: 'STAFF_UPDATED',
+      entity_type: 'staff',
+      entity_id: user.id,
+      user_name: currentUser?.fullName || 'Super Admin',
+      user_role: currentUser?.role || 'admin',
+      details: `${updated.is_active ? 'Activated' : 'Deactivated'} staff login for ${user.full_name} (${user.email})`,
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
   }
@@ -202,60 +280,106 @@ export default function AdminPage() {
   async function handleSaveUserEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
-    await pushUserToSupabase(editingUser);
+
+    if (!isValidEmail(editingUser.email)) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+
+    const cleanPhone = cleanIndianPhone(editingUser.phone);
+    if (editingUser.phone && !isValidIndianPhone(cleanPhone)) {
+      alert('Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).');
+      return;
+    }
+
+    const sanitizedUser: UserAccount = {
+      ...editingUser,
+      email: editingUser.email.trim().toLowerCase(),
+      phone: cleanPhone || undefined,
+      specialization: editingUser.role === 'doctor' ? (editingUser.specialization || 'General Medicine') : undefined,
+      consultation_room: editingUser.role === 'doctor' ? (editingUser.consultation_room || 'Room 1') : undefined,
+      consultation_fee: editingUser.role === 'doctor' ? (Number(editingUser.consultation_fee) || 500) : 0,
+      opd_timings: editingUser.role === 'doctor' ? (editingUser.opd_timings || undefined) : undefined,
+    };
+
+    await pushUserToSupabase(sanitizedUser);
+    recordAuditLog({
+      action: 'STAFF_UPDATED',
+      entity_type: 'staff',
+      entity_id: sanitizedUser.id,
+      user_name: currentUser?.fullName || 'Super Admin',
+      user_role: currentUser?.role || 'admin',
+      details: `Updated staff credentials/profile for ${sanitizedUser.full_name} (${sanitizedUser.role})`,
+      new_data: sanitizedUser,
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
     setEditingUser(null);
-  }
-
-  async function handleDeleteUserConfirm() {
-    if (!deletingUser) return;
-    const uid = deletingUser.id;
-    queryClient.setQueriesData<any[]>({ queryKey: queryKeys.users.all }, (old) =>
-      old ? old.filter((u) => u.id !== uid) : []
-    );
-    queryClient.setQueriesData<any[]>({ queryKey: queryKeys.doctors.all }, (old) =>
-      old ? old.filter((d) => d.id !== uid && d.user_id !== uid) : []
-    );
-    await deleteUserFromSupabase(uid);
-    queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
-    setDeletingUser(null);
   }
 
   // Handlers for Patients
   async function handleSavePatientEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingPatient) return;
-    await pushPatientToSupabase(editingPatient);
+
+    const cleanPhone = cleanIndianPhone(editingPatient.phone);
+    if (!isValidIndianPhone(cleanPhone)) {
+      alert('Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).');
+      return;
+    }
+
+    const sanitizedPatient: Patient = {
+      ...editingPatient,
+      name: editingPatient.name.trim(),
+      phone: cleanPhone,
+    };
+
+    await pushPatientToSupabase(sanitizedPatient);
+    recordAuditLog({
+      action: 'PATIENT_UPDATED',
+      entity_type: 'patient',
+      entity_id: sanitizedPatient.id,
+      user_name: currentUser?.fullName || 'Super Admin',
+      user_role: currentUser?.role || 'admin',
+      details: `Updated patient details for ${sanitizedPatient.name} (${sanitizedPatient.uhid})`,
+      new_data: sanitizedPatient,
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
     setEditingPatient(null);
   }
 
-  async function handleDeletePatientConfirm() {
-    if (!deletingPatient) return;
-    const pid = deletingPatient.id;
+  async function handleConfirmSoftDelete() {
+    if (!softDeleteTarget) return;
+    const p = softDeleteTarget;
     queryClient.setQueriesData<Patient[]>({ queryKey: queryKeys.patients.all }, (old) =>
-      old ? old.filter((p) => p.id !== pid) : []
+      old ? old.filter((x) => x.id !== p.id) : []
     );
-    queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
-      old ? old.filter((v) => v.patient_id !== pid) : []
-    );
-    await deletePatientFromSupabase(pid);
+    await softDeletePatientInSupabase(p.id);
+    recordAuditLog({
+      action: 'PATIENT_SOFT_DELETED',
+      entity_type: 'patient',
+      entity_id: p.id,
+      user_name: currentUser?.fullName || 'Super Admin',
+      user_role: currentUser?.role || 'admin',
+      details: `Moved patient ${p.name} (${p.uhid}) to Trash with 30-day restore window`,
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    setDeletingPatient(null);
+    queryClient.invalidateQueries({ queryKey: queryKeys.deletedPatients.all });
+    setSoftDeleteTarget(null);
   }
 
-  // Delete Visit
-  async function handleDeleteVisit(v: Visit) {
-    if (confirm(`Delete visit ${v.visit_number}?`)) {
-      queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
-        old ? old.filter((x) => x.id !== v.id) : []
-      );
-      await deleteVisitFromSupabase(v.id);
-      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    }
+  async function handleRestorePatient(p: Patient) {
+    await restorePatientInSupabase(p.id);
+    recordAuditLog({
+      action: 'PATIENT_RESTORED',
+      entity_type: 'patient',
+      entity_id: p.id,
+      user_name: currentUser?.fullName || 'Super Admin',
+      user_role: currentUser?.role || 'admin',
+      details: `Restored patient ${p.name} (${p.uhid}) from Trash to Active Patients Database`,
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.deletedPatients.all });
   }
 
   // Monthly bulk delete handler
@@ -287,6 +411,13 @@ export default function AdminPage() {
         old ? old.filter((v) => !targetIds.includes(v.id)) : []
       );
       await deleteVisitsFromSupabase(targetIds);
+      recordAuditLog({
+        action: 'VISIT_DELETED',
+        entity_type: 'visit',
+        user_name: currentUser?.fullName || 'Super Admin',
+        user_role: currentUser?.role || 'admin',
+        details: `Bulk deleted ${targetIds.length} visits for period ${selectedMonth === 'all' ? 'older than 30 days' : selectedMonth}`,
+      });
       await queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
       await queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
       setShowMonthlyDeleteModal(false);
@@ -299,38 +430,234 @@ export default function AdminPage() {
     }
   }
 
-  // Delete Prescription
-  async function handleDeleteRx(rxId: string) {
-    if (confirm('Permanently delete this prescription?')) {
-      queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
-        old ? old.filter((x) => x.id !== rxId) : []
-      );
-      await deletePrescriptionFromSupabase(rxId);
-      queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    }
+  // Triggers for High-Security Destructive Action Modal (Purge / Permanent Deletions)
+  function handlePurgeAll() {
+    setDestructiveAction({
+      type: 'purge',
+      title: 'Purge Hospital Records & Queues',
+      description: 'CRITICAL WARNING: This operation will permanently purge all patient records, active OPD visits, tokens, prescriptions, and pharmacy dispensings across local cache and Supabase cloud. Master staff logins and pharmacy drug inventory catalogs will be preserved.',
+      confirmWord: 'PURGE',
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
   }
 
-  // Delete Drug
-  async function handleDeleteDrug(d: Drug) {
-    if (confirm(`Delete drug ${d.name} from inventory?`)) {
-      queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
-        old ? old.filter((x) => x.id !== d.id) : []
-      );
-      await deleteDrugFromSupabase(d.id);
-      queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-    }
+  function promptDeleteUser(u: UserAccount) {
+    setDestructiveAction({
+      type: 'delete_staff',
+      title: `Delete Staff Account: ${u.full_name}`,
+      description: `WARNING: Permanently delete login credentials and revoke system access for ${u.full_name} (${u.email}) with role ${u.role}. This action is immediate and cannot be undone.`,
+      confirmWord: 'DELETE',
+      targetId: u.id,
+      targetName: `${u.full_name} (${u.email})`,
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
   }
 
-  // Purge Records
-  async function handlePurgeAll() {
-    if (confirm('Are you sure you want to purge all active patient queues and records? This action is permanent and cannot be undone.')) {
-      queryClient.setQueriesData({ queryKey: queryKeys.patients.all }, () => []);
-      queryClient.setQueriesData({ queryKey: queryKeys.visits.all }, () => []);
-      queryClient.setQueriesData({ queryKey: queryKeys.prescriptions.all }, () => []);
-      queryClient.setQueriesData({ queryKey: queryKeys.dispensings.all }, () => []);
-      await purgeAllRecordsFromSupabase();
-      queryClient.invalidateQueries();
+  function promptPermanentDeletePatient(p: Patient) {
+    setDestructiveAction({
+      type: 'permanent_delete_patient',
+      title: `Permanently Erase Patient: ${p.name}`,
+      description: `CRITICAL WARNING: This will permanently erase patient record ${p.name} (UHID: ${p.uhid}) and all associated historical OPD consultations and prescriptions. This cannot be recovered.`,
+      confirmWord: 'DELETE',
+      targetId: p.id,
+      targetName: `${p.name} (${p.uhid})`,
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
+  }
+
+  function promptDeleteVisit(v: Visit) {
+    setDestructiveAction({
+      type: 'delete_visit',
+      title: `Delete Visit #${v.visit_number}`,
+      description: `WARNING: Permanently remove visit #${v.visit_number} (Token #${v.token_number}) from the hospital database.`,
+      confirmWord: 'DELETE',
+      targetId: v.id,
+      targetName: `Visit #${v.visit_number}`,
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
+  }
+
+  function promptDeleteRx(rxId: string) {
+    setDestructiveAction({
+      type: 'delete_rx',
+      title: 'Delete Prescription Record',
+      description: 'WARNING: Permanently delete this prescription and all prescribed medicines from the database.',
+      confirmWord: 'DELETE',
+      targetId: rxId,
+      targetName: `Rx #${rxId.slice(0, 8)}`,
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
+  }
+
+  function promptDeleteDrug(d: Drug) {
+    setDestructiveAction({
+      type: 'delete_drug',
+      title: `Delete Drug: ${d.name}`,
+      description: `WARNING: Permanently remove ${d.name} (${d.drug_type}) from the pharmacy catalog and inventory stock.`,
+      confirmWord: 'DELETE',
+      targetId: d.id,
+      targetName: d.name,
+    });
+    setTypedConfirmWord('');
+    setAdminPassword('');
+    setDestructiveError('');
+  }
+
+  async function executeDestructiveAction() {
+    if (!destructiveAction) return;
+
+    if (typedConfirmWord.trim().toUpperCase() !== destructiveAction.confirmWord) {
+      setDestructiveError(`Please type ${destructiveAction.confirmWord} in capital letters to confirm.`);
+      return;
+    }
+
+    const currentAcc = users.find(
+      (u) => u.id === currentUser?.id || u.email.toLowerCase() === (currentUser?.email || '').toLowerCase()
+    );
+    const actualPassword = currentAcc?.password;
+    if (actualPassword && adminPassword.trim() !== actualPassword.trim()) {
+      setDestructiveError('Incorrect Super Admin password. Action denied.');
+      return;
+    }
+    if (!adminPassword.trim()) {
+      setDestructiveError('Admin password is required to authorize this action.');
+      return;
+    }
+
+    setIsExecutingDestructive(true);
+    setDestructiveError('');
+
+    try {
+      switch (destructiveAction.type) {
+        case 'purge': {
+          queryClient.setQueriesData({ queryKey: queryKeys.patients.all }, () => []);
+          queryClient.setQueriesData({ queryKey: queryKeys.visits.all }, () => []);
+          queryClient.setQueriesData({ queryKey: queryKeys.prescriptions.all }, () => []);
+          queryClient.setQueriesData({ queryKey: queryKeys.dispensings.all }, () => []);
+          await purgeAllRecordsFromSupabase();
+          recordAuditLog({
+            action: 'DATABASE_PURGED',
+            entity_type: 'system',
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: 'Full system purge executed for all queues, visits, prescriptions, and dispensings.',
+          });
+          queryClient.invalidateQueries();
+          break;
+        }
+        case 'delete_staff': {
+          const uid = destructiveAction.targetId!;
+          queryClient.setQueriesData<any[]>({ queryKey: queryKeys.users.all }, (old) =>
+            old ? old.filter((u) => u.id !== uid) : []
+          );
+          queryClient.setQueriesData<any[]>({ queryKey: queryKeys.doctors.all }, (old) =>
+            old ? old.filter((d) => d.id !== uid && d.user_id !== uid) : []
+          );
+          await deleteUserFromSupabase(uid);
+          recordAuditLog({
+            action: 'STAFF_DELETED',
+            entity_type: 'staff',
+            entity_id: uid,
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: `Permanently deleted staff login: ${destructiveAction.targetName}`,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.doctors.all });
+          break;
+        }
+        case 'permanent_delete_patient': {
+          const pid = destructiveAction.targetId!;
+          queryClient.setQueriesData<Patient[]>({ queryKey: queryKeys.patients.all }, (old) =>
+            old ? old.filter((p) => p.id !== pid) : []
+          );
+          queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+            old ? old.filter((v) => v.patient_id !== pid) : []
+          );
+          await deletePatientFromSupabase(pid);
+          recordAuditLog({
+            action: 'PATIENT_PERMANENTLY_DELETED',
+            entity_type: 'patient',
+            entity_id: pid,
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: `Permanently destroyed patient record: ${destructiveAction.targetName}`,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.deletedPatients.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+          break;
+        }
+        case 'delete_visit': {
+          const vid = destructiveAction.targetId!;
+          queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
+            old ? old.filter((x) => x.id !== vid) : []
+          );
+          await deleteVisitFromSupabase(vid);
+          recordAuditLog({
+            action: 'VISIT_DELETED',
+            entity_type: 'visit',
+            entity_id: vid,
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: `Deleted OPD visit ${destructiveAction.targetName}`,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+          break;
+        }
+        case 'delete_rx': {
+          const rxId = destructiveAction.targetId!;
+          queryClient.setQueriesData<Prescription[]>({ queryKey: queryKeys.prescriptions.all }, (old) =>
+            old ? old.filter((x) => x.id !== rxId) : []
+          );
+          await deletePrescriptionFromSupabase(rxId);
+          recordAuditLog({
+            action: 'PRESCRIPTION_DELETED',
+            entity_type: 'prescription',
+            entity_id: rxId,
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: `Deleted prescription ${destructiveAction.targetName}`,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
+          break;
+        }
+        case 'delete_drug': {
+          const did = destructiveAction.targetId!;
+          queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
+            old ? old.filter((x) => x.id !== did) : []
+          );
+          await deleteDrugFromSupabase(did);
+          recordAuditLog({
+            action: 'DRUG_DELETED',
+            entity_type: 'inventory',
+            entity_id: did,
+            user_name: currentUser?.fullName || 'Super Admin',
+            user_role: currentUser?.role || 'admin',
+            details: `Deleted pharmacy drug: ${destructiveAction.targetName}`,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
+          break;
+        }
+      }
+      setDestructiveAction(null);
+      setTypedConfirmWord('');
+      setAdminPassword('');
+    } catch (err: any) {
+      setDestructiveError(err?.message || 'Action failed.');
+    } finally {
+      setIsExecutingDestructive(false);
     }
   }
 
@@ -464,14 +791,20 @@ export default function AdminPage() {
 
                         <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                           <span className="font-mono text-[var(--text-strong)]">{u.email}</span>
-                          {u.phone && <span>· Phone: {u.phone}</span>}
-                          {u.specialization && (
-                            <span className="text-[var(--green-700)] font-medium">
-                              · {u.specialization} ({u.consultation_room || 'Room 1'})
-                            </span>
+                          {u.phone && <span>· Phone: {formatPhoneDisplay(u.phone)}</span>}
+                          {u.role === 'doctor' && (
+                            <>
+                              {u.specialization && (
+                                <span className="text-[var(--green-700)] font-medium">
+                                  · {u.specialization} ({u.consultation_room || 'OPD Room'})
+                                </span>
+                              )}
+                              {u.opd_timings && <span>· Timings: {u.opd_timings}</span>}
+                              {u.consultation_fee !== undefined && u.consultation_fee > 0 && (
+                                <span className="font-semibold text-[var(--green-800)]">· Fee: ₹{u.consultation_fee}</span>
+                              )}
+                            </>
                           )}
-                          {u.opd_timings && <span>· Timings: {u.opd_timings}</span>}
-                          {u.consultation_fee && <span>· Fee: ₹{u.consultation_fee}</span>}
                         </div>
                       </div>
                     </div>
@@ -503,7 +836,7 @@ export default function AdminPage() {
 
                       <button
                         title={u.id === currentUser?.id ? 'Cannot delete your active login session' : 'Delete User Login'}
-                        onClick={() => setDeletingUser(u)}
+                        onClick={() => promptDeleteUser(u)}
                         disabled={u.id === currentUser?.id}
                         className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
                       >
@@ -523,7 +856,7 @@ export default function AdminPage() {
         <Card>
           <CardHeader
             title="Complete Hospital Patient Registry"
-            count={filteredPatients.length}
+            count={patientSubView === 'active' ? filteredPatients.length : filteredDeletedPatients.length}
             action={
               <SearchInput
                 value={search}
@@ -534,7 +867,98 @@ export default function AdminPage() {
             }
           />
 
-          {filteredPatients.length === 0 ? (
+          {/* Sub-view switcher: Active Patients vs Trash / 30-Day Restore Window */}
+          <div className="flex items-center gap-2 mb-4 p-1 bg-[var(--bg-canvas)] rounded-[var(--r-control)] border border-[var(--line-soft)] w-fit">
+            <button
+              onClick={() => setPatientSubView('active')}
+              className={clsx(
+                'px-3.5 py-1.5 rounded-[var(--r-control)] text-xs font-semibold transition-all cursor-pointer',
+                patientSubView === 'active'
+                  ? 'bg-white text-[var(--text-strong)] shadow-xs'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+              )}
+            >
+              Active Patients ({filteredPatients.length})
+            </button>
+            <button
+              onClick={() => setPatientSubView('trash')}
+              className={clsx(
+                'px-3.5 py-1.5 rounded-[var(--r-control)] text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer',
+                patientSubView === 'trash'
+                  ? 'bg-amber-50 text-amber-900 border border-amber-200 shadow-xs'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+              )}
+            >
+              <Archive size={13} />
+              Trash & Restore Window ({filteredDeletedPatients.length})
+            </button>
+          </div>
+
+          {patientSubView === 'trash' ? (
+            filteredDeletedPatients.length === 0 ? (
+              <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-1">
+                <Archive size={28} className="mx-auto text-[var(--text-muted)] opacity-50 mb-2" />
+                <p className="font-semibold text-[var(--text-strong)]">Trash is empty</p>
+                <p>No patients have been deleted. Deleted records remain recoverable here for 30 days.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {filteredDeletedPatients.map((p) => {
+                  const deletedDate = p.deleted_at ? new Date(p.deleted_at) : new Date();
+                  const daysPassed = Math.floor((Date.now() - deletedDate.getTime()) / (1000 * 60 * 60 * 24));
+                  const daysRemaining = Math.max(0, 30 - daysPassed);
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-50/40 rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-red-200 shadow-2xs"
+                    >
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center font-bold text-xs text-red-700 shrink-0 border border-red-300">
+                          <Archive size={16} />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-[var(--text-strong)] leading-tight">{p.name}</span>
+                            <span className="text-xs text-[var(--text-muted)] tabular-nums">{p.age} years</span>
+                            <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-semibold">
+                              In Trash · {daysRemaining} days left to restore
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
+                            <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
+                            <span>·</span>
+                            <span>Phone: {formatPhoneDisplay(p.phone)}</span>
+                            <span>·</span>
+                            <span>Deleted: {deletedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-red-200/60">
+                        <button
+                          title="Restore Patient to Active Queue"
+                          onClick={() => handleRestorePatient(p)}
+                          className="h-10 sm:h-8 px-3 sm:px-2.5 flex items-center justify-center gap-1.5 text-xs rounded-[var(--r-control)] font-semibold bg-green-100 text-green-800 hover:bg-green-200 transition-all cursor-pointer min-h-[40px] sm:min-h-0"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Restore Patient</span>
+                        </button>
+                        <button
+                          title="Permanently Erase Patient Record"
+                          onClick={() => promptPermanentDeletePatient(p)}
+                          className="h-10 sm:h-8 px-3 sm:px-2.5 flex items-center justify-center gap-1.5 text-xs rounded-[var(--r-control)] font-semibold bg-red-100 text-red-800 hover:bg-red-200 transition-all cursor-pointer min-h-[40px] sm:min-h-0"
+                        >
+                          <Trash2 size={13} />
+                          <span>Permanent Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : filteredPatients.length === 0 ? (
             <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
               <p>No registered patients found in database.</p>
               <Link href="/reception/register" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
@@ -563,7 +987,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                         <span className="font-mono text-[var(--text-strong)] font-semibold">{p.uhid}</span>
                         <span>·</span>
-                        <span>Phone: {p.phone}</span>
+                        <span>Phone: {formatPhoneDisplay(p.phone)}</span>
                         {p.other_conditions && (
                           <>
                             <span>·</span>
@@ -578,14 +1002,14 @@ export default function AdminPage() {
                     <button
                       title="Edit Patient"
                       onClick={() => setEditingPatient({ ...p })}
-                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
+                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-card)] transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 cursor-pointer"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
-                      title="Delete Patient"
-                      onClick={() => setDeletingPatient(p)}
-                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
+                      title="Move Patient to Trash (Soft Delete)"
+                      onClick={() => setSoftDeleteTarget(p)}
+                      className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 cursor-pointer"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -729,8 +1153,8 @@ export default function AdminPage() {
                     <div className="flex justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--line-soft)]/60">
                       <button
                         title="Delete Visit"
-                        onClick={() => handleDeleteVisit(v)}
-                        className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0"
+                        onClick={() => promptDeleteVisit(v)}
+                        className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 cursor-pointer"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -773,8 +1197,8 @@ export default function AdminPage() {
                       </div>
                       <button
                         title="Delete Prescription"
-                        onClick={() => handleDeleteRx(rx.id)}
-                        className="h-7 w-7 flex items-center justify-center rounded-full bg-[var(--danger-bg)] text-[var(--danger)]"
+                        onClick={() => promptDeleteRx(rx.id)}
+                        className="h-7 w-7 flex items-center justify-center rounded-full bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors cursor-pointer"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -855,13 +1279,167 @@ export default function AdminPage() {
 
                   <button
                     title="Delete Drug"
-                    onClick={() => handleDeleteDrug(drug)}
-                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0"
+                    onClick={() => promptDeleteDrug(drug)}
+                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0 cursor-pointer"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ────────────────── TAB 6: AUDIT TRAIL & ACTIVITY LOG ────────────────── */}
+      {tab === 'audit' && (
+        <Card>
+          <CardHeader
+            title="Hospital System Audit Trail & Security Log"
+            count={filteredAuditLogs.length}
+            action={
+              <div className="flex items-center gap-2 flex-wrap">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search user, action, record..."
+                  className="w-full sm:w-56"
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<RefreshCw size={13} />}
+                  onClick={() => refetchAuditLogs()}
+                >
+                  Refresh
+                </Button>
+              </div>
+            }
+          />
+
+          {/* Audit Category Filter Pills */}
+          <div className="flex gap-1.5 p-1 bg-[var(--bg-canvas)] rounded-[var(--r-control)] border border-[var(--line-soft)] mb-4 overflow-x-auto no-scrollbar">
+            {[
+              { id: 'all', label: 'All Activities' },
+              { id: 'auth', label: 'User Logins' },
+              { id: 'staff', label: 'Staff Accounts' },
+              { id: 'patient', label: 'Patient Registry' },
+              { id: 'prescription', label: 'Prescriptions' },
+              { id: 'system', label: 'System & Deletions' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setAuditCategory(cat.id as any)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-[var(--r-control)] text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                  auditCategory === cat.id
+                    ? 'bg-white text-[var(--text-strong)] shadow-xs border border-[var(--line-soft)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+                )}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredAuditLogs.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-1">
+              <ShieldCheck size={32} className="mx-auto text-[var(--text-muted)] opacity-50 mb-2" />
+              <p className="font-semibold text-[var(--text-strong)]">No activity logs found</p>
+              <p>Hospital staff actions, logins, registrations, and deletions are recorded here automatically.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-[var(--line-soft)] rounded-[var(--r-tile)]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[var(--bg-tile)] border-b border-[var(--line-soft)] text-[var(--text-muted)] font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="py-2.5 px-3.5">Timestamp</th>
+                    <th className="py-2.5 px-3.5">Actor / User</th>
+                    <th className="py-2.5 px-3.5">Action</th>
+                    <th className="py-2.5 px-3.5">Entity / Scope</th>
+                    <th className="py-2.5 px-3.5">Details & Metadata</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--line-soft)]">
+                  {filteredAuditLogs.map((log) => {
+                    const dt = new Date(log.created_at);
+                    const formattedDate = dt.toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    });
+                    const formattedTime = dt.toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    });
+
+                    // Action badge color
+                    let badgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+                    if (['USER_LOGIN', 'USER_REGISTERED', 'PATIENT_REGISTERED', 'PATIENT_RESTORED'].includes(log.action)) {
+                      badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+                    } else if (['PRESCRIPTION_ISSUED'].includes(log.action)) {
+                      badgeClass = 'bg-sky-50 text-sky-800 border-sky-300';
+                    } else if (['STAFF_UPDATED', 'PATIENT_UPDATED', 'PATIENT_SOFT_DELETED'].includes(log.action)) {
+                      badgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+                    } else if (
+                      [
+                        'DATABASE_PURGED',
+                        'STAFF_DELETED',
+                        'PATIENT_PERMANENTLY_DELETED',
+                        'VISIT_DELETED',
+                        'PRESCRIPTION_DELETED',
+                        'DRUG_DELETED',
+                      ].includes(log.action)
+                    ) {
+                      badgeClass = 'bg-rose-50 text-rose-800 border-rose-300';
+                    }
+
+                    return (
+                      <tr key={log.id} className="hover:bg-[var(--bg-tile)]/50 transition-colors">
+                        <td className="py-2.5 px-3.5 whitespace-nowrap text-[var(--text-muted)] font-mono text-[11px]">
+                          <div>{formattedDate}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] opacity-75">{formattedTime}</div>
+                        </td>
+                        <td className="py-2.5 px-3.5 whitespace-nowrap">
+                          <div className="font-semibold text-[var(--text-strong)]">{log.user_name || 'System / Service'}</div>
+                          {log.user_role && (
+                            <span className="text-[10px] font-medium text-[var(--text-muted)] capitalize">
+                              {log.user_role}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5 whitespace-nowrap">
+                          <span className={clsx('inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border', badgeClass)}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3.5 whitespace-nowrap">
+                          <span className="capitalize font-mono text-[11px] text-[var(--text-strong)]">
+                            {log.entity_type || '—'}
+                          </span>
+                          {log.entity_id && (
+                            <span className="block text-[10px] text-[var(--text-muted)] font-mono">
+                              {log.entity_id.length > 12 ? log.entity_id.slice(0, 8) + '...' : log.entity_id}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-[var(--text-body)]">
+                          <p className="leading-snug">{log.details || '—'}</p>
+                          {log.new_data && (
+                            <details className="mt-1 text-[11px] text-[var(--text-muted)] cursor-pointer">
+                              <summary className="hover:text-[var(--text-strong)]">View Payload</summary>
+                              <pre className="mt-1 p-2 bg-[var(--bg-canvas)] rounded border text-[10px] font-mono overflow-x-auto max-w-md">
+                                {JSON.stringify(log.new_data, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </Card>
@@ -931,9 +1509,11 @@ export default function AdminPage() {
                   <label className="text-[var(--text-muted)] block mb-1">Phone</label>
                   <input
                     type="tel"
-                    inputMode="tel"
+                    inputMode="numeric"
                     value={editingUser.phone || ''}
-                    onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
+                    onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    maxLength={10}
+                    placeholder="10-digit mobile number"
                     className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                   />
                 </div>
@@ -986,30 +1566,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ────────────────── MODAL: DELETE USER CONFIRMATION ────────────────── */}
-      {deletingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-sm shadow-[var(--shadow-float)] text-center">
-            <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
-              <AlertTriangle size={24} />
-            </div>
-            <h3 className="text-base font-semibold text-[var(--text-strong)] mb-1">Delete Account?</h3>
-            <p className="text-xs text-[var(--text-muted)] mb-5">
-              Permanently delete staff login for <strong>{deletingUser.full_name}</strong> ({deletingUser.email})?
-              This action cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <Button variant="danger" className="flex-1" onClick={handleDeleteUserConfirm}>
-                Yes, Delete
-              </Button>
-              <Button variant="secondary" className="flex-1" onClick={() => setDeletingUser(null)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ────────────────── MODAL: EDIT PATIENT ────────────────── */}
       {editingPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -1049,9 +1605,11 @@ export default function AdminPage() {
                   <label className="text-[var(--text-muted)] block mb-1">Phone</label>
                   <input
                     type="tel"
-                    inputMode="tel"
+                    inputMode="numeric"
                     value={editingPatient.phone}
-                    onChange={(e) => setEditingPatient({ ...editingPatient, phone: e.target.value })}
+                    onChange={(e) => setEditingPatient({ ...editingPatient, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    maxLength={10}
+                    placeholder="10-digit mobile number"
                     className="h-10 w-full rounded-[var(--r-control)] border px-3 text-base sm:text-xs"
                     required
                   />
@@ -1079,22 +1637,110 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ────────────────── MODAL: DELETE PATIENT CONFIRMATION ────────────────── */}
-      {deletingPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      {/* ────────────────── MODAL: SOFT DELETE PATIENT (MOVE TO TRASH) ────────────────── */}
+      {softDeleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-sm shadow-[var(--shadow-float)] text-center">
-            <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
-              <AlertTriangle size={24} />
+            <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+              <Archive size={24} />
             </div>
-            <h3 className="text-base font-semibold text-[var(--text-strong)] mb-1">Delete Patient?</h3>
-            <p className="text-xs text-[var(--text-muted)] mb-5">
-              Permanently delete <strong>{deletingPatient.name}</strong> ({deletingPatient.uhid}) and all associated visits?
+            <h3 className="text-base font-semibold text-[var(--text-strong)] mb-1">Move to Trash?</h3>
+            <p className="text-xs text-[var(--text-muted)] mb-5 leading-relaxed">
+              Move <strong>{softDeleteTarget.name}</strong> ({softDeleteTarget.uhid}) to Trash? The patient will be hidden from OPD queues but safely kept in the <strong>30-day restore window</strong>.
             </p>
             <div className="flex gap-2">
-              <Button variant="danger" className="flex-1" onClick={handleDeletePatientConfirm}>
-                Yes, Delete
+              <Button variant="danger" className="flex-1 font-semibold" onClick={handleConfirmSoftDelete}>
+                Move to Trash
               </Button>
-              <Button variant="secondary" className="flex-1" onClick={() => setDeletingPatient(null)}>
+              <Button variant="secondary" className="flex-1" onClick={() => setSoftDeleteTarget(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── MODAL: HIGH-SECURITY DESTRUCTIVE ACTION (PURGE / DELETE) ────────────────── */}
+      {destructiveAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-md shadow-2xl border border-red-200">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-red-950">{destructiveAction.title}</h3>
+                <p className="text-xs text-red-700 font-medium">Critical Destructive Authorization</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-body)] mb-4 bg-red-50 p-3 rounded-[var(--r-tile)] border border-red-200/70 leading-relaxed">
+              {destructiveAction.description}
+            </p>
+
+            {destructiveError && (
+              <div className="mb-3 p-2.5 bg-red-100 text-red-800 rounded-[var(--r-control)] text-xs font-semibold flex items-center gap-1.5">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>{destructiveError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3.5 mb-5 text-xs">
+              <div>
+                <label className="block font-medium text-[var(--text-strong)] mb-1">
+                  Type <span className="font-mono font-bold text-red-600">{destructiveAction.confirmWord}</span> in capital letters to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={typedConfirmWord}
+                  onChange={(e) => {
+                    setTypedConfirmWord(e.target.value);
+                    setDestructiveError('');
+                  }}
+                  placeholder={`Type ${destructiveAction.confirmWord}`}
+                  className="h-10 w-full rounded-[var(--r-control)] border border-[var(--line-soft)] px-3 font-mono text-sm uppercase bg-white focus:outline-none focus:border-red-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--text-strong)] mb-1 flex items-center gap-1">
+                  <Lock size={12} />
+                  Enter Super Admin Password:
+                </label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    setDestructiveError('');
+                  }}
+                  placeholder="Super Admin login password"
+                  className="h-10 w-full rounded-[var(--r-control)] border border-[var(--line-soft)] px-3 text-sm bg-white focus:outline-none focus:border-red-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="danger"
+                className="flex-1 font-semibold"
+                disabled={isExecutingDestructive || !typedConfirmWord.trim() || !adminPassword.trim()}
+                onClick={executeDestructiveAction}
+              >
+                {isExecutingDestructive ? 'Authorizing & Deleting...' : `Confirm & ${destructiveAction.confirmWord}`}
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                disabled={isExecutingDestructive}
+                onClick={() => {
+                  setDestructiveAction(null);
+                  setTypedConfirmWord('');
+                  setAdminPassword('');
+                  setDestructiveError('');
+                }}
+              >
                 Cancel
               </Button>
             </div>

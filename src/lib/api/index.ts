@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { getLocalAuditLogs } from '@/lib/audit/logger';
 import type {
   Patient,
   Visit,
@@ -12,6 +13,7 @@ import type {
   Bed,
   Admission,
   HospitalSettings,
+  AuditLog,
 } from '@/lib/types/database';
 
 function isValidUUID(id?: string | null): boolean {
@@ -110,7 +112,7 @@ export async function fetchDoctors(): Promise<Doctor[]> {
     }
 
     for (const prof of profiles) {
-      if (!doctorMap.has(prof.id)) {
+      if (prof.role === 'doctor' && !doctorMap.has(prof.id)) {
         doctorMap.set(prof.id, {
           id: prof.id,
           user_id: prof.id,
@@ -447,3 +449,64 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
     return null;
   }
 }
+
+export async function fetchAuditLogs(): Promise<AuditLog[]> {
+  try {
+    const supabase = createClient();
+    const res = await withTimeout(
+      supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    );
+
+    const dbLogs: AuditLog[] = (res?.data || []).map((row: any) => ({
+      id: row.id,
+      table_name: row.table_name,
+      record_id: row.record_id,
+      action: row.action,
+      user_id: row.user_id,
+      user_name: row.new_data?.user_name || row.user_name || (row.user_role === 'admin' ? 'Super Admin' : 'Hospital Staff'),
+      user_role: row.user_role || 'admin',
+      details: row.new_data?.details || row.details || `${row.action} operation on ${row.table_name}`,
+      old_data: row.old_data,
+      new_data: row.new_data,
+      created_at: row.created_at,
+    }));
+
+    const localLogs = getLocalAuditLogs();
+    const map = new Map<string, AuditLog>();
+    dbLogs.forEach((l) => map.set(l.id, l));
+    localLogs.forEach((l) => map.set(l.id, l));
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  } catch (err) {
+    console.warn('fetchAuditLogs error, falling back to local audit cache:', err);
+    return getLocalAuditLogs();
+  }
+}
+
+export async function fetchDeletedPatients(): Promise<Patient[]> {
+  try {
+    const supabase = createClient();
+    const res = await withTimeout(
+      supabase
+        .from('patients')
+        .select('*')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false })
+    );
+    if (!res || res.error || !res.data) return [];
+    return (res.data as any[]).map((p) => ({
+      ...p,
+      is_deleted: true,
+    }));
+  } catch (err) {
+    console.warn('fetchDeletedPatients error:', err);
+    return [];
+  }
+}
+

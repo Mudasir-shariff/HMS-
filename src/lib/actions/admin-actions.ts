@@ -9,7 +9,12 @@ const CreateStaffSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   fullName: z.string().min(2, 'Full name is required'),
   role: z.enum(['admin', 'doctor', 'receptionist', 'pharmacist']),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val.replace(/\D/g, '')), {
+      message: 'Phone must be a valid 10-digit Indian mobile number starting with 6-9',
+    })
+    .optional(),
   specialization: z.string().optional(),
   consultationRoom: z.string().optional(),
   consultationFee: z.number().nonnegative().optional(),
@@ -86,11 +91,15 @@ export async function createStaffAccountAction(
       user_metadata: {
         full_name: fullName,
         role,
-        phone,
-        specialization,
-        consultation_room: consultationRoom,
-        consultation_fee: consultationFee,
-        opd_timings: opdTimings,
+        phone: phone || null,
+        ...(role === 'doctor'
+          ? {
+              specialization: specialization || null,
+              consultation_room: consultationRoom || null,
+              consultation_fee: consultationFee ?? 500,
+              opd_timings: opdTimings || null,
+            }
+          : {}),
       },
     });
 
@@ -103,17 +112,17 @@ export async function createStaffAccountAction(
 
     const userId = authData.user.id;
 
-    // Upsert into public.user_profiles
+    // Upsert into public.user_profiles (role-specific fields only set for doctors)
     const { error: profileErr } = await supabase.from('user_profiles').upsert({
       id: userId,
       email: email.toLowerCase(),
       full_name: fullName,
       role,
       phone: phone || null,
-      specialization: specialization || null,
-      consultation_room: consultationRoom || null,
-      consultation_fee: consultationFee ?? 500,
-      opd_timings: opdTimings || null,
+      specialization: role === 'doctor' ? (specialization || null) : null,
+      consultation_room: role === 'doctor' ? (consultationRoom || null) : null,
+      consultation_fee: role === 'doctor' ? (consultationFee ?? 500) : 0,
+      opd_timings: role === 'doctor' ? (opdTimings || null) : null,
       is_active: true,
     });
 
