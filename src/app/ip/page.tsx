@@ -81,13 +81,23 @@ export default function InPatientPage() {
   const filteredAdmissionPatients = useMemo(() => {
     const q = patientSearch.trim().toLowerCase();
     if (!q) return patients;
+    const selectedPat = patients.find((p) => p.id === admitPatientId);
+    if (selectedPat && (
+      q === `${selectedPat.name} (${selectedPat.uhid})`.toLowerCase() ||
+      q === selectedPat.name.toLowerCase()
+    )) {
+      return patients;
+    }
+    const cleanQuery = q.includes('(') ? q.split('(')[0].trim() : q;
     return patients.filter(
       (p) =>
+        p.name.toLowerCase().includes(cleanQuery) ||
+        p.uhid.toLowerCase().includes(cleanQuery) ||
+        p.phone.includes(cleanQuery) ||
         p.name.toLowerCase().includes(q) ||
-        p.uhid.toLowerCase().includes(q) ||
-        p.phone.includes(q)
+        p.uhid.toLowerCase().includes(q)
     );
-  }, [patients, patientSearch]);
+  }, [patients, patientSearch, admitPatientId]);
 
   // Click outside to close patient dropdown
   useEffect(() => {
@@ -108,18 +118,6 @@ export default function InPatientPage() {
   }, [wards, newBedWardId]);
 
   useEffect(() => {
-    if (admitPatientId) {
-      const p = patients.find((pat) => pat.id === admitPatientId);
-      if (p && !patientSearch) {
-        setPatientSearch(`${p.name} (${p.uhid})`);
-      }
-    } else if (patients.length > 0 && !admitPatientId) {
-      setAdmitPatientId(patients[0].id);
-      setPatientSearch(`${patients[0].name} (${patients[0].uhid})`);
-    }
-  }, [patients, admitPatientId, patientSearch]);
-
-  useEffect(() => {
     if (!admitDoctorId && doctors.length > 0) {
       setAdmitDoctorId(doctors[0].id);
     }
@@ -135,13 +133,32 @@ export default function InPatientPage() {
 
   async function handleAdmit(e: React.FormEvent) {
     e.preventDefault();
-    const matchedFromSearch = filteredAdmissionPatients.length > 0 ? filteredAdmissionPatients[0].id : '';
-    const effectivePatientId = admitPatientId || matchedFromSearch || (patients.length > 0 ? patients[0].id : '');
+    let effectivePatientId = admitPatientId;
+    if (!effectivePatientId && patientSearch.trim()) {
+      const q = patientSearch.trim().toLowerCase();
+      const match = patients.find(
+        (p) =>
+          p.name.toLowerCase() === q ||
+          p.uhid.toLowerCase() === q ||
+          `${p.name} (${p.uhid})`.toLowerCase() === q
+      );
+      if (match) {
+        effectivePatientId = match.id;
+      } else if (filteredAdmissionPatients.length === 1) {
+        effectivePatientId = filteredAdmissionPatients[0].id;
+      }
+    }
+
+    if (!effectivePatientId) {
+      alert('Please select or search for a valid patient from the list.');
+      return;
+    }
+
     const effectiveDoctorId = admitDoctorId || (doctors.length > 0 ? doctors[0].id : '');
     const effectiveBedId = admitBedId || (availableBeds.length > 0 ? availableBeds[0].id : '');
 
-    if (!effectivePatientId || !effectiveBedId || !effectiveDoctorId) {
-      alert('Please select patient, available bed, and attending doctor.');
+    if (!effectiveBedId || !effectiveDoctorId) {
+      alert('Please select an available bed and attending doctor.');
       return;
     }
 
@@ -185,6 +202,8 @@ export default function InPatientPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admissions.all });
       await queryClient.invalidateQueries({ queryKey: queryKeys.beds.all });
       setShowAdmitModal(false);
+      setAdmitPatientId('');
+      setPatientSearch('');
       setAdmitDiagnosis('');
       setAdmitBedId('');
     } catch (err: any) {
@@ -341,7 +360,13 @@ export default function InPatientPage() {
             >
               Add Bed
             </Button>
-            <Button icon={<Plus size={16} />} onClick={() => setShowAdmitModal(true)}>
+            <Button
+              icon={<Plus size={16} />}
+              onClick={() => {
+                setShowAdmitModal(true);
+                setShowPatientDropdown(false);
+              }}
+            >
               Admit Patient
             </Button>
           </div>
@@ -678,34 +703,60 @@ export default function InPatientPage() {
                     type="text"
                     value={patientSearch}
                     onChange={(e) => {
-                      setPatientSearch(e.target.value);
+                      const val = e.target.value;
+                      setPatientSearch(val);
                       setShowPatientDropdown(true);
+                      if (!val.trim()) {
+                        setAdmitPatientId('');
+                        return;
+                      }
                       const match = patients.find(
                         (p) =>
-                          p.name.toLowerCase() === e.target.value.trim().toLowerCase() ||
-                          p.uhid.toLowerCase() === e.target.value.trim().toLowerCase()
+                          p.name.toLowerCase() === val.trim().toLowerCase() ||
+                          p.uhid.toLowerCase() === val.trim().toLowerCase() ||
+                          `${p.name} (${p.uhid})`.toLowerCase() === val.trim().toLowerCase() ||
+                          `${p.name} (${p.uhid} · ${p.age}y · ${p.phone})`.toLowerCase() === val.trim().toLowerCase()
                       );
                       if (match) {
                         setAdmitPatientId(match.id);
+                      } else {
+                        setAdmitPatientId('');
                       }
                     }}
                     onFocus={() => setShowPatientDropdown(true)}
                     placeholder="Type patient name, UHID, or phone to search..."
-                    className="h-10 w-full rounded-[var(--r-control)] border px-3 pr-9 text-xs bg-white text-[var(--text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--green-700)] shadow-2xs"
+                    className="h-10 w-full rounded-[var(--r-control)] border px-3 pr-16 text-xs bg-white text-[var(--text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--green-700)] shadow-2xs"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPatientDropdown((prev) => !prev)}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] rounded transition-colors cursor-pointer"
-                    title="Select patient from list"
-                    tabIndex={-1}
-                  >
-                    <ChevronDown
-                      size={15}
-                      className={clsx('transition-transform duration-200 text-[var(--green-800)]', showPatientDropdown && 'rotate-180')}
-                    />
-                  </button>
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {patientSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPatientSearch('');
+                          setAdmitPatientId('');
+                          setShowPatientDropdown(true);
+                        }}
+                        className="h-7 w-7 flex items-center justify-center text-[var(--text-muted)] hover:text-black hover:bg-[var(--bg-tile)] rounded transition-colors cursor-pointer"
+                        title="Clear patient name"
+                        tabIndex={-1}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowPatientDropdown((prev) => !prev)}
+                      className="h-7 w-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] rounded transition-colors cursor-pointer"
+                      title="Select patient from list"
+                      tabIndex={-1}
+                    >
+                      <ChevronDown
+                        size={15}
+                        className={clsx('transition-transform duration-200 text-[var(--green-800)]', showPatientDropdown && 'rotate-180')}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Dropdown Options */}
@@ -724,7 +775,7 @@ export default function InPatientPage() {
                             type="button"
                             onClick={() => {
                               setAdmitPatientId(p.id);
-                              setPatientSearch(`${p.name} (${p.uhid} · ${p.age}y · ${p.phone})`);
+                              setPatientSearch(`${p.name} (${p.uhid})`);
                               setShowPatientDropdown(false);
                             }}
                             className={clsx(
