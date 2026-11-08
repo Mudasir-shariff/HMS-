@@ -178,12 +178,13 @@ export default function SettingsPage() {
                 <Select
                   label="Prescription Print Paper Size"
                   options={[
-                    { value: 'A4', label: 'A4 Full Sheet (Default Hospital)' },
-                    { value: 'A5', label: 'A5 Half Sheet (Doctor Pad)' },
+                    { value: 'A4', label: 'A4 Full Sheet (Desktop Laser / Inkjet)' },
+                    { value: 'A5', label: 'A5 Half Sheet (Doctor OPD Prescription Pad)' },
+                    { value: 'thermal_80mm', label: '80mm Thermal POS Receipt Printer (3-inch roll)' },
                   ]}
                   value={form.prescription_paper_size}
                   onChange={(e) =>
-                    setForm({ ...form, prescription_paper_size: (e.target as HTMLSelectElement).value as 'A4' | 'A5' })
+                    setForm({ ...form, prescription_paper_size: (e.target as HTMLSelectElement).value as any })
                   }
                 />
 

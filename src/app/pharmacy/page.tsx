@@ -19,6 +19,7 @@ import {
   Trash2,
   Check,
   ShieldAlert,
+  Printer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, Button, StatusPill, SearchInput, Avatar, EmptyState } from '@/components/ui';
@@ -102,6 +103,7 @@ export default function PharmacyPage() {
 
   // Edit Dispensed Record State
   const [editingDispensing, setEditingDispensing] = useState<Dispensing | null>(null);
+  const [printingDispensing, setPrintingDispensing] = useState<Dispensing | null>(null);
 
   // Edit / Delete Drug Inventory State
   const [editingDrug, setEditingDrug] = useState<Drug | null>(null);
@@ -506,8 +508,9 @@ export default function PharmacyPage() {
 
   return (
     <>
-      <PageHeader
-        title="Pharmacy Portal"
+      <div className={printingDispensing ? 'no-print' : ''}>
+        <PageHeader
+          title="Pharmacy Portal"
         subtitle="Live prescription queue, walk-in sales, stock auto-deduction & inventory control"
         action={
           <div className="flex items-center gap-2 flex-wrap">
@@ -718,6 +721,15 @@ export default function PharmacyPage() {
                         <Button
                           size="sm"
                           variant="secondary"
+                          icon={<Printer size={13} />}
+                          onClick={() => setPrintingDispensing(disp)}
+                          title="Print Pharmacy Bill / Cash Memo"
+                        >
+                          Print Bill
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           icon={<Edit2 size={13} />}
                           onClick={() => setEditingDispensing(disp)}
                         >
@@ -910,6 +922,7 @@ export default function PharmacyPage() {
           )}
         </Card>
       )}
+      </div>
 
       {/* ────────────────────────────────────────────────────────────────────────
           WALK-IN SALE MODAL (PRD v1.1 Rule: No Prescription Flow)
@@ -1611,6 +1624,105 @@ export default function PharmacyPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ────────────────── PRINT PHARMACY BILL MODAL ────────────────── */}
+      {printingDispensing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[var(--r-card)] p-5 w-full max-w-md shadow-xl border border-[var(--line-soft)] max-h-[95vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--line-soft)] mb-3 no-print">
+              <div>
+                <h3 className="font-bold text-sm text-[var(--text-strong)]">Print Pharmacy Bill</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">Auto-formats for 80mm/58mm POS Thermal or A4/A5 Laser</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrintingDispensing(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* The Printable Bill Container */}
+            <div className="printable-receipt paper-thermal max-w-[76mm] mx-auto p-4 text-black font-mono text-left text-xs leading-normal bg-white border border-gray-300 rounded shadow-xs">
+              <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                <h2 className="font-bold text-sm uppercase">{settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}</h2>
+                <p className="text-[9px] text-gray-700">{settings.address || 'Chintamani, Karnataka'}</p>
+                {settings.phone && <p className="text-[9px] text-gray-700">Ph: {settings.phone}</p>}
+                <p className="text-[10px] font-bold uppercase mt-1 tracking-wider border-t border-dotted border-gray-400 pt-1">
+                  PHARMACY CASH MEMO / BILL
+                </p>
+              </div>
+
+              <div className="text-[10px] space-y-0.5 border-b border-dashed border-black pb-2 mb-2">
+                <div className="flex justify-between">
+                  <span>Patient: <strong>{printingDispensing.patient_name || 'Walk-in Customer'}</strong></span>
+                </div>
+                {printingDispensing.patient_uhid && (
+                  <div className="flex justify-between">
+                    <span>UHID: <strong className="font-mono">{printingDispensing.patient_uhid}</strong></span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-700 text-[9px]">
+                  <span>Pharmacist: {printingDispensing.pharmacist_name || 'Staff'}</span>
+                  <span>
+                    {printingDispensing.delivered_at
+                      ? new Date(printingDispensing.delivered_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                      : 'Delivered'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-b border-dashed border-black pb-2 mb-2">
+                <div className="flex justify-between font-bold text-[10px] pb-1 border-b border-dotted border-gray-400 uppercase">
+                  <span className="w-1/2">Item</span>
+                  <span className="w-1/4 text-center">Qty</span>
+                  <span className="w-1/4 text-right">Amt (₹)</span>
+                </div>
+                <div className="divide-y divide-dotted divide-gray-300 space-y-1 mt-1">
+                  {printingDispensing.items?.map((item: any, idx: number) => (
+                    <div key={item.id || idx} className="pt-1 flex justify-between items-baseline text-[10px]">
+                      <span className="w-1/2 font-semibold truncate pr-1">{item.drug_name || item.name}</span>
+                      <span className="w-1/4 text-center">{item.quantity ?? item.qty}</span>
+                      <span className="w-1/4 text-right font-mono">
+                        ₹{(((item.unit_price ?? item.price ?? 0) * (item.quantity ?? item.qty ?? 1))).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-b border-dashed border-black pb-2 mb-2 text-[11px] font-bold flex justify-between">
+                <span>TOTAL AMOUNT PAID:</span>
+                <span className="font-mono text-sm">₹{(printingDispensing.total_amount || 0).toFixed(2)}</span>
+              </div>
+
+              <div className="text-[8.5px] text-gray-700 space-y-0.5">
+                <p className="italic">Note: Schedule H / Prescription drugs to be taken as directed by physician.</p>
+                <p className="text-center font-bold mt-2">*** Get Well Soon ***</p>
+                <p className="text-[7.5px] text-gray-400 text-center font-sans">Radha Krishna HMS · opti-x.in</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4 no-print">
+              <Button
+                variant="secondary"
+                icon={<Printer size={15} />}
+                onClick={() => window.print()}
+                className="flex-1"
+              >
+                Print Now
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setPrintingDispensing(null)}
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </div>
           </div>
         </div>
       )}

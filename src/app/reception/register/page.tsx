@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, MessageSquare, Plus, Search, UserCheck, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, MessageSquare, Plus, Search, UserCheck, AlertCircle, Printer } from 'lucide-react';
 import Link from 'next/link';
 import { Card, Button, Input, Select, Checkbox, Textarea, StatusPill } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -186,113 +186,151 @@ export default function RegisterPatientPage() {
 
     return (
       <div className="py-6 max-w-xl mx-auto">
-        <PageHeader title="Patient Registered & Token Issued" subtitle="Token issued successfully and assigned to live OPD queue" />
+        <div className="no-print">
+          <PageHeader title="Patient Registered & Token Issued" subtitle="Token issued successfully and assigned to live OPD queue" />
 
-        <Card className="text-center shadow-[var(--shadow-card)] border border-[var(--line-soft)]">
-          <div className="flex flex-col items-center gap-4 py-4 sm:py-6">
-            <div className="h-14 w-14 rounded-full bg-[var(--success-bg)] border border-[var(--success-border)] flex items-center justify-center shadow-xs">
-              <CheckCircle size={32} className="text-[var(--success)]" />
-            </div>
+          <Card className="text-center shadow-[var(--shadow-card)] border border-[var(--line-soft)]">
+            <div className="flex flex-col items-center gap-4 py-4 sm:py-6">
+              <div className="h-14 w-14 rounded-full bg-[var(--success-bg)] border border-[var(--success-border)] flex items-center justify-center shadow-xs">
+                <CheckCircle size={32} className="text-[var(--success)]" />
+              </div>
 
-            {/* Hero Token Display on Screen */}
-            <div className="w-full flex flex-col items-center">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[var(--bg-tile)] border border-[var(--line-soft)] text-[var(--text-muted)]">
-                Daily Token Number
-              </span>
-              <div className="my-3 py-5 px-8 sm:px-12 bg-gradient-to-b from-[var(--sage-100)] to-white border-2 border-[var(--green-600)] rounded-3xl shadow-sm inline-flex flex-col items-center justify-center ring-4 ring-[var(--sage-200)]/60">
-                <span className="text-6xl sm:text-8xl leading-none font-black tabular-nums text-[var(--green-900)] tracking-tight">
-                  {tokenDisplay}
+              {/* Hero Token Display on Screen */}
+              <div className="w-full flex flex-col items-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[var(--bg-tile)] border border-[var(--line-soft)] text-[var(--text-muted)]">
+                  Daily Token Number
                 </span>
+                <div className="my-3 py-5 px-8 sm:px-12 bg-gradient-to-b from-[var(--sage-100)] to-white border-2 border-[var(--green-600)] rounded-3xl shadow-sm inline-flex flex-col items-center justify-center ring-4 ring-[var(--sage-200)]/60">
+                  <span className="text-6xl sm:text-8xl leading-none font-black tabular-nums text-[var(--green-900)] tracking-tight">
+                    {tokenDisplay}
+                  </span>
+                </div>
+                <p className="text-base sm:text-lg font-bold text-[var(--text-strong)] mt-1">
+                  Announce / Tell Patient: <span className="text-[var(--green-700)] underline decoration-2 underline-offset-4 font-extrabold">Token #{tokenDisplay}</span>
+                </p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Assigned to <strong className="text-[var(--text-strong)] font-semibold">{doctorName}</strong> · Room: <strong className="text-[var(--text-strong)] font-semibold">{room}</strong>
+                </p>
               </div>
-              <p className="text-base sm:text-lg font-bold text-[var(--text-strong)] mt-1">
-                Announce / Tell Patient: <span className="text-[var(--green-700)] underline decoration-2 underline-offset-4 font-extrabold">Token #{tokenDisplay}</span>
-              </p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Assigned to <strong className="text-[var(--text-strong)] font-semibold">{doctorName}</strong> · Room: <strong className="text-[var(--text-strong)] font-semibold">{room}</strong>
-              </p>
-            </div>
 
-            {/* Patient & Visit Details Tile */}
-            <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 sm:p-5 w-full text-left space-y-2.5 border border-[var(--line-soft)] text-xs shadow-2xs">
-              <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2.5">
-                <span className="font-bold text-sm text-[var(--text-strong)]">{createdResult.patient.name}</span>
-                <span className="text-[11px] font-mono font-bold text-[var(--green-700)] bg-white px-2.5 py-0.5 rounded-full border border-[var(--line-soft)] shadow-2xs">
-                  UHID: {createdResult.patient.uhid}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-[var(--text-body)]">
-                <div>
-                  <span className="text-[var(--text-muted)] font-medium">Age / Phone: </span>
-                  <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.age}y · {createdResult.patient.phone}</span>
+              {/* Patient & Visit Details Tile */}
+              <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 sm:p-5 w-full text-left space-y-2.5 border border-[var(--line-soft)] text-xs shadow-2xs">
+                <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2.5">
+                  <span className="font-bold text-sm text-[var(--text-strong)]">{createdResult.patient.name}</span>
+                  <span className="text-[11px] font-mono font-bold text-[var(--green-700)] bg-white px-2.5 py-0.5 rounded-full border border-[var(--line-soft)] shadow-2xs">
+                    UHID: {createdResult.patient.uhid}
+                  </span>
                 </div>
-                <div>
-                  <span className="text-[var(--text-muted)] font-medium">Blood Group: </span>
-                  <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.blood_group || 'Not recorded'}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)] font-medium">Visit Number: </span>
-                  <span className="font-semibold font-mono text-[var(--text-strong)]">{createdResult.visit.visit_number}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)] font-medium">Queue Status: </span>
-                  <span className="font-bold text-[var(--green-700)]">Waiting in OPD (# {tokenDisplay})</span>
+                <div className="grid grid-cols-2 gap-3 text-[var(--text-body)]">
+                  <div>
+                    <span className="text-[var(--text-muted)] font-medium">Age / Phone: </span>
+                    <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.age}y · {createdResult.patient.phone}</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--text-muted)] font-medium">Blood Group: </span>
+                    <span className="font-semibold text-[var(--text-strong)]">{createdResult.patient.blood_group || 'Not recorded'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--text-muted)] font-medium">Visit Number: </span>
+                    <span className="font-semibold font-mono text-[var(--text-strong)]">{createdResult.visit.visit_number}</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--text-muted)] font-medium">Queue Status: </span>
+                    <span className="font-bold text-[var(--green-700)]">Waiting in OPD (# {tokenDisplay})</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Note: Paperless Reminder */}
-            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[var(--r-control)] px-3.5 py-2.5 text-xs text-[#92400E] text-left w-full shadow-2xs flex items-center gap-2">
-              <span className="text-sm shrink-0">ℹ️</span>
-              <p className="leading-relaxed">
-                <strong>Paperless Reception (PRD v1.1):</strong> No physical slip is printed at reception. Communicate the token verbally or click below to WhatsApp the patient.
-              </p>
-            </div>
+              {/* Physical Token Slip & WhatsApp Actions */}
+              <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                <Button
+                  variant="secondary"
+                  icon={<Printer size={16} />}
+                  className="flex-1 justify-center min-h-[46px] border border-[var(--line-soft)]"
+                  onClick={() => window.print()}
+                  title="Print OPD Token Slip on 80mm/58mm Thermal POS or A4/A5 printer"
+                >
+                  Print Token Slip
+                </Button>
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 min-h-[46px] px-4 rounded-[var(--r-control)] bg-[#25D366] hover:bg-[#20BD5A] text-white text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer"
+                >
+                  <MessageSquare size={16} />
+                  Send WhatsApp Token
+                </a>
+              </div>
 
-            {/* WhatsApp Send Button (Prominent) */}
-            <a
-              href={waUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2.5 h-12 px-6 rounded-[var(--r-pill)] bg-[#25D366] hover:bg-[#20BD5A] text-white text-sm font-semibold shadow-xs hover:shadow-md transition-all duration-150 active:scale-[0.99] cursor-pointer"
-            >
-              <MessageSquare size={18} />
-              Send Token to Patient on WhatsApp
-            </a>
-
-            {/* Secondary Actions (Quieter) */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full pt-1">
-              <Button
-                variant="secondary"
-                icon={<Plus size={16} />}
-                className="flex-1 w-full justify-center min-h-[44px]"
-                onClick={() => {
-                  setCreatedResult(null);
-                  setMatchedPatient(null);
-                  setForm({
-                    name: '',
-                    age: '',
-                    phone: '',
-                    uhidLookup: '',
-                    bloodGroup: '',
-                    hasBP: false,
-                    hasSugar: false,
-                    hasOther: false,
-                    otherCondition: '',
-                    doctorId: doctors[0]?.id || '',
-                  });
-                }}
-              >
-                Register Next Patient
-              </Button>
-              <Link
-                href="/reception"
-                className="flex-1 w-full min-h-[44px] px-4 text-xs font-semibold rounded-[var(--r-control)] bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center cursor-pointer"
-              >
-                Return to Reception Desk
-              </Link>
+              {/* Secondary Actions */}
+              <div className="flex flex-col sm:flex-row gap-3 w-full pt-1">
+                <Button
+                  variant="secondary"
+                  icon={<Plus size={16} />}
+                  className="flex-1 w-full justify-center min-h-[44px]"
+                  onClick={() => {
+                    setCreatedResult(null);
+                    setMatchedPatient(null);
+                    setForm({
+                      name: '',
+                      age: '',
+                      phone: '',
+                      uhidLookup: '',
+                      bloodGroup: '',
+                      hasBP: false,
+                      hasSugar: false,
+                      hasOther: false,
+                      otherCondition: '',
+                      doctorId: doctors[0]?.id || '',
+                    });
+                  }}
+                >
+                  Register Next Patient
+                </Button>
+                <Link
+                  href="/reception"
+                  className="flex-1 w-full min-h-[44px] px-4 text-xs font-semibold rounded-[var(--r-control)] bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center cursor-pointer"
+                >
+                  Return to Reception Desk
+                </Link>
+              </div>
             </div>
+          </Card>
+        </div>
+
+        {/* ── DEDICATED PRINTABLE TOKEN SLIP (Auto-formats for 80mm/58mm POS Thermal or A4/A5 desktop printers) ── */}
+        <div className="print-only printable-token-slip paper-thermal max-w-[76mm] mx-auto p-4 text-black font-mono text-center text-xs leading-normal bg-white">
+          <div className="border-b border-dashed border-black pb-2 mb-2">
+            <h2 className="font-bold text-sm uppercase">{settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}</h2>
+            <p className="text-[9px] text-gray-700">{settings.address || 'Ward No. 10, NR Extension, Chintamani'}</p>
+            {settings.phone && <p className="text-[9px] text-gray-700">Ph: {settings.phone}</p>}
+            <p className="text-[10px] font-bold uppercase mt-1 tracking-wider border-t border-dotted border-gray-400 pt-1">
+              OPD APPOINTMENT TOKEN
+            </p>
           </div>
-        </Card>
+
+          <div className="my-2 py-2 border-y-2 border-black">
+            <p className="text-[9px] uppercase font-bold text-gray-700 tracking-wider">TOKEN NUMBER</p>
+            <p className="text-4xl font-black tracking-tight">{tokenDisplay}</p>
+          </div>
+
+          <div className="text-left text-[10px] space-y-1 border-b border-dashed border-black pb-2 mb-2">
+            <div><strong>Patient:</strong> {createdResult.patient.name}</div>
+            <div><strong>Age / Blood:</strong> {createdResult.patient.age}Y · {createdResult.patient.blood_group || '—'}</div>
+            <div><strong>UHID:</strong> <span className="font-mono">{createdResult.patient.uhid}</span></div>
+            <div><strong>Phone:</strong> {createdResult.patient.phone}</div>
+            <div><strong>Consultant:</strong> {doctorName}</div>
+            <div><strong>Room:</strong> {room}</div>
+            <div><strong>Date/Time:</strong> {new Date().toLocaleDateString('en-IN')} {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+
+          <div className="text-[9px] text-gray-700">
+            <p>Please wait for your token to be called.</p>
+            <p className="mt-1 font-bold">*** Thank You ***</p>
+            <p className="text-[7.5px] text-gray-500 font-sans mt-1">Radha Krishna HMS · opti-x.in</p>
+          </div>
+        </div>
       </div>
     );
   }

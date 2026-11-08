@@ -336,8 +336,9 @@ export default function AdminPage() {
 
   return (
     <>
-      <PageHeader
-        title="Super Admin Master Control"
+      <div className={showMonthlyReportModal ? 'no-print' : ''}>
+        <PageHeader
+          title="Super Admin Master Control"
         subtitle="Complete hospital administration: view, edit, and delete all logins, staff, patients, visits, and data"
         action={
           <div className="flex items-center gap-2 flex-wrap">
@@ -567,219 +568,7 @@ export default function AdminPage() {
                           <>
                             <span>·</span>
                             <span className="italic">{p.other_conditions}</span>
-                            {/* ────────────────── MODAL: MONTHLY REPORT ────────────────── */}
-      {showMonthlyReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-3xl shadow-[var(--shadow-float)] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-3 mb-4">
-              <div>
-                <h3 className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-                  <FileText size={18} className="text-[var(--green-700)]" />
-                  Monthly OPD & Patient Report
-                </h3>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {selectedMonth === 'all' ? 'All Time Database Summary' : formatMonthName(selectedMonth)} · {settings.hospital_name}
-                </p>
-              </div>
-              <button onClick={() => setShowMonthlyReportModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)]">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Printable summary card */}
-            <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs space-y-2">
-              <div className="flex justify-between items-center border-b pb-2">
-                <span className="font-bold text-sm text-[var(--text-strong)]">{settings.hospital_name}</span>
-                <span className="text-[var(--text-muted)]">Generated: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <div>
-                  <span className="text-[var(--text-muted)]">Total Consultations:</span>
-                  <p className="text-sm font-bold text-[var(--text-strong)]">{monthStats.total}</p>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)]">Dispensed by Pharmacy:</span>
-                  <p className="text-sm font-bold text-[var(--green-700)]">{monthStats.dispensed}</p>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)]">Prescriptions Issued:</span>
-                  <p className="text-sm font-bold text-[#8A6520]">{monthStats.prescribed}</p>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)]">Active in Queue:</span>
-                  <p className="text-sm font-bold text-[var(--info)]">{monthStats.waiting + monthStats.consulting}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Itemized Table */}
-            <div className="border border-[var(--line-soft)] rounded-[var(--r-tile)] overflow-hidden mb-4 text-xs">
-              <div className="max-h-80 overflow-y-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-[var(--bg-tile)] sticky top-0 border-b border-[var(--line-soft)] text-[var(--text-muted)] text-[11px]">
-                    <tr>
-                      <th className="p-2.5">Token</th>
-                      <th className="p-2.5">Patient Name</th>
-                      <th className="p-2.5">UHID</th>
-                      <th className="p-2.5">Consultant</th>
-                      <th className="p-2.5">Status</th>
-                      <th className="p-2.5 text-right">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--line-soft)]">
-                    {visitsForSelectedPeriod.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-4 text-center text-[var(--text-muted)]">
-                          No patient records found for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      visitsForSelectedPeriod.map((v) => {
-                        const pat = patients.find((p) => p.id === v.patient_id);
-                        const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
-                        return (
-                          <tr key={v.id} className="hover:bg-[var(--bg-card)]">
-                            <td className="p-2.5 font-bold tabular-nums">#{String(v.token_number).padStart(2, '0')}</td>
-                            <td className="p-2.5 font-medium">{pat?.name || 'Patient'}</td>
-                            <td className="p-2.5 font-mono text-[11px]">{pat?.uhid || '—'}</td>
-                            <td className="p-2.5 text-[var(--green-800)]">{doc?.full_name || 'Doctor'}</td>
-                            <td className="p-2.5">
-                              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-gray-100">
-                                {v.status}
-                              </span>
-                            </td>
-                            <td className="p-2.5 text-right text-[var(--text-muted)] tabular-nums">
-                              {new Date(v.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                icon={<Printer size={15} />}
-                onClick={() => window.print()}
-                className="flex-1"
-              >
-                Print Report
-              </Button>
-              <Button variant="secondary" onClick={() => setShowMonthlyReportModal(false)} className="flex-1">
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ────────────────── MODAL: MONTHLY DATA CLEAN-UP ────────────────── */}
-      {showMonthlyDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-md shadow-[var(--shadow-float)]">
-            <div className="flex items-center gap-3 text-red-600 mb-3">
-              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-[var(--text-strong)]">Monthly Data Clean-Up</h3>
-                <p className="text-xs text-[var(--text-muted)]">Permanent database deletion of historical visits</p>
-              </div>
-            </div>
-
-            <div className="space-y-3 mb-4 text-xs">
-              <p className="text-[var(--text-muted)]">
-                Select deletion scope. Prescriptions and dispensing history associated with the selected visits will also be cleaned up.
-              </p>
-
-              <div className="space-y-2 border border-[var(--line-soft)] rounded-[var(--r-control)] p-3 bg-[var(--bg-tile)]">
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="deleteMode"
-                    checked={deleteMode === 'month'}
-                    onChange={() => setDeleteMode('month')}
-                    className="mt-0.5 accent-[var(--green-900)]"
-                  />
-                  <div>
-                    <span className="font-semibold block text-[var(--text-strong)]">
-                      Delete specific month: {selectedMonth === 'all' ? 'Select a month from dropdown first' : formatMonthName(selectedMonth)}
-                    </span>
-                    <span className="text-[var(--text-muted)] text-[11px]">
-                      {selectedMonth === 'all'
-                        ? 'Disabled: Select a specific month from the period dropdown on the page'
-                        : `${visitsForSelectedPeriod.length} visits found for ${formatMonthName(selectedMonth)}`}
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-[var(--line-soft)]">
-                  <input
-                    type="radio"
-                    name="deleteMode"
-                    checked={deleteMode === 'older30'}
-                    onChange={() => setDeleteMode('older30')}
-                    className="mt-0.5 accent-[var(--green-900)]"
-                  />
-                  <div>
-                    <span className="font-semibold block text-[var(--text-strong)]">
-                      Purge all records older than 30 days
-                    </span>
-                    <span className="text-[var(--text-muted)] text-[11px]">
-                      {visitsOlderThan30Days.length} visits eligible for purge (&gt;30 days old)
-                    </span>
-                  </div>
-                </label>
-              </div>
-
-              <div className="bg-red-50 p-2.5 rounded-[var(--r-control)] border border-red-200 text-red-800 text-[11px]">
-                <strong className="block mb-0.5">Safety Confirmation:</strong>
-                To prevent accidental deletion, type <strong>DELETE</strong> in the box below to authorize.
-              </div>
-
-              <input
-                type="text"
-                placeholder="Type DELETE to confirm"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="h-10 w-full rounded-[var(--r-control)] border px-3 text-xs font-mono uppercase bg-white"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="danger"
-                disabled={
-                  deleteConfirmText.trim().toUpperCase() !== 'DELETE' ||
-                  isDeletingMonthlyData ||
-                  (deleteMode === 'month' && (selectedMonth === 'all' || visitsForSelectedPeriod.length === 0)) ||
-                  (deleteMode === 'older30' && visitsOlderThan30Days.length === 0)
-                }
-                onClick={handleExecuteMonthlyDelete}
-                className="flex-1"
-              >
-                {isDeletingMonthlyData ? 'Deleting Data...' : 'Permanently Delete'}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={isDeletingMonthlyData}
-                onClick={() => {
-                  setShowMonthlyDeleteModal(false);
-                  setDeleteConfirmText('');
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1077,6 +866,7 @@ export default function AdminPage() {
           )}
         </Card>
       )}
+      </div>
 
       {/* ────────────────── MODAL: EDIT USER LOGIN ────────────────── */}
       {editingUser && (
@@ -1314,7 +1104,7 @@ export default function AdminPage() {
       {/* ────────────────── MODAL: MONTHLY REPORT ────────────────── */}
       {showMonthlyReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-3xl shadow-[var(--shadow-float)] max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-3xl shadow-[var(--shadow-float)] max-h-[90vh] overflow-y-auto paper-a4">
             <div className="flex items-center justify-between border-b pb-3 mb-4">
               <div>
                 <h3 className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
@@ -1325,7 +1115,7 @@ export default function AdminPage() {
                   {selectedMonth === 'all' ? 'All Time Database Summary' : formatMonthName(selectedMonth)} · {settings.hospital_name}
                 </p>
               </div>
-              <button onClick={() => setShowMonthlyReportModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)]">
+              <button onClick={() => setShowMonthlyReportModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer no-print">
                 <X size={18} />
               </button>
             </div>
@@ -1358,7 +1148,7 @@ export default function AdminPage() {
 
             {/* Itemized Table */}
             <div className="border border-[var(--line-soft)] rounded-[var(--r-tile)] overflow-hidden mb-4 text-xs">
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-80 overflow-y-auto print:max-h-none print:overflow-visible">
                 <table className="w-full text-left">
                   <thead className="bg-[var(--bg-tile)] sticky top-0 border-b border-[var(--line-soft)] text-[var(--text-muted)] text-[11px]">
                     <tr>
@@ -1382,7 +1172,7 @@ export default function AdminPage() {
                         const pat = patients.find((p) => p.id === v.patient_id);
                         const doc = doctors.find((d) => d.id === v.doctor_id || d.user_id === v.doctor_id);
                         return (
-                          <tr key={v.id} className="hover:bg-[var(--bg-card)]">
+                          <tr key={v.id} className="hover:bg-[var(--bg-card)] avoid-break">
                             <td className="p-2.5 font-bold tabular-nums">#{String(v.token_number).padStart(2, '0')}</td>
                             <td className="p-2.5 font-medium">{pat?.name || 'Patient'}</td>
                             <td className="p-2.5 font-mono text-[11px]">{pat?.uhid || '—'}</td>
@@ -1404,12 +1194,13 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 no-print">
               <Button
                 variant="secondary"
                 icon={<Printer size={15} />}
                 onClick={() => window.print()}
                 className="flex-1"
+                title="Print Report on A4 / Letter printer"
               >
                 Print Report
               </Button>

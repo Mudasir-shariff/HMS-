@@ -255,7 +255,9 @@ function PrescribeContent() {
   const [followUp, setFollowUp] = useState('');
   const [showPrintView, setShowPrintView] = useState(false);
   const [savedRxId, setSavedRxId] = useState<string>('');
-  const [printLayout, setPrintLayout] = useState<'A4' | 'A5'>(settings.prescription_paper_size || 'A4');
+  const [printLayout, setPrintLayout] = useState<'A4' | 'A5' | 'thermal'>(
+    settings?.prescription_paper_size === 'thermal_80mm' ? 'thermal' : (settings?.prescription_paper_size as any) || 'A4'
+  );
   const [queuedPrinterSuccess, setQueuedPrinterSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -793,19 +795,31 @@ function PrescribeContent() {
 
             {/* Print Options & Format Toggles */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Paper Size Selector */}
+              {/* Paper Size Selector (All Printers Supported: A4 Laser, A5 Pad, 80mm Thermal POS) */}
               <div className="flex items-center bg-white rounded-[var(--r-pill)] border border-[var(--line-soft)] p-0.5 text-xs">
                 <button
+                  type="button"
                   onClick={() => setPrintLayout('A4')}
-                  className={`px-2.5 py-1 rounded-[var(--r-pill)] font-medium ${printLayout === 'A4' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-muted)]'}`}
+                  className={`px-2.5 py-1 rounded-[var(--r-pill)] font-medium transition-colors cursor-pointer ${printLayout === 'A4' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                  title="Standard A4 Paper (Laser / Inkjet desktop printers)"
                 >
                   A4 Sheet
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPrintLayout('A5')}
-                  className={`px-2.5 py-1 rounded-[var(--r-pill)] font-medium ${printLayout === 'A5' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-muted)]'}`}
+                  className={`px-2.5 py-1 rounded-[var(--r-pill)] font-medium transition-colors cursor-pointer ${printLayout === 'A5' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                  title="A5 Half Sheet (Doctor OPD Prescription Pad)"
                 >
                   A5 Pad
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintLayout('thermal')}
+                  className={`px-2.5 py-1 rounded-[var(--r-pill)] font-medium transition-colors cursor-pointer ${printLayout === 'thermal' ? 'bg-[var(--green-900)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                  title="80mm Thermal POS Receipt Roll (TVS, Epson, Star, Citizen POS printers)"
+                >
+                  80mm Thermal
                 </button>
               </div>
 
@@ -893,13 +907,141 @@ function PrescribeContent() {
             });
           }
 
+          if (printLayout === 'thermal') {
+            return (
+              <div
+                id="printable-prescription"
+                className="paper-thermal max-w-[76mm] p-3 text-black font-mono text-xs leading-tight mx-auto bg-white shadow-md border border-gray-300"
+              >
+                {/* 1. Header: Hospital Brand & Info */}
+                <div className="text-center pb-2 border-b border-dashed border-black space-y-0.5">
+                  <h1 className="font-bold text-sm uppercase leading-tight tracking-wide">
+                    {settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}
+                  </h1>
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-800">
+                    {settings.prescription_header || 'MULTISPECIALITY CARE'}
+                  </p>
+                  <p className="text-[8.5px] text-gray-600">
+                    {settings.address || 'Ward No. 10, Near Rama Mandir Road, NR Extension, Chintamani, Karnataka'}
+                  </p>
+                  {settings.phone && (
+                    <p className="text-[8.5px] text-gray-600">Ph: {settings.phone}</p>
+                  )}
+                  <p className="text-[10px] font-bold uppercase tracking-widest pt-1 border-t border-dotted border-gray-400 mt-1">
+                    OPD PRESCRIPTION
+                  </p>
+                </div>
+
+                {/* 2. Patient Details */}
+                <div className="py-1.5 border-b border-dashed border-black text-[10px] space-y-0.5">
+                  <div className="flex justify-between items-baseline">
+                    <span>Patient: <strong>{patientName}</strong></span>
+                    <span>{age}Y / {patientGender}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span>UHID: <strong className="font-mono">{uhid}</strong></span>
+                    <span>Mob: {patientPhone || activePatient?.phone || '—'}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline text-gray-700 text-[9px]">
+                    <span>Date: {currentDateFormatted}</span>
+                    <span>Time: {currentTimeFormatted}</span>
+                  </div>
+                </div>
+
+                {/* 3. Doctor Details */}
+                <div className="py-1.5 border-b border-dashed border-black text-[10px]">
+                  <div>Doctor: <strong>{doctor.full_name}</strong></div>
+                  <div className="text-[9px] text-gray-700">
+                    {doctor.qualification || doctor.specialization || 'MBBS, MD'} | Reg: {doctor.reg_number || 'KMC-48291'}
+                  </div>
+                </div>
+
+                {/* 4. Diagnosis */}
+                <div className="py-1.5 border-b border-dashed border-black text-[10px]">
+                  <span className="font-bold uppercase">Diagnosis: </span>
+                  <span className="text-gray-900">{diagnosis || 'Clinical evaluation & symptomatic management'}</span>
+                </div>
+
+                {/* 5. Medicines (Rx) */}
+                <div className="py-1.5 border-b border-dashed border-black">
+                  <div className="font-bold uppercase text-[10px] mb-1">DRUGS (Rx):</div>
+                  <div className="divide-y divide-dotted divide-gray-300 space-y-1">
+                    {medicines.map((m, idx) => {
+                      const freq = `${m.morning ? '1' : '0'}-${m.afternoon ? '1' : '0'}-${m.night ? '1' : '0'}`;
+                      const timing = m.relation === 'before_food' ? 'Before food' : 'After food';
+                      const unit = m.type === 'syrup' ? '1 Bottle' : m.type === 'injection' ? '1 Vial' : '1 Tab';
+
+                      return (
+                        <div key={m.id || idx} className="pt-1 text-[10px]">
+                          <div className="flex justify-between font-bold items-baseline">
+                            <span>{idx + 1}. {m.name}</span>
+                            <span>{m.days}d</span>
+                          </div>
+                          <div className="text-[9px] text-gray-700 pl-2">
+                            {unit} • Dose: {freq} • {timing}
+                            {m.addedByPharmacist && ' • [Pharm]'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Diagnostic & Lab Test Orders (if any) */}
+                {labTests.length > 0 && (
+                  <div className="py-1.5 border-b border-dashed border-black text-[10px]">
+                    <div className="font-bold uppercase text-[9.5px]">LAB TESTS ORDERED:</div>
+                    <div className="text-[9px] text-gray-800 pl-2">
+                      {labTests.map((t, idx) => `${idx + 1}. ${t}`).join(', ')}
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. Instructions */}
+                <div className="py-1.5 border-b border-dashed border-black text-[10px]">
+                  <div className="font-bold uppercase text-[9.5px]">INSTRUCTIONS:</div>
+                  <div className="text-[9px] text-gray-800 pl-2 space-y-0.5">
+                    {instructionLines.map((line, idx) => (
+                      <p key={idx}>{idx + 1}. {line}</p>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 7. Follow Up */}
+                <div className="py-1.5 border-b border-dashed border-black text-[10px]">
+                  <div className="font-bold uppercase text-[9.5px]">FOLLOW UP:</div>
+                  <p className="text-[9px] text-gray-800 pl-2">
+                    {followUp ? `${followUpFormatted} / after ${followUpDaysDiff} days` : 'Review as needed / return SOS'}
+                  </p>
+                </div>
+
+                {/* 8. Additional Note */}
+                {additionalNote && (
+                  <div className="py-1.5 border-b border-dashed border-black text-[9px] text-gray-700">
+                    <span className="font-semibold">Note: </span>
+                    <span>{additionalNote}</span>
+                  </div>
+                )}
+
+                {/* 9. Doctor Signature Block */}
+                <div className="pt-3 text-center text-[10px]">
+                  <div className="h-6 border-b border-gray-400 w-28 mx-auto mb-1"></div>
+                  <p className="font-bold">{doctor.full_name}</p>
+                  <p className="text-[8.5px] text-gray-600">Doctor&apos;s Signature / Seal</p>
+                  <p className="text-[8px] text-gray-500 mt-2">Please follow advice · Consult if symptoms worsen</p>
+                  <p className="text-[7.5px] text-gray-400 font-sans mt-0.5">Radha Krishna HMS · opti-x.in</p>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div
               id="printable-prescription"
               className={`bg-white text-black font-sans mx-auto shadow-md border border-gray-300 ${
                 printLayout === 'A5'
-                  ? 'max-w-[148mm] min-h-[210mm] p-6 text-[11px]'
-                  : 'max-w-[210mm] min-h-[297mm] p-8 sm:p-12 text-xs'
+                  ? 'paper-a5 max-w-[148mm] min-h-[210mm] p-6 text-[11px]'
+                  : 'paper-a4 max-w-[210mm] min-h-[297mm] p-8 sm:p-12 text-xs'
               }`}
               style={{ minHeight: printLayout === 'A5' ? '210mm' : '297mm' }}
             >

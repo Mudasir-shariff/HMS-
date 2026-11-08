@@ -348,8 +348,9 @@ export default function InPatientPage() {
         }
       />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
+      <div className={dischargeTarget ? 'no-print' : ''}>
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
         {[
           { label: 'Total Hospital Beds', value: beds.length },
           { label: 'Occupied Beds', value: beds.filter((b) => b.is_occupied).length },
@@ -534,6 +535,7 @@ export default function InPatientPage() {
           </div>
         </div>
       )}
+      </div>
 
       {/* Discharge & Final Itemized Bill Modal (PRD v1.1 Section 3.7) */}
       {dischargeTarget && (() => {
@@ -549,13 +551,13 @@ export default function InPatientPage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-xl shadow-[var(--shadow-float)] border border-[var(--line-soft)] max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[var(--r-card)] p-6 w-full max-w-xl shadow-[var(--shadow-float)] border border-[var(--line-soft)] max-h-[90vh] overflow-y-auto paper-a4">
               <div className="flex justify-between items-center pb-3 border-b border-[var(--line-soft)] mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-[var(--text-strong)]">Discharge & Final Hospital Bill</h3>
                   <p className="text-xs text-[var(--text-muted)]">Stops the daily timer and produces itemized settlement</p>
                 </div>
-                <button onClick={() => setDischargeTarget(null)} className="text-[var(--text-muted)]">
+                <button onClick={() => setDischargeTarget(null)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer no-print">
                   <X size={20} />
                 </button>
               </div>
@@ -563,8 +565,15 @@ export default function InPatientPage() {
               {/* Printable Invoice Header */}
               <div className="bg-[var(--bg-tile)] p-4 rounded-[var(--r-tile)] border border-[var(--line-soft)] mb-4 text-xs space-y-2">
                 <div className="flex justify-between border-b pb-2">
-                  <span className="font-bold text-sm text-[var(--text-strong)]">{settings.hospital_name}</span>
-                  <span className="font-mono font-bold text-[var(--green-700)]">UAID: {dischargeTarget.uaid}</span>
+                  <div>
+                    <span className="font-bold text-sm text-[var(--text-strong)]">{settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}</span>
+                    <p className="text-[10px] text-[var(--text-muted)]">{settings.address || 'Ward No. 10, NR Extension, Chintamani'}</p>
+                    {settings.phone && <p className="text-[10px] text-[var(--text-muted)]">Ph: {settings.phone}</p>}
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono font-bold text-[var(--green-700)]">UAID: {dischargeTarget.uaid}</span>
+                    <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider mt-0.5">Discharge Summary & Tax Bill</p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div>
@@ -620,12 +629,25 @@ export default function InPatientPage() {
                 </table>
               </div>
 
-              <div className="flex gap-2">
+              {/* Signature block */}
+              <div className="my-5 pt-3 border-t border-[var(--line-soft)] flex justify-between items-end text-xs text-[var(--text-muted)]">
+                <div>
+                  <p className="italic">Thank you for choosing {settings.hospital_name || 'Radha Krishna Hospital'}.</p>
+                  <p className="text-[10px]">Wish you a speedy and complete recovery.</p>
+                </div>
+                <div className="text-right">
+                  <div className="h-7 border-b border-gray-400 w-36 ml-auto mb-1"></div>
+                  <p className="font-semibold text-[var(--text-strong)] text-[11px]">Authorized Billing Signatory</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 no-print">
                 <Button
                   variant="secondary"
                   icon={<Printer size={15} />}
                   onClick={() => window.print()}
                   className="flex-1"
+                  title="Print Bill on A4/A5 or any printer"
                 >
                   Print Bill
                 </Button>

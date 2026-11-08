@@ -262,7 +262,7 @@ export interface HospitalSettings {
   phone?: string;
   token_reset_hour: number;     // hour of day to reset tokens (0-23)
   ip_hours_per_day: number;     // default billing day length
-  prescription_paper_size: 'A4' | 'A5';
+  prescription_paper_size: 'A4' | 'A5' | 'thermal_80mm';
   prescription_header?: string;
   prescription_footer?: string;
   default_printer?: string;

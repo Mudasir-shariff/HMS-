@@ -16,6 +16,7 @@ import {
   Plus,
   Minus,
   Search,
+  Printer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -595,89 +596,156 @@ function DispenseContent() {
   if (dispensedDone && deliveryResult) {
     return (
       <div className="py-6 sm:py-8 max-w-lg mx-auto text-center px-3 sm:px-0">
-        <Card className="p-6 sm:p-8 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
-          <div className="h-16 w-16 rounded-full bg-[var(--success-bg)] text-[var(--success)] flex items-center justify-center mx-auto mb-4">
-            <CheckCircle size={32} />
+        <div className="no-print">
+          <Card className="p-6 sm:p-8 shadow-[var(--shadow-float)] border border-[var(--line-soft)]">
+            <div className="h-16 w-16 rounded-full bg-[var(--success-bg)] text-[var(--success)] flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={32} />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-strong)] mb-1">Medicines Delivered!</h2>
+            <p className="text-xs text-[var(--text-muted)] mb-5">
+              Stock quantities automatically reduced from catalog · Recorded by <strong>{deliveryResult.pharmacistName}</strong> at <strong>{deliveryResult.time}</strong>
+            </p>
+
+            {/* Delivery Record Tile */}
+            <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 text-left text-xs mb-4 space-y-2 border border-[var(--line-soft)]">
+              <div className="flex justify-between border-b border-[var(--line-soft)] pb-2">
+                <span className="text-[var(--text-muted)]">Patient:</span>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {patient?.name} ({patient?.age}y · UHID: {patient?.uhid})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-muted)]">Prescribing Doctor:</span>
+                <span className="font-medium text-[var(--text-strong)]">{doctor?.full_name || 'Consultant'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-muted)]">Token:</span>
+                <span className="font-mono font-bold text-[var(--green-700)]">#{String(token).padStart(2, '0')}</span>
+              </div>
+
+              <div className="border-t border-[var(--line-soft)] pt-2 my-2">
+                <p className="font-semibold text-[var(--text-strong)] mb-1.5">Dispensed Items ({deliveryResult.itemCount}):</p>
+                {deliveryResult.items.map((item) => (
+                  <div key={item.id} className="flex justify-between py-1 text-[11px]">
+                    <span>
+                      • {item.name} <span className="text-[var(--text-muted)]">({item.drugType})</span>
+                    </span>
+                    <span className="font-bold text-[var(--text-strong)]">{item.qty} units</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between font-bold text-sm text-[var(--green-900)] pt-2 border-t border-[var(--line-soft)]">
+                <span>Total Billable Amount:</span>
+                <span>₹{totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Print Pharmacy Bill Action */}
+            <div className="flex flex-col sm:flex-row gap-2.5 mb-5">
+              <Button
+                variant="secondary"
+                icon={<Printer size={16} />}
+                className="w-full justify-center min-h-[46px] border border-[var(--line-soft)]"
+                onClick={() => window.print()}
+                title="Print Pharmacy Bill / Cash Memo (Thermal POS 80mm/58mm or A4/A5 Laser)"
+              >
+                Print Pharmacy Bill / Receipt
+              </Button>
+            </div>
+
+            {/* PRD v1.1 Fast Dispensing Workflow: Next Patient Button */}
+            {nextPatient ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUrl = `/pharmacy/dispense?visitId=${encodeURIComponent(nextPatient.visitId || nextPatient.id)}&token=${encodeURIComponent(nextPatient.token_number)}&rxId=${encodeURIComponent(nextPatient.prescriptionId || '')}`;
+                  router.push(targetUrl);
+                }}
+                className="w-full min-h-[48px] px-5 py-3 text-sm sm:text-base font-bold rounded-[var(--r-control)] bg-[var(--green-800)] text-white hover:bg-[var(--green-900)] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5 text-center shadow-md cursor-pointer mb-3 touch-manipulation"
+              >
+                <span>Dispense Next: Token #{String(nextPatient.token_number).padStart(2, '0')} ({nextPatient.patientName})</span>
+                <ArrowRight size={18} />
+              </button>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-[var(--r-control)] p-3 mb-3 font-medium flex items-center justify-center gap-2">
+                <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+                <span>Queue Cleared · All waiting patients have been dispensed!</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Link
+                href="/pharmacy"
+                className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
+              >
+                Back to Dispensing Queue
+              </Link>
+              <Link
+                href="/pharmacy?tab=dispensed"
+                className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-[var(--sage-100)] border border-[var(--green-600)]/30 text-[var(--green-900)] hover:bg-[var(--sage-200)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
+              >
+                Today&apos;s Patient List
+              </Link>
+            </div>
+          </Card>
+        </div>
+
+        {/* ── DEDICATED PRINTABLE PHARMACY BILL (Universal: 80mm/58mm POS Thermal or A4/A5 Desktop) ── */}
+        <div className="print-only printable-receipt paper-thermal max-w-[76mm] mx-auto p-4 text-black font-mono text-left text-xs leading-normal bg-white">
+          <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+            <h2 className="font-bold text-sm uppercase">{settings.hospital_name || 'RADHA KRISHNA HOSPITAL'}</h2>
+            <p className="text-[9px] text-gray-700">{settings.address || 'Chintamani, Karnataka'}</p>
+            {settings.phone && <p className="text-[9px] text-gray-700">Ph: {settings.phone}</p>}
+            <p className="text-[10px] font-bold uppercase mt-1 tracking-wider border-t border-dotted border-gray-400 pt-1">
+              PHARMACY CASH MEMO / BILL
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-strong)] mb-1">Medicines Delivered!</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-5">
-            Stock quantities automatically reduced from catalog · Recorded by <strong>{deliveryResult.pharmacistName}</strong> at <strong>{deliveryResult.time}</strong>
-          </p>
 
-          {/* Delivery Record Tile */}
-          <div className="bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-4 text-left text-xs mb-5 space-y-2 border border-[var(--line-soft)]">
-            <div className="flex justify-between border-b border-[var(--line-soft)] pb-2">
-              <span className="text-[var(--text-muted)]">Patient:</span>
-              <span className="font-semibold text-[var(--text-strong)]">
-                {patient?.name} ({patient?.age}y · UHID: {patient?.uhid})
-              </span>
+          <div className="text-[10px] space-y-0.5 border-b border-dashed border-black pb-2 mb-2">
+            <div className="flex justify-between">
+              <span>Patient: <strong>{patient?.name}</strong></span>
+              <span>{patient?.age}Y {patient?.blood_group ? `· ${patient.blood_group}` : ''}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[var(--text-muted)]">Prescribing Doctor:</span>
-              <span className="font-medium text-[var(--text-strong)]">{doctor?.full_name || 'Consultant'}</span>
+              <span>UHID: <strong className="font-mono">{patient?.uhid}</strong></span>
+              <span>Token: <strong>#{String(token).padStart(2, '0')}</strong></span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--text-muted)]">Token:</span>
-              <span className="font-mono font-bold text-[var(--green-700)]">#{String(token).padStart(2, '0')}</span>
+            <div className="flex justify-between text-gray-700 text-[9px]">
+              <span>Doctor: {doctor?.full_name || 'Consultant'}</span>
+              <span>{deliveryResult.time}</span>
             </div>
+          </div>
 
-            <div className="border-t border-[var(--line-soft)] pt-2 my-2">
-              <p className="font-semibold text-[var(--text-strong)] mb-1.5">Dispensed Items ({deliveryResult.itemCount}):</p>
+          <div className="border-b border-dashed border-black pb-2 mb-2">
+            <div className="flex justify-between font-bold text-[10px] pb-1 border-b border-dotted border-gray-400 uppercase">
+              <span className="w-1/2">Item</span>
+              <span className="w-1/4 text-center">Qty</span>
+              <span className="w-1/4 text-right">Amt (₹)</span>
+            </div>
+            <div className="divide-y divide-dotted divide-gray-300 space-y-1 mt-1">
               {deliveryResult.items.map((item) => (
-                <div key={item.id} className="flex justify-between py-1 text-[11px]">
-                  <span>
-                    • {item.name} <span className="text-[var(--text-muted)]">({item.drugType})</span>
-                  </span>
-                  <span className="font-bold text-[var(--text-strong)]">{item.qty} units</span>
+                <div key={item.id} className="pt-1 flex justify-between items-baseline text-[10px]">
+                  <span className="w-1/2 font-semibold truncate pr-1">{item.name}</span>
+                  <span className="w-1/4 text-center">{item.qty}</span>
+                  <span className="w-1/4 text-right font-mono">₹{((item.unitPrice || 0) * item.qty).toFixed(2)}</span>
                 </div>
               ))}
             </div>
-
-            <div className="flex justify-between font-bold text-sm text-[var(--green-900)] pt-2 border-t border-[var(--line-soft)]">
-              <span>Total Billable Amount:</span>
-              <span>₹{totalAmount.toFixed(2)}</span>
-            </div>
           </div>
 
-          <div className="bg-[#FAF8F2] border border-[#E8DCC4] rounded-[var(--r-control)] px-3 py-2 text-[11px] text-[#7A6020] text-left mb-6">
-            ✓ <strong>PRD v1.1 Paperless Rule:</strong> No printed pharmacy bill needed. Record is logged in Today&apos;s Patient List where dispensed items can still be adjusted if the patient returns.
+          <div className="border-b border-dashed border-black pb-2 mb-2 text-[11px] font-bold flex justify-between">
+            <span>TOTAL AMOUNT PAID:</span>
+            <span className="font-mono text-sm">₹{totalAmount.toFixed(2)}</span>
           </div>
 
-          {/* PRD v1.1 Fast Dispensing Workflow: Next Patient Button */}
-          {nextPatient ? (
-            <button
-              type="button"
-              onClick={() => {
-                const targetUrl = `/pharmacy/dispense?visitId=${encodeURIComponent(nextPatient.visitId || nextPatient.id)}&token=${encodeURIComponent(nextPatient.token_number)}&rxId=${encodeURIComponent(nextPatient.prescriptionId || '')}`;
-                router.push(targetUrl);
-              }}
-              className="w-full min-h-[48px] px-5 py-3 text-sm sm:text-base font-bold rounded-[var(--r-control)] bg-[var(--green-800)] text-white hover:bg-[var(--green-900)] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5 text-center shadow-md cursor-pointer mb-3 touch-manipulation"
-            >
-              <span>Dispense Next: Token #{String(nextPatient.token_number).padStart(2, '0')} ({nextPatient.patientName})</span>
-              <ArrowRight size={18} />
-            </button>
-          ) : (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-[var(--r-control)] p-3 mb-3 font-medium flex items-center justify-center gap-2">
-              <CheckCircle size={16} className="text-emerald-600 shrink-0" />
-              <span>Queue Cleared · All waiting patients have been dispensed!</span>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Link
-              href="/pharmacy"
-              className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] text-[var(--text-strong)] hover:bg-[var(--bg-tile)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
-            >
-              Back to Dispensing Queue
-            </Link>
-            <Link
-              href="/pharmacy?tab=dispensed"
-              className="flex-1 min-h-[44px] px-4 text-xs sm:text-sm font-semibold rounded-[var(--r-control)] bg-[var(--sage-100)] border border-[var(--green-600)]/30 text-[var(--green-900)] hover:bg-[var(--sage-200)] transition-all flex items-center justify-center text-center shadow-xs cursor-pointer touch-manipulation"
-            >
-              Today&apos;s Patient List
-            </Link>
+          <div className="text-[8.5px] text-gray-700 space-y-0.5">
+            <p>Pharmacist: {deliveryResult.pharmacistName}</p>
+            <p className="italic">Note: Schedule H / Prescription drugs to be taken as directed by physician.</p>
+            <p className="text-center font-bold mt-2">*** Get Well Soon ***</p>
+            <p className="text-[7.5px] text-gray-400 text-center font-sans">Radha Krishna HMS · opti-x.in</p>
           </div>
-        </Card>
+        </div>
       </div>
     );
   }

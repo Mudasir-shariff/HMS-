@@ -226,41 +226,155 @@ body {
   );
 }
 
-/* ── Print Media Optimization ── */
+/* Screen utility: hide print-only elements on screen */
+.print-only {
+  display: none !important;
+}
+
+/* ── Universal Multi-Printer Print Optimization (Laser, Inkjet, Thermal 80mm/58mm, Dot Matrix) ── */
 @media print {
   @page {
     size: auto;
-    margin: 8mm 12mm;
+    margin: 5mm;
   }
 
-  body {
-    background: white !important;
-    color: #10200F !important;
-    font-size: 12px !important;
-    line-height: 1.4 !important;
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.35 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
+  .print-only {
+    display: block !important;
+  }
+
+  /* Hide navigation, page headers, floating tabs, sidebars, and UI buttons */
   header,
   aside,
   nav,
+  footer,
   .no-print,
-  button:not(.allow-print) {
+  button:not(.allow-print),
+  input[type="button"],
+  input[type="submit"] {
     display: none !important;
+  }
+
+  /* Remove modal fixed overlays so modal printable documents (e.g. bills/reports) print cleanly */
+  .fixed.inset-0,
+  .backdrop-blur-sm {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
   }
 
   main {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Prevent page breaks cutting across vital information */
+  tr,
+  blockquote,
+  .printable-card,
+  .prescription-section,
+  .signature-block,
+  .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  h1, h2, h3, h4, thead {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* ── Format 1: A4 Full Sheet (Laser & Inkjet Desktop Printers) ── */
+  .paper-a4 {
+    width: 100% !important;
+    max-width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 8mm !important;
+    font-size: 10pt !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* ── Format 2: A5 Pad / Half Sheet (OPD Doctor Prescription Pad) ── */
+  .paper-a5 {
+    width: 100% !important;
+    max-width: 148mm !important;
+    margin: 0 auto !important;
+    padding: 4mm 6mm !important;
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* ── Format 3: 80mm (3-inch) Thermal POS Receipt Printer (Pharmacy & Token Slips) ── */
+  .paper-thermal,
+  .paper-thermal-80 {
+    width: 100% !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 3mm !important;
+    font-size: 9pt !important;
+    line-height: 1.2 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+
+  .paper-thermal *,
+  .paper-thermal-80 * {
+    color: #000000 !important;
+  }
+
+  /* ── Format 4: 58mm (2-inch) Mini POS Thermal Printer ── */
+  .paper-thermal-58 {
+    width: 100% !important;
+    max-width: 48mm !important;
+    margin: 0 auto !important;
+    padding: 1mm 2mm !important;
+    font-size: 8pt !important;
+    line-height: 1.15 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
   }
 
   #printable-prescription {
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
     margin: 0 auto !important;
-    width: 100% !important;
-    max-width: 100% !important;
     background: white !important;
+  }
+
+  .printable-token-slip,
+  .printable-receipt {
+    border: 1px dashed #000000 !important;
+    padding: 4mm !important;
+    margin: 0 auto !important;
+    background: #ffffff !important;
   }
 }
