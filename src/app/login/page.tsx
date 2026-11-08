@@ -208,8 +208,8 @@ function LoginForm() {
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-[var(--line-soft)] pt-1.5 gap-1">
               <span className="font-medium text-[var(--text-strong)]">Email:</span>
-              <a href="mailto:shariffmudasirshariff@gmail.com" className="font-medium text-[var(--green-800)] hover:underline break-all text-right sm:text-left">
-                shariffmudasirshariff@gmail.com
+              <a href="mailto:hello@opti-x.in" className="font-medium text-[var(--green-800)] hover:underline break-all text-right sm:text-left">
+                hello@opti-x.in
               </a>
             </div>
           </div>

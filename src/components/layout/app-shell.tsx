@@ -502,8 +502,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-[var(--text-strong)]">Email Support</p>
-                  <a href="mailto:shariffmudasirshariff@gmail.com" className="text-xs font-semibold text-[var(--green-800)] hover:underline break-all block mt-0.5">
-                    shariffmudasirshariff@gmail.com
+                  <a href="mailto:hello@opti-x.in" className="text-xs font-semibold text-[var(--green-800)] hover:underline break-all block mt-0.5">
+                    hello@opti-x.in
                   </a>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Available 24/7 for ticket queries, bug reports & feature requests

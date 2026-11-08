@@ -276,8 +276,8 @@ export default function SettingsPage() {
               </div>
               <div className="pt-1.5 border-t border-[var(--line-soft)]">
                 <span className="font-medium text-[var(--text-strong)] block">Support Email:</span>
-                <a href="mailto:shariffmudasirshariff@gmail.com" className="text-[var(--green-800)] hover:underline font-medium break-all">
-                  shariffmudasirshariff@gmail.com
+                <a href="mailto:hello@opti-x.in" className="text-[var(--green-800)] hover:underline font-medium break-all">
+                  hello@opti-x.in
                 </a>
               </div>
               <div className="pt-1.5 border-t border-[var(--line-soft)] text-[10px]">
