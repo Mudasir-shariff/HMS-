@@ -21,7 +21,6 @@ const ROLES = [
   { value: 'admin', label: 'Super Admin', desc: 'Hospital administration, staff accounts, system settings' },
   { value: 'doctor', label: 'Consultant Doctor', desc: 'Patient consultation queue, clinical notes, prescriptions' },
   { value: 'receptionist', label: 'Receptionist', desc: 'Patient OPD registration, token queue, bed admissions' },
-  { value: 'pharmacist', label: 'Pharmacist', desc: 'Prescription dispensing, batch inventory, drug pricing' },
 ];
 
 const SPECIALIZATIONS = [

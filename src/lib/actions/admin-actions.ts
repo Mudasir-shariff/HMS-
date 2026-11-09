@@ -8,7 +8,7 @@ const CreateStaffSchema = z.object({
   email: z.string().email('Valid email address is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   fullName: z.string().min(2, 'Full name is required'),
-  role: z.enum(['admin', 'doctor', 'receptionist', 'pharmacist']),
+  role: z.enum(['admin', 'doctor', 'receptionist']),
   phone: z
     .string()
     .refine((val) => !val || /^[6-9]\d{9}$/.test(val.replace(/\D/g, '')), {

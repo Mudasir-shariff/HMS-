@@ -5,16 +5,14 @@
 
 // ── Enums ──
 
-export type UserRole = 'admin' | 'receptionist' | 'doctor' | 'pharmacist';
+export type UserRole = 'admin' | 'receptionist' | 'doctor';
 
 export type VisitStatus =
   | 'waiting'       // in doctor queue
   | 'in_consultation'
-  | 'prescribed'    // moved to pharmacy queue
-  | 'dispensed'     // pharmacy done
-  | 'completed';
-
-export type DrugType = 'tablet' | 'capsule' | 'syrup' | 'injection' | 'other';
+  | 'completed'
+  | 'prescribed'    // legacy fallback
+  | 'dispensed';    // legacy fallback
 
 export type DoseTime = 'morning' | 'afternoon' | 'night';
 export type DoseRelation = 'before_food' | 'after_food';
@@ -109,22 +107,18 @@ export interface Prescription {
 export interface PrescriptionItem {
   id: string;
   prescription_id: string;
-  drug_id: string;
-  drug_name: string;        // snapshot at prescription time
+  drug_id?: string;
+  drug_name: string;
   dose_morning: boolean;
   dose_afternoon: boolean;
   dose_night: boolean;
   dose_relation: DoseRelation;
   num_days: number;
   quantity?: number;
-  is_custom?: boolean;       // free-text item not in pharmacy catalog (Other item)
-  item_type?: DrugType;
+  is_custom?: boolean;
+  item_type?: string;
   custom_unit?: string;
-  added_by_pharmacist?: boolean;
-  pharmacist_notes?: string;
   created_at: string;
-  // joined
-  drug?: Drug;
 }
 
 export interface LabTestOrder {
@@ -132,69 +126,6 @@ export interface LabTestOrder {
   prescription_id: string;
   test_name: string;
   notes?: string;
-  created_at: string;
-}
-
-// ── Pharmacy ──
-
-export interface Drug {
-  id: string;
-  name: string;
-  drug_type: DrugType;
-  custom_type_name?: string;
-  expiry_date: string;
-  purchase_price: number;
-  selling_price: number;
-  stock_quantity: number;
-  low_stock_limit: number;
-  boxes?: number;
-  tablets_per_sheet?: number;
-  price_per_sheet?: number;
-  selling_price_per_sheet?: number;
-  price_per_unit?: number;
-  batch_number?: string;
-  supplier?: string;
-  unit?: string;
-  schedule_h: boolean;
-  schedule_h1: boolean;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Dispensing {
-  id: string;
-  prescription_id?: string;  // null for walk-in sales
-  visit_id?: string;
-  patient_id?: string;
-  pharmacist_id: string;
-  pharmacist_name?: string;
-  patient_name?: string;
-  patient_phone?: string;
-  patient_uhid?: string;
-  is_walk_in: boolean;
-  total_amount: number;
-  has_schedule_h_warning?: boolean;
-  override_reason?: string;
-  status?: 'delivered';
-  delivered_at?: string;
-  uaid?: string;             // if IP prescription
-  stay_day_number?: number;
-  created_at: string;
-  updated_at: string;
-  // joined
-  items?: DispensingItem[];
-}
-
-export interface DispensingItem {
-  id: string;
-  dispensing_id: string;
-  drug_id: string;
-  drug_name: string;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  is_custom?: boolean;
   created_at: string;
 }
 
@@ -233,7 +164,7 @@ export interface Admission {
   discharged_at?: string;
   hours_per_day: number;     // billing day length, default 18
   total_bed_charges: number;
-  total_pharmacy_charges: number;
+  total_pharmacy_charges?: number;
   total_lab_charges: number;
   // joined
   patient?: Patient;

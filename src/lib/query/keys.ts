@@ -15,21 +15,12 @@ export const queryKeys = {
     byVisit: (visitId: string) => ['prescriptions', 'byVisit', visitId] as const,
     detail: (id: string) => ['prescriptions', 'detail', id] as const,
   },
-  drugs: {
-    all: ['drugs'] as const,
-    active: () => ['drugs', 'active'] as const,
-    detail: (id: string) => ['drugs', 'detail', id] as const,
-  },
   doctors: {
     all: ['doctors'] as const,
   },
   users: {
     all: ['users'] as const,
     detail: (id: string) => ['users', 'detail', id] as const,
-  },
-  dispensings: {
-    all: ['dispensings'] as const,
-    detail: (id: string) => ['dispensings', 'detail', id] as const,
   },
   wards: {
     all: ['wards'] as const,

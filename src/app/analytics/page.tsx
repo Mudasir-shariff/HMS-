@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   Download,
   AlertTriangle,
-  ShoppingCart,
   CheckCircle,
   Phone,
   MessageSquare,
@@ -29,9 +28,7 @@ import {
   useVisits,
   usePatients,
   useDoctors,
-  useDrugs,
   useAdmissions,
-  useDispensings,
   useHospitalSettings,
 } from '@/lib/query/hooks';
 import { isTodayOrWithin24Hours } from '@/lib/utils/date';
@@ -43,9 +40,7 @@ export default function AnalyticsPage() {
   const { data: visits = [] } = useVisits();
   const { data: patients = [] } = usePatients();
   const { data: doctors = [] } = useDoctors();
-  const { data: drugs = [] } = useDrugs();
   const { data: admissions = [] } = useAdmissions();
-  const { data: dispensings = [] } = useDispensings();
   const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('week');
@@ -73,12 +68,6 @@ export default function AnalyticsPage() {
     });
   }, [visits, dateFilter]);
 
-  // Total sales & breakdown
-  const walkInSales = dispensings.filter((d) => d.is_walk_in);
-  const rxDispensedSales = dispensings.filter((d) => !d.is_walk_in);
-
-  const totalWalkInRevenue = walkInSales.reduce((sum, d) => sum + d.total_amount, 0);
-  const totalRxRevenue = rxDispensedSales.reduce((sum, d) => sum + d.total_amount, 0);
   const totalBedRevenue = admissions.reduce((sum, a) => sum + a.total_bed_charges, 0);
 
   // ────────────────────────────────────────────────────────────────────────
@@ -321,8 +310,6 @@ export default function AnalyticsPage() {
       ...doctorRevenueStats.doctorsList.map(
         (d) => `Doctor Revenue,${d.name} (${d.specialization}),${d.estimatedRevenue},${d.count} patients @ Rs.${d.fee}`
       ),
-      `Pharmacy,Walk-in Sales (INR),${totalWalkInRevenue.toFixed(2)},No-prescription OTC transactions`,
-      `Pharmacy,Prescription Sales (INR),${totalRxRevenue.toFixed(2)},Doctor prescribed medications`,
       `In-Patient,Bed Charges (INR),${totalBedRevenue.toFixed(2)},Active & discharged in-patients`,
     ].join('\n');
 
@@ -713,88 +700,6 @@ export default function AnalyticsPage() {
           </div>
         </Card>
       </div>
-
-      {/* ────────────────────────────────────────────────────────────────────────
-          ROW 3: WALK-IN (NO-PRESCRIPTION) SALES AUDIT
-         ──────────────────────────────────────────────────────────────────────── */}
-      <Card className="mb-6 border border-amber-200 bg-[#FFFDF9]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-amber-200/60">
-          <div className="flex items-center gap-2">
-            <ShoppingCart size={20} className="text-amber-800" />
-            <div>
-              <h3 className="text-base font-bold text-[var(--text-strong)]">
-                Walk-in (No-Prescription) Sales Audit & Regulatory Report
-              </h3>
-              <p className="text-xs text-[var(--text-muted)]">
-                Regulatory compliance log of direct OTC sales and Schedule H warnings
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="bg-amber-100 text-amber-900 font-bold px-3 py-1 rounded-full">
-              {walkInSales.length} Transactions
-            </span>
-            <span className="font-bold text-sm text-[var(--green-900)] tabular-nums">
-              Total: ₹{totalWalkInRevenue.toFixed(2)}
-            </span>
-          </div>
-        </div>
-
-        {walkInSales.length === 0 ? (
-          <p className="text-xs text-[var(--text-muted)] text-center py-4">
-            No walk-in (no-prescription) sales recorded for this period.
-          </p>
-        ) : (
-          <div className="overflow-x-auto text-xs">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-amber-200 text-[var(--text-muted)] font-semibold">
-                  <th className="pb-2">Date & Time</th>
-                  <th className="pb-2">Customer / UHID</th>
-                  <th className="pb-2">Dispensed Items</th>
-                  <th className="pb-2">Schedule H Alert</th>
-                  <th className="pb-2">Pharmacist</th>
-                  <th className="pb-2 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-amber-100">
-                {walkInSales.map((sale) => (
-                  <tr key={sale.id} className="py-2 hover:bg-amber-50/50">
-                    <td className="py-2 text-[11px] text-[var(--text-muted)]">
-                      {new Date(sale.delivered_at || sale.created_at).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="py-2 font-medium">
-                      {sale.patient_name || 'Walk-in'} {sale.patient_phone ? `(${sale.patient_phone})` : ''}
-                      {sale.patient_uhid && <span className="block font-mono text-[10px] text-gray-500">UHID: {sale.patient_uhid}</span>}
-                    </td>
-                    <td className="py-2">
-                      {sale.items?.map((it) => `${it.drug_name} (${it.quantity})`).join(', ') || 'Medications'}
-                    </td>
-                    <td className="py-2">
-                      {sale.has_schedule_h_warning ? (
-                        <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold">
-                          SCH H Warning Logged
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-green-700 font-medium">Clear</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-[var(--text-muted)]">{sale.pharmacist_name || 'Pharmacist'}</td>
-                    <td className="py-2 text-right font-bold text-[var(--text-strong)] tabular-nums">
-                      ₹{sale.total_amount.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
     </>
   );
 }

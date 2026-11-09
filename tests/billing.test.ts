@@ -37,13 +37,12 @@ describe('In-Patient Stay & Billing Calculations', () => {
     expect(totalBedCharges).toBe(7500);
   });
 
-  it('aggregates total IP bill accurately across bed, pharmacy, and lab charges', () => {
+  it('aggregates total IP bill accurately across bed and diagnostic lab charges', () => {
     const bedCharges = 7500;
-    const pharmacyCharges = 3450.5;
     const labCharges = 1200;
 
-    const totalBill = bedCharges + pharmacyCharges + labCharges;
-    expect(totalBill).toBe(12150.5);
+    const totalBill = bedCharges + labCharges;
+    expect(totalBill).toBe(8700);
   });
 });
 

@@ -5,10 +5,10 @@
 -- Paste and run this ENTIRE script in the Supabase SQL Editor.
 -- It configures:
 -- 1. All hospital tables with canonical UUID keys, versioning & soft deletes.
--- 2. Atomic sequences and advisory-locked RPCs for UHID, OPD tokens & dispensing.
+-- 2. Atomic sequences and advisory-locked RPCs for UHID & OPD tokens.
 -- 3. Enables Supabase Realtime across all tables with REPLICA IDENTITY FULL.
 -- 4. Grants full permissions to anon & authenticated (disables RLS blocks).
--- 5. Seeds default staff logins (Admin, Doctor, Receptionist, Pharmacist),
+-- 5. Seeds default staff logins (Admin, Doctor, Receptionist),
 --    essential drug inventory, hospital settings, wards, and beds.
 -- =============================================================================
 
@@ -145,8 +145,6 @@ CREATE TABLE IF NOT EXISTS public.prescription_items (
   is_custom           BOOLEAN DEFAULT FALSE,
   item_type           TEXT,
   custom_unit         TEXT,
-  added_by_pharmacist BOOLEAN DEFAULT FALSE,
-  pharmacist_notes    TEXT,
   version             INT DEFAULT 1,
   deleted_at          TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -166,80 +164,6 @@ CREATE TABLE IF NOT EXISTS public.lab_test_orders (
 );
 
 ALTER TABLE IF EXISTS public.lab_test_orders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-
--- Drugs & Pharmacy Inventory
-CREATE TABLE IF NOT EXISTS public.drugs (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name                TEXT NOT NULL,
-  drug_type           TEXT NOT NULL DEFAULT 'tablet',
-  custom_type_name    TEXT,
-  unit_price          NUMERIC NOT NULL DEFAULT 0,
-  selling_price       NUMERIC DEFAULT 0,
-  purchase_price      NUMERIC DEFAULT 0,
-  stock_quantity      INT NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
-  low_stock_limit     INT DEFAULT 30,
-  reorder_level       INT DEFAULT 50,
-  boxes               INT,
-  tablets_per_sheet   INT,
-  price_per_sheet     NUMERIC,
-  batch_number        TEXT,
-  expiry_date         DATE,
-  supplier            TEXT,
-  unit                TEXT,
-  schedule_h          BOOLEAN DEFAULT FALSE,
-  schedule_h1         BOOLEAN DEFAULT FALSE,
-  is_active           BOOLEAN DEFAULT TRUE,
-  version             INT DEFAULT 1,
-  deleted_at          TIMESTAMPTZ,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE IF EXISTS public.drugs ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
-ALTER TABLE IF EXISTS public.drugs ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-
--- Dispensings (Pharmacy Bills & Sales)
-CREATE TABLE IF NOT EXISTS public.dispensings (
-  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  prescription_id         UUID,
-  patient_id              UUID,
-  pharmacist_id           UUID,
-  pharmacist_name         TEXT,
-  patient_name            TEXT,
-  patient_phone           TEXT,
-  patient_uhid            TEXT,
-  is_walk_in              BOOLEAN DEFAULT FALSE,
-  total_amount            NUMERIC NOT NULL DEFAULT 0,
-  has_schedule_h_warning  BOOLEAN DEFAULT FALSE,
-  override_reason         TEXT,
-  status                  TEXT DEFAULT 'delivered',
-  delivered_at            TIMESTAMPTZ,
-  uaid                    TEXT,
-  stay_day_number         INT,
-  version                 INT DEFAULT 1,
-  deleted_at              TIMESTAMPTZ,
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE IF EXISTS public.dispensings ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
-ALTER TABLE IF EXISTS public.dispensings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-
--- Dispensing Items
-CREATE TABLE IF NOT EXISTS public.dispensing_items (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dispensing_id       UUID NOT NULL,
-  drug_id             UUID,
-  drug_name           TEXT NOT NULL,
-  quantity            INT NOT NULL DEFAULT 1,
-  unit_price          NUMERIC NOT NULL DEFAULT 0,
-  total_price         NUMERIC NOT NULL DEFAULT 0,
-  is_custom           BOOLEAN DEFAULT FALSE,
-  deleted_at          TIMESTAMPTZ,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE IF EXISTS public.dispensing_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- Wards & In-Patient Beds
 CREATE TABLE IF NOT EXISTS public.wards (
@@ -451,128 +375,6 @@ BEGIN
 END;
 $$;
 
--- Atomic Dispensing (Lock visit, check stock >= qty, decrement stock, complete visit)
-CREATE OR REPLACE FUNCTION public.dispense_prescription_atomic(
-  p_prescription_id UUID DEFAULT NULL,
-  p_pharmacist_id UUID DEFAULT NULL,
-  p_pharmacist_name TEXT DEFAULT 'Pharmacist on Duty',
-  p_items JSONB DEFAULT '[]'::JSONB,
-  p_override_reason TEXT DEFAULT NULL,
-  p_total_amount NUMERIC DEFAULT 0,
-  p_is_walk_in BOOLEAN DEFAULT FALSE,
-  p_patient_id UUID DEFAULT NULL,
-  p_patient_name TEXT DEFAULT NULL,
-  p_patient_phone TEXT DEFAULT NULL,
-  p_patient_uhid TEXT DEFAULT NULL,
-  p_uaid TEXT DEFAULT NULL,
-  p_stay_day_number INT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_dispensing_id UUID;
-  v_visit_id UUID;
-  v_visit_status TEXT;
-  v_item RECORD;
-  v_drug RECORD;
-  v_item_drug_id UUID;
-  v_item_qty INT;
-  v_has_schedule_h BOOLEAN := FALSE;
-BEGIN
-  IF p_prescription_id IS NOT NULL THEN
-    SELECT v.id, v.status
-    INTO v_visit_id, v_visit_status
-    FROM public.visits v
-    JOIN public.prescriptions p ON p.visit_id = v.id
-    WHERE p.id = p_prescription_id
-    FOR UPDATE;
-
-    IF v_visit_status IN ('dispensed', 'completed') THEN
-      RAISE EXCEPTION 'Prescription has already been dispensed by another pharmacist.';
-    END IF;
-  END IF;
-
-  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS (
-    drug_id UUID,
-    drug_name TEXT,
-    quantity INT,
-    unit_price NUMERIC,
-    is_custom BOOLEAN
-  )
-  LOOP
-    v_item_drug_id := v_item.drug_id;
-    v_item_qty := COALESCE(v_item.quantity, 1);
-
-    IF v_item_drug_id IS NOT NULL AND NOT COALESCE(v_item.is_custom, FALSE) THEN
-      SELECT * INTO v_drug FROM public.drugs WHERE id = v_item_drug_id FOR UPDATE;
-
-      IF NOT FOUND THEN
-        RAISE EXCEPTION 'Drug not found: %', v_item_drug_id;
-      END IF;
-
-      IF v_drug.stock_quantity < v_item_qty THEN
-        RAISE EXCEPTION 'Insufficient stock for %: available %, requested %', v_drug.name, v_drug.stock_quantity, v_item_qty;
-      END IF;
-
-      IF v_drug.schedule_h OR v_drug.schedule_h1 THEN
-        v_has_schedule_h := TRUE;
-      END IF;
-
-      UPDATE public.drugs
-      SET stock_quantity = stock_quantity - v_item_qty,
-          updated_at = NOW()
-      WHERE id = v_item_drug_id;
-    END IF;
-  END LOOP;
-
-  v_dispensing_id := gen_random_uuid();
-  INSERT INTO public.dispensings (
-    id, prescription_id, patient_id, pharmacist_id, pharmacist_name,
-    patient_name, patient_phone, patient_uhid, is_walk_in, total_amount,
-    has_schedule_h_warning, override_reason, status, delivered_at,
-    uaid, stay_day_number, version, created_at, updated_at
-  ) VALUES (
-    v_dispensing_id, p_prescription_id, p_patient_id, p_pharmacist_id, p_pharmacist_name,
-    p_patient_name, p_patient_phone, p_patient_uhid, p_is_walk_in, p_total_amount,
-    v_has_schedule_h, p_override_reason, 'delivered', NOW(),
-    p_uaid, p_stay_day_number, 1, NOW(), NOW()
-  );
-
-  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS (
-    drug_id UUID,
-    drug_name TEXT,
-    quantity INT,
-    unit_price NUMERIC,
-    total_price NUMERIC,
-    is_custom BOOLEAN
-  )
-  LOOP
-    INSERT INTO public.dispensing_items (
-      id, dispensing_id, drug_id, drug_name, quantity, unit_price, total_price, is_custom, created_at
-    ) VALUES (
-      gen_random_uuid(), v_dispensing_id, v_item.drug_id, v_item.drug_name,
-      COALESCE(v_item.quantity, 1), COALESCE(v_item.unit_price, 0),
-      COALESCE(v_item.total_price, COALESCE(v_item.quantity, 1) * COALESCE(v_item.unit_price, 0)),
-      COALESCE(v_item.is_custom, FALSE), NOW()
-    );
-  END LOOP;
-
-  IF v_visit_id IS NOT NULL THEN
-    UPDATE public.visits
-    SET status = 'dispensed',
-        updated_at = NOW()
-    WHERE id = v_visit_id;
-  END IF;
-
-  RETURN jsonb_build_object(
-    'success', TRUE,
-    'dispensing_id', v_dispensing_id
-  );
-END;
-$$;
-
 -- -----------------------------------------------------------------------------
 -- 4. DISABLE ROW LEVEL SECURITY (RLS) FOR CROSS-DEVICE ANONYMOUS ACCESS
 -- -----------------------------------------------------------------------------
@@ -588,9 +390,6 @@ ALTER TABLE public.visits             DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prescriptions      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prescription_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_test_orders    DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.drugs              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dispensings        DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dispensing_items   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wards              DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.beds               DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admissions         DISABLE ROW LEVEL SECURITY;
@@ -605,65 +404,6 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 -- 5. REALTIME PUBLICATION & REPLICA IDENTITY FULL
 -- -----------------------------------------------------------------------------
 
-DO $$
-DECLARE
-  tbl TEXT;
-  tbls TEXT[] := ARRAY[
-    'user_profiles', 'doctors', 'patients', 'visits', 'prescriptions',
-    'prescription_items', 'lab_test_orders', 'drugs', 'dispensings',
-    'dispensing_items', 'wards', 'beds', 'admissions', 'hospital_settings'
-  ];
-BEGIN
-  FOREACH tbl IN ARRAY tbls LOOP
-    BEGIN
-      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
-    EXCEPTION
-      WHEN duplicate_object THEN NULL;
-      WHEN OTHERS THEN NULL;
-    END;
-    EXECUTE format('ALTER TABLE public.%I REPLICA IDENTITY FULL', tbl);
-  END LOOP;
-END $$;
-
--- -----------------------------------------------------------------------------
--- 6. ENSURE PRIMARY KEYS
--- -----------------------------------------------------------------------------
-
-DO $$
-BEGIN
-  ALTER TABLE public.user_profiles ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-  ALTER TABLE public.doctors ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-  ALTER TABLE public.patients ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-  ALTER TABLE public.visits ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-  ALTER TABLE public.prescriptions ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-  ALTER TABLE public.drugs ADD PRIMARY KEY (id);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
 
 DO $$
 BEGIN
@@ -693,14 +433,12 @@ DELETE FROM public.user_profiles WHERE email IN (
   'doctor@hospital.local',
   'dr.priya@hospital.local',
   'reception@hospital.local',
-  'pharmacy@hospital.local'
-) OR id IN (
+  ) OR id IN (
   '11111111-1111-4111-a111-111111111111',
   '22222222-2222-4222-a222-222222222222',
   '33333333-3333-4333-a333-333333333333',
   '44444444-4444-4444-a444-444444444444',
-  '55555555-5555-4555-a555-555555555555'
-);
+  );
 
 -- Delete any legacy demo doctors
 DELETE FROM public.doctors WHERE full_name IN (
@@ -710,25 +448,6 @@ DELETE FROM public.doctors WHERE full_name IN (
   '22222222-2222-4222-a222-222222222222',
   '33333333-3333-4333-a333-333333333333'
 );
-
--- Delete any legacy demo drugs
-DELETE FROM public.drugs WHERE id IN (
-  'd0000001-0000-0000-0000-000000000001',
-  'd0000002-0000-0000-0000-000000000002',
-  'd0000003-0000-0000-0000-000000000003',
-  'd0000004-0000-0000-0000-000000000004',
-  'd0000005-0000-0000-0000-000000000005',
-  'd0000006-0000-0000-0000-000000000006',
-  'd0000007-0000-0000-0000-000000000007',
-  'd0000008-0000-0000-0000-000000000008',
-  'd0000009-0000-0000-0000-000000000009',
-  'd0000010-0000-0000-0000-000000000010',
-  'd0000011-0000-0000-0000-000000000011',
-  'd0000012-0000-0000-0000-000000000012',
-  'd0000013-0000-0000-0000-000000000013',
-  'd0000014-0000-0000-0000-000000000014',
-  'd0000015-0000-0000-0000-000000000015'
-) OR batch_number LIKE '%-2026-%';
 
 -- Delete any legacy demo beds & wards
 DELETE FROM public.beds WHERE id IN (
@@ -750,7 +469,7 @@ DELETE FROM public.wards WHERE id IN (
   'e0000003-0000-0000-0000-000000000003'
 );
 
--- NOTE: No dummy patients, visits, prescriptions, drugs, or accounts are inserted.
+-- NOTE: No dummy patients, visits, prescriptions, or accounts are inserted.
 -- All data is created exclusively through live hospital operations.
 
 -- Verification

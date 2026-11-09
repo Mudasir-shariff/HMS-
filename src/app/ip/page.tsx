@@ -431,7 +431,7 @@ export default function InPatientPage() {
                 const ward = wards.find((w) => w.id === bed?.ward_id);
                 const stay = calculateStay(adm.admitted_at);
                 const bedCost = stay.billingDays * (bed?.price_per_day || 1200);
-                const grandTotal = bedCost + (adm.total_pharmacy_charges || 0) + (adm.total_lab_charges || 0);
+                const grandTotal = bedCost + (adm.total_lab_charges || 0);
 
                 return (
                   <div
@@ -472,7 +472,7 @@ export default function InPatientPage() {
                           <span>Stay: <strong>{stay.totalHours} hrs</strong> ({stay.billingDays} day(s))</span>
                         </p>
                         <p className="text-[var(--text-muted)] mt-0.5">
-                          Bed: ₹{bedCost} · Rx: ₹{adm.total_pharmacy_charges || 0} · Total: <strong className="text-[var(--green-700)]">₹{grandTotal}</strong>
+                          Bed: ₹{bedCost} · Total: <strong className="text-[var(--green-700)]">₹{grandTotal}</strong>
                         </p>
                       </div>
 
@@ -570,9 +570,8 @@ export default function InPatientPage() {
         const ward = wards.find((w) => w.id === bed?.ward_id);
         const stay = calculateStay(dischargeTarget.admitted_at);
         const bedCharges = stay.billingDays * (bed?.price_per_day || 1200);
-        const rxCharges = dischargeTarget.total_pharmacy_charges || 0;
         const labCharges = dischargeTarget.total_lab_charges || 0;
-        const grandTotal = bedCharges + rxCharges + labCharges;
+        const grandTotal = bedCharges + labCharges;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -635,11 +634,6 @@ export default function InPatientPage() {
                       <td className="p-2.5 font-medium">Room / Bed Occupancy Charges</td>
                       <td className="p-2.5 text-center">{stay.billingDays} day(s) ({stay.totalHours} hrs)</td>
                       <td className="p-2.5 text-right font-semibold">₹{bedCharges.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5 font-medium">In-Patient Pharmacy & Medications</td>
-                      <td className="p-2.5 text-center">Dispensed Items</td>
-                      <td className="p-2.5 text-right font-semibold">₹{rxCharges.toFixed(2)}</td>
                     </tr>
                     <tr>
                       <td className="p-2.5 font-medium">Diagnostics & Clinical Lab Tests</td>

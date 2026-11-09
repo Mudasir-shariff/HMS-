@@ -4,14 +4,12 @@ import {
   fetchVisits,
   fetchPatients,
   fetchPrescriptions,
-  fetchDrugs,
   fetchDoctors,
   fetchUserProfiles,
   fetchWards,
   fetchBeds,
   fetchAdmissions,
   fetchSettings,
-  fetchDispensings,
   fetchAuditLogs,
   fetchDeletedPatients,
 } from '@/lib/api';
@@ -43,15 +41,6 @@ export function usePrescriptions(visitId?: string) {
   });
 }
 
-export function useDrugs() {
-  return useQuery({
-    queryKey: queryKeys.drugs.all,
-    queryFn: fetchDrugs,
-    staleTime: 10000,
-    refetchInterval: 30000,
-  });
-}
-
 export function useDoctors() {
   return useQuery({
     queryKey: queryKeys.doctors.all,
@@ -67,15 +56,6 @@ export function useUserProfiles() {
     queryFn: fetchUserProfiles,
     staleTime: 10000,
     refetchInterval: false,
-  });
-}
-
-export function useDispensings() {
-  return useQuery({
-    queryKey: queryKeys.dispensings.all,
-    queryFn: fetchDispensings,
-    staleTime: 5000,
-    refetchInterval: 15000,
   });
 }
 

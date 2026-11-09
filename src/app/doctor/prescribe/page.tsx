@@ -31,7 +31,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, Button, Textarea, Input, StatusPill } from '@/components/ui';
 import { BrandLogo } from '@/components/ui/brand-logo';
 import {
-  useDrugs,
   useDoctors,
   useHospitalSettings,
   usePatients,
@@ -44,9 +43,10 @@ import { useAuth } from '@/lib/auth/context';
 import { calculateSmartQuantity, generateUUID } from '@/lib/utils/quantity';
 import { createClient } from '@/lib/supabase/client';
 import { broadcastChange } from '@/lib/realtime/realtime-provider';
-import { syncFromSupabase, pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
+import { pushPrescriptionToSupabase, pushVisitToSupabase, isSupabaseConfigured, withTimeout } from '@/lib/supabase/sync';
 import { recordAuditLog } from '@/lib/audit/logger';
-import type { PrescriptionItem, LabTestOrder, DrugType, Prescription, Visit } from '@/lib/types/database';
+import { CLINICAL_MEDICINES, type ClinicalMedicine } from '@/lib/data/medicines';
+import type { PrescriptionItem, LabTestOrder, Prescription, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
 const LAB_TEST_SUGGESTIONS = [
@@ -97,7 +97,7 @@ const CLINICAL_TEMPLATES = [
 
 interface MedicineRow {
   id: string;
-  drugId: string;
+  drugId?: string;
   name: string;
   type: string;
   morning: boolean;
@@ -108,8 +108,6 @@ interface MedicineRow {
   qty: number;
   isCustom?: boolean;
   customUnit?: string;
-  addedByPharmacist?: boolean;
-  pharmacistNotes?: string;
 }
 
 export default function PrescribePage() {
@@ -146,7 +144,7 @@ function PrescribeContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { data: drugs = [] } = useDrugs();
+  const drugs = CLINICAL_MEDICINES;
   const { data: doctors = [] } = useDoctors();
   const { data: settings = { hospital_name: 'RADHAKRISHNA HOSPITAL' } as any } = useHospitalSettings();
   const { data: patients = [] } = usePatients();
@@ -208,8 +206,6 @@ function PrescribeContent() {
         qty: it.quantity || 10,
         isCustom: it.is_custom,
         customUnit: it.custom_unit,
-        addedByPharmacist: Boolean(it.added_by_pharmacist),
-        pharmacistNotes: it.pharmacist_notes,
       }));
     }
     return [];
@@ -218,7 +214,7 @@ function PrescribeContent() {
   const loadedRxIdRef = useRef<string | null>(existingRx?.id || null);
   const loadedRxItemsLenRef = useRef<number>(existingRx?.items?.length || 0);
 
-  // Keep prescription updated if pharmacist adds a tablet during dispensing/review
+  // Keep prescription state in sync if loaded prescription updates
   useEffect(() => {
     if (existingRx && existingRx.items && existingRx.items.length > 0) {
       if (existingRx.id !== loadedRxIdRef.current || existingRx.items.length !== loadedRxItemsLenRef.current) {
@@ -238,8 +234,6 @@ function PrescribeContent() {
             qty: it.quantity || 10,
             isCustom: it.is_custom,
             customUnit: it.custom_unit,
-            addedByPharmacist: Boolean(it.added_by_pharmacist),
-            pharmacistNotes: it.pharmacist_notes,
           }))
         );
       }
@@ -266,21 +260,12 @@ function PrescribeContent() {
   const [drugSearch, setDrugSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'tablet' | 'injection' | 'syrup' | 'capsule' | 'other'>('all');
-  const [isSyncingDrugs, setIsSyncingDrugs] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Background drug sync on mount if cache is empty
-  useEffect(() => {
-    if (drugs.length === 0) {
-      setIsSyncingDrugs(true);
-      syncFromSupabase().finally(() => setIsSyncingDrugs(false));
-    }
-  }, [drugs.length]);
-
-  // Custom Item Modal/Drawer State (PRD v1.1 Injections & Other Free-Text)
+  // Custom Item Modal/Drawer State
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [customName, setCustomName] = useState('');
-  const [customType, setCustomType] = useState<DrugType>('injection');
+  const [customType, setCustomType] = useState<'tablet' | 'capsule' | 'syrup' | 'injection' | 'other'>('injection');
   const [customUnit, setCustomUnit] = useState('vial');
   const [customQty, setCustomQty] = useState(1);
   const [customMorning, setCustomMorning] = useState(true);
@@ -315,8 +300,7 @@ function PrescribeContent() {
       const q = drugSearch.toLowerCase();
       return (
         d.name.toLowerCase().includes(q) ||
-        d.drug_type.toLowerCase().includes(q) ||
-        (d.batch_number && d.batch_number.toLowerCase().includes(q))
+        d.drug_type.toLowerCase().includes(q)
       );
     });
   }, [drugs, selectedCategory, drugSearch]);
@@ -484,10 +468,8 @@ function PrescribeContent() {
       num_days: m.days,
       quantity: m.qty,
       is_custom: m.isCustom,
-      item_type: m.type as DrugType,
+      item_type: m.type as any,
       custom_unit: m.customUnit,
-      added_by_pharmacist: m.addedByPharmacist,
-      pharmacist_notes: m.pharmacistNotes,
       created_at: new Date().toISOString(),
     }));
 
@@ -525,7 +507,7 @@ function PrescribeContent() {
     const updatedVisit: Visit = existing
       ? {
           ...existing,
-          status: 'prescribed' as const,
+          status: 'completed' as const,
           follow_up_date: followUp || existing.follow_up_date,
           instructions: instructions || existing.instructions,
           updated_at: new Date().toISOString(),
@@ -536,7 +518,7 @@ function PrescribeContent() {
           patient_id: validPatientId,
           doctor_id: doctorId || user?.doctorId || user?.id || generateUUID(),
           token_number: Number(token) || 1,
-          status: 'prescribed' as const,
+          status: 'completed' as const,
           follow_up_date: followUp || undefined,
           instructions: instructions,
           created_at: new Date().toISOString(),
@@ -558,15 +540,15 @@ function PrescribeContent() {
       old ? [rxPayload, ...old.filter((p) => p.id !== rxPayload.id)] : [rxPayload]
     );
 
-    // Broadcast prescription creation to all terminals (Pharmacy, Reception, Doctor) (<30ms)
+    // Broadcast prescription creation to all terminals (<30ms)
     broadcastChange('prescription_created', { prescription: rxPayload, visit: updatedVisit });
 
-    // 3. Update Supabase visit status to 'prescribed' immediately so queue reflects completion
+    // 3. Update Supabase visit status to 'completed' immediately so queue reflects completion
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const updatePayload = {
-          status: 'prescribed' as const,
+          status: 'completed' as const,
           follow_up_date: followUp || null,
           instructions: instructions || null,
           updated_at: new Date().toISOString(),
@@ -575,7 +557,7 @@ function PrescribeContent() {
           await supabase.from('visits').update(updatePayload).eq('id', finalVisitId);
         }
       } catch (uErr) {
-        console.warn('Error updating visit status to prescribed:', uErr);
+        console.warn('Error updating visit status to completed:', uErr);
       }
     }
 
@@ -666,24 +648,24 @@ function PrescribeContent() {
       const targetPatientId = patientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(patientId) ? patientId : (activePatient?.id || null);
       const targetId = visitId || activeVisit?.id || (targetPatientId && visits.find((v) => v.patient_id === targetPatientId)?.id);
 
-      // 1. Force optimistic update in React Query cache so previous patient is immediately marked 'prescribed'
+      // 1. Force optimistic update in React Query cache so previous patient is immediately marked 'completed'
       queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) => {
         if (!old) return [];
         return old.map((v) =>
           v.id === targetId || (targetPatientId && v.patient_id === targetPatientId)
-            ? { ...v, status: 'prescribed' as const, updated_at: new Date().toISOString() }
+            ? { ...v, status: 'completed' as const, updated_at: new Date().toISOString() }
             : v
         );
       });
 
       // Broadcast visit update to all terminals (<30ms)
-      broadcastChange('visit_updated', { visit: { id: targetId, status: 'prescribed' } });
+      broadcastChange('visit_updated', { visit: { id: targetId, status: 'completed' } });
 
       // 2. Direct Supabase update
       if (isSupabaseConfigured()) {
         const supabase = createClient();
         const updatePayload = {
-          status: 'prescribed' as const,
+          status: 'completed' as const,
           follow_up_date: followUp || null,
           instructions: instructions || null,
           updated_at: new Date().toISOString(),
@@ -778,10 +760,10 @@ function PrescribeContent() {
             </div>
             <div>
               <p className="font-bold text-sm sm:text-base text-[#065F46] leading-tight">
-                Hand-off Complete: Transferred to Pharmacy Queue
+                Consultation Complete: Prescription Issued
               </p>
               <p className="text-[#047857] text-xs mt-0.5 font-medium">
-                Patient Token #{String(token).padStart(2, '0')} ({patientName}) is now in the Pharmacy Dispensing Queue.
+                Prescription issued for Patient Token #{String(token).padStart(2, '0')} ({patientName}). Consultation is marked complete.
               </p>
             </div>
           </div>
@@ -804,7 +786,7 @@ function PrescribeContent() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-[var(--text-strong)]">
-                  Prescription Finalized & Sent to Pharmacy
+                  Prescription Finalized & Consultation Completed
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">
                   Patient Token #{String(token).padStart(2, '0')} · {patientName} · {doctor.full_name}
@@ -999,7 +981,6 @@ function PrescribeContent() {
                           </div>
                           <div className="text-[9px] text-gray-700 pl-2">
                             {unit} • Dose: {freq} • {timing}
-                            {m.addedByPharmacist && ' • [Pharm]'}
                           </div>
                         </div>
                       );
@@ -1153,11 +1134,6 @@ function PrescribeContent() {
                         <div className="flex justify-between items-baseline">
                           <span className="font-bold text-black text-sm">
                             {idx + 1}. {m.name}
-                            {m.addedByPharmacist && (
-                              <span className="ml-2 text-[10px] uppercase font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-300">
-                                [Added by Pharmacy]
-                              </span>
-                            )}
                           </span>
                           <span className="font-semibold text-black text-right">
                             {m.days} days
@@ -1165,7 +1141,6 @@ function PrescribeContent() {
                         </div>
                         <div className="pl-4 text-[11px] sm:text-xs text-gray-700 mt-0.5">
                           {unit} &nbsp;•&nbsp; Dose: {freq} &nbsp;•&nbsp; {timing}
-                          {m.addedByPharmacist && <span> &nbsp;•&nbsp; Dispensed & verified by Pharmacy</span>}
                         </div>
                       </div>
                     );
@@ -1262,12 +1237,12 @@ function PrescribeContent() {
           <Button
             variant="secondary"
             size="sm"
-            icon={<Send size={14} />}
+            icon={<CheckCircle size={14} />}
             onClick={handleSaveOnly}
             loading={isSaving}
             disabled={isSaving}
           >
-            {isSaving ? 'Sending...' : 'Send to Pharmacy'}
+            {isSaving ? 'Saving...' : 'Save & Complete'}
           </Button>
 
           <Button
@@ -1278,7 +1253,7 @@ function PrescribeContent() {
             disabled={isSaving}
             className="bg-[var(--green-900)] text-white"
           >
-            {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
+            {isSaving ? 'Saving...' : 'Save & Print Prescription'}
           </Button>
         </div>
       </div>
@@ -1344,22 +1319,10 @@ function PrescribeContent() {
             <div>
               <CardHeader title="Rx: Prescribe Medications & Injections" count={medicines.length} />
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                Select from medicines entered by the pharmacist, or add custom injections and clinical items.
+                Select from standard clinical medicines formulary, or add custom injections and items.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setIsSyncingDrugs(true);
-                  syncFromSupabase().finally(() => setIsSyncingDrugs(false));
-                }}
-                icon={<RefreshCw size={13} className={isSyncingDrugs ? 'animate-spin' : ''} />}
-                title="Refresh latest stock from pharmacy"
-              >
-                Refresh Stock
-              </Button>
               <Button
                 size="sm"
                 variant="secondary"
@@ -1371,44 +1334,12 @@ function PrescribeContent() {
             </div>
           </div>
 
-          {/* Alert if 0 medicines have been added by Pharmacist yet */}
-          {drugs.length === 0 && (
-            <div className="p-3.5 mb-4 rounded-[var(--r-tile)] bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
-              <div className="flex items-center gap-2">
-                <AlertCircle size={18} className="text-amber-700 shrink-0" />
-                <span>
-                  <strong>No medicines in pharmacy inventory yet.</strong> Medicines entered by the pharmacist will automatically show here.
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Link
-                  href="/pharmacy/inventory/add"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[var(--r-control)] bg-amber-800 text-white font-medium hover:bg-amber-900 transition-colors"
-                >
-                  <Plus size={12} />
-                  <span>Add Medicine in Pharmacy</span>
-                </Link>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setIsSyncingDrugs(true);
-                    syncFromSupabase().finally(() => setIsSyncingDrugs(false));
-                  }}
-                  icon={<RefreshCw size={12} className={isSyncingDrugs ? 'animate-spin' : ''} />}
-                >
-                  Sync Now
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Unified Type-and-Select Medicine Combobox */}
           <div ref={searchRef} className="bg-white p-4 sm:p-5 rounded-[var(--r-tile)] border-2 border-[var(--line-soft)] focus-within:border-[var(--green-600)] focus-within:ring-2 focus-within:ring-[rgba(13,148,136,0.2)] shadow-xs transition-all mb-5">
             <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
               <label className="text-xs sm:text-[13px] font-bold text-[var(--text-strong)] flex items-center gap-1.5">
                 <Pill size={16} className="text-[var(--green-700)]" />
-                <span>Search & Add Medicines from Pharmacy Stock ({drugs.length} total):</span>
+                <span>Search & Prescribe Clinical Medicines ({drugs.length} formulary):</span>
               </label>
               <div className="flex items-center gap-2">
                 <button
@@ -1459,11 +1390,7 @@ function PrescribeContent() {
                       setShowSuggestions(false);
                     }
                   }}
-                  placeholder={
-                    drugs.length > 0
-                      ? 'Type brand or chemical name (e.g. Paracetamol, Pantoprazole, Amoxicillin)...'
-                      : 'No medicines in pharmacy inventory yet — Add stock in Pharmacy portal'
-                  }
+                  placeholder="Type medicine name (e.g. Paracetamol, Augmentin, Pan 40)..."
                   className="h-12 w-full rounded-[var(--r-control)] bg-[var(--bg-canvas)] border border-[var(--line-soft)] pl-11 pr-20 text-sm font-medium text-[var(--text-strong)] placeholder:text-[var(--text-faint)] focus:bg-white focus:outline-none focus:border-[var(--green-600)] transition-all shadow-2xs"
                 />
                 <div className="absolute right-2 flex items-center gap-1">
@@ -1484,7 +1411,7 @@ function PrescribeContent() {
                     type="button"
                     onClick={() => setShowSuggestions((prev) => !prev)}
                     className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-tile)]"
-                    title="Toggle inventory list"
+                    title="Toggle catalog list"
                   >
                     <ChevronDown size={16} className={clsx('transition-transform', showSuggestions && 'rotate-180')} />
                   </button>
@@ -1530,7 +1457,7 @@ function PrescribeContent() {
                       <div className="p-4 text-center">
                         <p className="text-xs text-[var(--text-muted)] mb-2">
                           {drugSearch
-                            ? `No medicines matching "${drugSearch}" in pharmacy inventory.`
+                            ? `No medicines matching "${drugSearch}" in clinical formulary.`
                             : 'No medicines in this category.'}
                         </p>
                         <button
@@ -1550,7 +1477,6 @@ function PrescribeContent() {
                       drugSuggestions.map((drug: (typeof drugs)[0], index: number) => {
                         const isAdded = medicines.some((m) => m.drugId === drug.id);
                         const isHighlighted = index === highlightedIndex;
-                        const isLow = drug.stock_quantity <= drug.low_stock_limit;
 
                         return (
                           <div
@@ -1572,39 +1498,21 @@ function PrescribeContent() {
                               </span>
                               <span
                                 className={clsx(
-                                  'text-[10px] uppercase px-1.5 py-0.5 rounded font-bold shrink-0',
-                                  drug.drug_type === 'injection'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : drug.drug_type === 'syrup'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : drug.drug_type === 'capsule'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                )}
+                                   'text-[10px] uppercase px-1.5 py-0.5 rounded font-bold shrink-0',
+                                   drug.drug_type === 'injection'
+                                     ? 'bg-blue-100 text-blue-800'
+                                     : drug.drug_type === 'syrup'
+                                     ? 'bg-purple-100 text-purple-800'
+                                     : drug.drug_type === 'capsule'
+                                     ? 'bg-amber-100 text-amber-800'
+                                     : 'bg-emerald-100 text-emerald-800'
+                                 )}
                               >
                                 {drug.drug_type}
                               </span>
-                              {drug.batch_number && (
-                                <span className="text-[10px] text-[var(--text-faint)] truncate hidden sm:inline">
-                                  Batch: {drug.batch_number}
-                                </span>
-                              )}
-                              {drug.schedule_h && (
-                                <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.2 rounded font-bold shrink-0">
-                                  SCH H
-                                </span>
-                              )}
                             </div>
 
                             <div className="flex items-center gap-3 shrink-0 ml-2">
-                              <span
-                                className={clsx(
-                                  'text-[11px] font-mono font-medium',
-                                  isLow ? 'text-red-600 font-bold' : 'text-[var(--text-muted)]'
-                                )}
-                              >
-                                Stock: {drug.stock_quantity}
-                              </span>
                               {isAdded ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                   <Check size={12} />
@@ -1655,7 +1563,7 @@ function PrescribeContent() {
                   <label className="block text-[11px] font-semibold text-[var(--text-strong)] mb-1">Item Type</label>
                   <select
                     value={customType}
-                    onChange={(e) => setCustomType(e.target.value as DrugType)}
+                    onChange={(e) => setCustomType(e.target.value as any)}
                     className="h-9 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-2 text-xs"
                   >
                     <option value="injection">Injection (Vial / Ampoule)</option>
@@ -1717,22 +1625,7 @@ function PrescribeContent() {
                             Custom Item
                           </span>
                         )}
-                        {m.drugId && (
-                          <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                            ✓ In Pharmacy Stock ({drugs.find((d) => d.id === m.drugId)?.stock_quantity ?? 0} units)
-                          </span>
-                        )}
-                        {m.addedByPharmacist && (
-                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                            💊 Added by Pharmacist
-                          </span>
-                        )}
                       </div>
-                      {m.pharmacistNotes && (
-                        <p className="text-[11px] text-emerald-700 font-medium mt-1">
-                          Pharmacy Note: {m.pharmacistNotes}
-                        </p>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -1934,13 +1827,13 @@ function PrescribeContent() {
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <Button
               variant="secondary"
-              icon={<Send size={15} />}
+              icon={<CheckCircle size={15} />}
               onClick={handleSaveOnly}
               loading={isSaving}
               disabled={isSaving}
               className="flex-1 sm:flex-initial justify-center min-h-[44px] font-medium"
             >
-              {isSaving ? 'Sending...' : 'Send to Pharmacy'}
+              {isSaving ? 'Saving...' : 'Save & Complete'}
             </Button>
 
             <Button
@@ -1950,7 +1843,7 @@ function PrescribeContent() {
               disabled={isSaving}
               className="flex-1 sm:flex-initial bg-[var(--green-900)] text-white justify-center min-h-[44px] shadow-sm font-bold"
             >
-              {isSaving ? 'Sending...' : 'Send to Pharmacy & Print'}
+              {isSaving ? 'Saving...' : 'Save & Print Prescription'}
             </Button>
           </div>
         </div>

@@ -53,7 +53,7 @@ export default function PrivacyPolicyPage() {
               1. Scope & Categories of Data Collected
             </h2>
             <p>
-              In providing healthcare, clinical consultations, pharmacy dispensing, and hospital administration services, our system processes the following data categories:
+              In providing healthcare, clinical consultations, inpatient admissions, and hospital administration services, our system processes the following data categories:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-[var(--text-body)]">
               <li>
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
                 <strong>Clinical & Medical History:</strong> Vital signs (blood pressure, blood glucose, temperature, pulse), comorbid conditions, past clinical histories, physician consultation notes, diagnostic assessments, and medical certificates.
               </li>
               <li>
-                <strong>Pharmacological & Dispensing Records:</strong> Prescribed medications, dosage instructions, duration, dispensed batches, and statutory Schedule H and Schedule H1 antibiotic registries.
+                <strong>Clinical Prescription Records:</strong> Prescribed medications, dosage instructions, duration, food relation, and clinical diagnostic orders.
               </li>
               <li>
                 <strong>Inpatient (IP) Admission Records:</strong> Bed allocations, daily nurse round records, admission and discharge summaries, and inpatient stay duration logs.
@@ -85,10 +85,10 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc pl-5 space-y-1 text-xs sm:text-sm text-[var(--text-body)]">
               <li>Facilitating continuous outpatient consultations and token sequencing.</li>
-              <li>Ensuring accurate prescription dispensing and drug inventory safety.</li>
+              <li>Generating and printing OPD prescriptions and diagnostic lab orders.</li>
               <li>Coordinating inpatient bed occupancy and discharge management.</li>
               <li>Sending automated WhatsApp/SMS token status and follow-up appointment alerts.</li>
-              <li>Complying with statutory drug control mandates and clinical documentation laws.</li>
+              <li>Complying with statutory medical records mandates and clinical documentation laws.</li>
             </ul>
           </section>
 
@@ -106,12 +106,6 @@ export default function PrivacyPolicyPage() {
                 <p className="font-semibold text-[var(--text-strong)] mb-1">Consultant Doctors</p>
                 <p className="text-[var(--text-muted)]">
                   Authorized to examine assigned patient vitals, review medical histories, record diagnoses, and issue clinical prescriptions.
-                </p>
-              </div>
-              <div className="p-3 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)]">
-                <p className="font-semibold text-[var(--text-strong)] mb-1">Pharmacists</p>
-                <p className="text-[var(--text-muted)]">
-                  Access restricted to prescribed drug names, quantities, and dosage instructions for dispensing and batch stock decrements.
                 </p>
               </div>
               <div className="p-3 rounded-[var(--r-tile)] bg-[var(--bg-tile)] border border-[var(--line-soft)]">

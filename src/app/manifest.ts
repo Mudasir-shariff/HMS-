@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Radha Krishna HMS',
     short_name: 'RK HMS',
-    description: 'Radha Krishna Hospital Management System (OPD, IP, Pharmacy) · Made by opti-x.in',
+    description: 'Radha Krishna Hospital Management System (OPD, IP) · Made by opti-x.in',
     start_url: '/',
     display: 'standalone',
     background_color: '#EDEDEA',
@@ -41,12 +41,6 @@ export default function manifest(): MetadataRoute.Manifest {
         name: 'Doctor Queue',
         short_name: 'Doctor',
         url: '/doctor',
-        icons: [{ src: '/icon-192.png', sizes: '192x192' }],
-      },
-      {
-        name: 'Pharmacy Dispense',
-        short_name: 'Pharmacy',
-        url: '/pharmacy',
         icons: [{ src: '/icon-192.png', sizes: '192x192' }],
       },
       {

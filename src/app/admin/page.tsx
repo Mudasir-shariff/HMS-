@@ -38,7 +38,6 @@ import {
   useUserProfiles,
   usePatients,
   useVisits,
-  useDrugs,
   usePrescriptions,
   useDoctors,
   useHospitalSettings,
@@ -56,24 +55,22 @@ import {
   deleteVisitFromSupabase,
   deleteVisitsFromSupabase,
   deletePrescriptionFromSupabase,
-  deleteDrugFromSupabase,
   purgeAllRecordsFromSupabase,
 } from '@/lib/supabase/sync';
 import { useAuth } from '@/lib/auth/context';
 import { getYearMonth, formatMonthName, isOlderThanDays } from '@/lib/utils/date';
 import { isValidEmail, isValidIndianPhone, cleanIndianPhone, formatPhoneDisplay } from '@/lib/utils/validation';
 import { recordAuditLog } from '@/lib/audit/logger';
-import type { Patient, Visit, Drug, Prescription, UserRole, AuditLog } from '@/lib/types/database';
+import type { Patient, Visit, Prescription, UserRole, AuditLog } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
-type TabId = 'staff' | 'patients' | 'visits' | 'prescriptions' | 'inventory' | 'audit';
+type TabId = 'staff' | 'patients' | 'visits' | 'prescriptions' | 'audit';
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
   { id: 'staff', label: 'Staff Logins & Accounts', icon: Users },
   { id: 'patients', label: 'All Patients Database', icon: ClipboardList },
   { id: 'visits', label: 'OPD Visits & Queue', icon: Stethoscope },
   { id: 'prescriptions', label: 'Prescriptions Master', icon: Shield },
-  { id: 'inventory', label: 'Pharmacy Drug Catalog', icon: Pill },
   { id: 'audit', label: 'Audit Trail & Activity Log', icon: ShieldCheck },
 ];
 
@@ -81,11 +78,10 @@ const ROLE_PILL: Record<string, { variant: 'info' | 'success' | 'warning' | 'dan
   admin: { variant: 'danger', label: 'Super Admin' },
   doctor: { variant: 'info', label: 'Doctor' },
   receptionist: { variant: 'success', label: 'Receptionist' },
-  pharmacist: { variant: 'warning', label: 'Pharmacist' },
 };
 
 interface DestructiveActionConfig {
-  type: 'purge' | 'delete_staff' | 'permanent_delete_patient' | 'delete_visit' | 'delete_rx' | 'delete_drug';
+  type: 'purge' | 'delete_staff' | 'permanent_delete_patient' | 'delete_visit' | 'delete_rx';
   title: string;
   description: string;
   confirmWord: 'PURGE' | 'DELETE';
@@ -100,7 +96,6 @@ export default function AdminPage() {
   const { data: patients = [] } = usePatients();
   const { data: deletedPatients = [] } = useDeletedPatients();
   const { data: visits = [] } = useVisits();
-  const { data: drugs = [] } = useDrugs();
   const { data: prescriptions = [] } = usePrescriptions();
   const { data: doctors = [] } = useDoctors();
   const { data: auditLogs = [], refetch: refetchAuditLogs } = useAuditLogs();
@@ -245,13 +240,6 @@ export default function AdminPage() {
       })
       .sort((a, b) => a.token_number - b.token_number);
   }, [visitsForSelectedPeriod, search, patients, doctors]);
-
-  // Filtered drugs
-  const filteredDrugs = drugs.filter(
-    (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.drug_type.toLowerCase().includes(search.toLowerCase())
-  );
 
   const [isManualSyncing, setIsManualSyncing] = useState(false);
 
@@ -435,7 +423,7 @@ export default function AdminPage() {
     setDestructiveAction({
       type: 'purge',
       title: 'Purge Hospital Records & Queues',
-      description: 'CRITICAL WARNING: This operation will permanently purge all patient records, active OPD visits, tokens, prescriptions, and pharmacy dispensings across local cache and Supabase cloud. Master staff logins and pharmacy drug inventory catalogs will be preserved.',
+      description: 'CRITICAL WARNING: This operation will permanently purge all patient records, active OPD visits, tokens, and prescriptions across local cache and Supabase cloud. Master staff logins will be preserved.',
       confirmWord: 'PURGE',
     });
     setTypedConfirmWord('');
@@ -499,20 +487,6 @@ export default function AdminPage() {
     setDestructiveError('');
   }
 
-  function promptDeleteDrug(d: Drug) {
-    setDestructiveAction({
-      type: 'delete_drug',
-      title: `Delete Drug: ${d.name}`,
-      description: `WARNING: Permanently remove ${d.name} (${d.drug_type}) from the pharmacy catalog and inventory stock.`,
-      confirmWord: 'DELETE',
-      targetId: d.id,
-      targetName: d.name,
-    });
-    setTypedConfirmWord('');
-    setAdminPassword('');
-    setDestructiveError('');
-  }
-
   async function executeDestructiveAction() {
     if (!destructiveAction) return;
 
@@ -543,14 +517,13 @@ export default function AdminPage() {
           queryClient.setQueriesData({ queryKey: queryKeys.patients.all }, () => []);
           queryClient.setQueriesData({ queryKey: queryKeys.visits.all }, () => []);
           queryClient.setQueriesData({ queryKey: queryKeys.prescriptions.all }, () => []);
-          queryClient.setQueriesData({ queryKey: queryKeys.dispensings.all }, () => []);
           await purgeAllRecordsFromSupabase();
           recordAuditLog({
             action: 'DATABASE_PURGED',
             entity_type: 'system',
             user_name: currentUser?.fullName || 'Super Admin',
             user_role: currentUser?.role || 'admin',
-            details: 'Full system purge executed for all queues, visits, prescriptions, and dispensings.',
+            details: 'Full system purge executed for all queues, visits, and prescriptions.',
           });
           queryClient.invalidateQueries();
           break;
@@ -633,23 +606,6 @@ export default function AdminPage() {
           queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
           break;
         }
-        case 'delete_drug': {
-          const did = destructiveAction.targetId!;
-          queryClient.setQueriesData<Drug[]>({ queryKey: queryKeys.drugs.all }, (old) =>
-            old ? old.filter((x) => x.id !== did) : []
-          );
-          await deleteDrugFromSupabase(did);
-          recordAuditLog({
-            action: 'DRUG_DELETED',
-            entity_type: 'inventory',
-            entity_id: did,
-            user_name: currentUser?.fullName || 'Super Admin',
-            user_role: currentUser?.role || 'admin',
-            details: `Deleted pharmacy drug: ${destructiveAction.targetName}`,
-          });
-          queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-          break;
-        }
       }
       setDestructiveAction(null);
       setTypedConfirmWord('');
@@ -699,7 +655,7 @@ export default function AdminPage() {
           { label: 'Active Doctors', value: doctors.length, color: 'text-[var(--green-700)]' },
           { label: 'Registered Patients', value: patients.length, color: 'text-[var(--info)]' },
           { label: 'OPD Visits Total', value: visits.length, color: 'text-[var(--text-strong)]' },
-          { label: 'Pharmacy Drugs', value: drugs.length, color: 'text-[#8A6520]' },
+          { label: 'Prescriptions Issued', value: prescriptions.length, color: 'text-[#8A6520]' },
         ].map((s) => (
           <div key={s.label} className="bg-[var(--bg-card)] rounded-[var(--r-tile)] p-3 sm:p-4 border border-[var(--line-soft)] flex flex-col justify-between min-h-[88px] sm:min-h-[96px] shadow-2xs">
             <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${s.color}`}>{s.value}</p>
@@ -1090,11 +1046,11 @@ export default function AdminPage() {
               <span className="text-lg font-bold text-[var(--text-strong)] tabular-nums">{monthStats.total}</span>
             </div>
             <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
-              <span className="text-[11px] text-[var(--text-muted)] block">Completed / Dispensed</span>
+              <span className="text-[11px] text-[var(--text-muted)] block">Completed Consultations</span>
               <span className="text-lg font-bold text-[var(--green-700)] tabular-nums">{monthStats.dispensed}</span>
             </div>
             <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
-              <span className="text-[11px] text-[var(--text-muted)] block">At Pharmacy / Rx</span>
+              <span className="text-[11px] text-[var(--text-muted)] block">Prescriptions Issued</span>
               <span className="text-lg font-bold text-[#8A6520] tabular-nums">{monthStats.prescribed}</span>
             </div>
             <div className="bg-white p-2.5 rounded-[var(--r-control)] border border-[var(--line-soft)] shadow-2xs">
@@ -1230,68 +1186,7 @@ export default function AdminPage() {
         </Card>
       )}
 
-      {/* ────────────────── TAB 5: DRUG CATALOG ────────────────── */}
-      {tab === 'inventory' && (
-        <Card>
-          <CardHeader
-            title="Pharmacy Drug Catalog & Pricing Control"
-            count={filteredDrugs.length}
-            action={
-              <Link href="/pharmacy/inventory/add">
-                <Button size="sm" icon={<Plus size={14} />}>Add Drug</Button>
-              </Link>
-            }
-          />
-
-          {filteredDrugs.length === 0 ? (
-            <div className="text-center py-12 text-xs text-[var(--text-muted)] space-y-2">
-              <p>No medicines currently registered in inventory.</p>
-              <Link href="/pharmacy/inventory/add" className="inline-block text-[var(--green-700)] font-semibold hover:underline">
-                + Add Drug to Pharmacy Inventory
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {filteredDrugs.map((drug) => (
-                <div
-                  key={drug.id}
-                  className="flex items-center gap-3.5 bg-[var(--bg-tile)] rounded-[var(--r-tile)] p-3.5 sm:p-4 border border-[var(--line-soft)]"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[var(--text-strong)]">{drug.name}</span>
-                      <span className="text-[10px] bg-white px-2 py-0.5 rounded-[var(--r-pill)] border border-[var(--line-soft)] uppercase font-semibold">
-                        {drug.drug_type}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                      <span>
-                        Stock: <strong className="text-[var(--text-strong)]">{drug.stock_quantity} units</strong>
-                      </span>
-                      <span>·</span>
-                      <span>Cost: ₹{drug.purchase_price.toFixed(2)}</span>
-                      <span>·</span>
-                      <span>MRP: ₹{drug.selling_price.toFixed(2)}</span>
-                      <span>·</span>
-                      <span>Expiry: {drug.expiry_date}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    title="Delete Drug"
-                    onClick={() => promptDeleteDrug(drug)}
-                    className="h-8 w-8 flex items-center justify-center rounded-[var(--r-control)] bg-[var(--danger-bg)] text-[var(--danger)] hover:brightness-95 transition-colors shrink-0 cursor-pointer"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* ────────────────── TAB 6: AUDIT TRAIL & ACTIVITY LOG ────────────────── */}
+      {/* ────────────────── TAB 5: AUDIT TRAIL & ACTIVITY LOG ────────────────── */}
       {tab === 'audit' && (
         <Card>
           <CardHeader
@@ -1502,7 +1397,6 @@ export default function AdminPage() {
                     <option value="admin">Super Admin</option>
                     <option value="doctor">Doctor</option>
                     <option value="receptionist">Receptionist</option>
-                    <option value="pharmacist">Pharmacist</option>
                   </select>
                 </div>
                 <div>
@@ -1778,7 +1672,7 @@ export default function AdminPage() {
                   <p className="text-sm font-bold text-[var(--text-strong)]">{monthStats.total}</p>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Dispensed by Pharmacy:</span>
+                  <span className="text-[var(--text-muted)]">Completed Consultations:</span>
                   <p className="text-sm font-bold text-[var(--green-700)]">{monthStats.dispensed}</p>
                 </div>
                 <div>
@@ -1874,7 +1768,7 @@ export default function AdminPage() {
 
             <div className="space-y-3 mb-4 text-xs">
               <p className="text-[var(--text-muted)]">
-                Select deletion scope. Prescriptions and dispensing history associated with the selected visits will also be cleaned up.
+                Select deletion scope. Prescriptions associated with the selected visits will also be cleaned up.
               </p>
 
               <div className="space-y-2 border border-[var(--line-soft)] rounded-[var(--r-control)] p-3 bg-[var(--bg-tile)]">

@@ -101,9 +101,9 @@ export default function DoctorPage() {
       };
 
       const isAlreadyPrescribed =
+        v.status === 'completed' ||
         v.status === 'prescribed' ||
         v.status === 'dispensed' ||
-        v.status === 'completed' ||
         prescribedVisitIds.has(v.id);
 
       if (isAlreadyPrescribed) {
@@ -111,7 +111,7 @@ export default function DoctorPage() {
         if (isTodayOrWithin24Hours(v.updated_at || v.created_at)) {
           completed.push({
             ...enriched,
-            status: v.status === 'waiting' || v.status === 'in_consultation' ? 'prescribed' : v.status,
+            status: 'completed',
           });
         }
       } else if (v.status === 'waiting' || v.status === 'in_consultation') {
@@ -137,17 +137,17 @@ export default function DoctorPage() {
 
     if (prevInConsultation.length > 0) {
       queryClient.setQueriesData<Visit[]>({ queryKey: queryKeys.visits.all }, (old) =>
-        old ? old.map((v) => (prevInConsultation.some((p) => p.id === v.id) ? { ...v, status: 'prescribed' } : v)) : []
+        old ? old.map((v) => (prevInConsultation.some((p) => p.id === v.id) ? { ...v, status: 'completed' } : v)) : []
       );
       for (const prev of prevInConsultation) {
-        broadcastChange('visit_updated', { visit: { id: prev.id, status: 'prescribed' } });
+        broadcastChange('visit_updated', { visit: { id: prev.id, status: 'completed' } });
       }
       try {
         const supabase = createClient();
         for (const prev of prevInConsultation) {
           supabase
             .from('visits')
-            .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+            .update({ status: 'completed', updated_at: new Date().toISOString() })
             .eq('id', prev.id)
             .then(() => {});
         }
@@ -334,15 +334,9 @@ export default function DoctorPage() {
                     ) : (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto">
                         <div className="flex items-center justify-between sm:justify-start gap-2">
-                          {p.status === 'prescribed' ? (
-                            <span className="text-xs bg-[#FFFBEB] text-[#92400E] font-bold px-3 py-1 rounded-full border border-[#FDE68A]">
-                              💊 At Pharmacy
-                            </span>
-                          ) : (
-                            <span className="text-xs bg-[#ECFDF5] text-[#065F46] font-bold px-3 py-1 rounded-full border border-[#A7F3D0]">
-                              ✅ Dispensed
-                            </span>
-                          )}
+                          <span className="text-xs bg-[#ECFDF5] text-[#065F46] font-bold px-3 py-1 rounded-full border border-[#A7F3D0]">
+                            ✅ Completed
+                          </span>
                         </div>
                         <Link
                           href={`/doctor/prescribe?visitId=${p.id}&patientId=${p.patient_id}&token=${p.token_number}&name=${encodeURIComponent(

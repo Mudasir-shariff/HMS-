@@ -47,7 +47,6 @@ const ROLE_NAV: Record<string, { name: string; href: string; iconName: string }[
     { name: 'Admin Panel', href: '/admin', iconName: 'Shield' },
     { name: 'Reception', href: '/reception', iconName: 'ClipboardList' },
     { name: 'Doctor Queue', href: '/doctor', iconName: 'Stethoscope' },
-    { name: 'Pharmacy', href: '/pharmacy', iconName: 'Pill' },
     { name: 'In-Patient', href: '/ip', iconName: 'BedDouble' },
     { name: 'Analytics', href: '/analytics', iconName: 'BarChart3' },
     { name: 'Settings', href: '/settings', iconName: 'Settings' },
@@ -59,10 +58,6 @@ const ROLE_NAV: Record<string, { name: string; href: string; iconName: string }[
   doctor: [
     { name: 'My Patient Queue', href: '/doctor', iconName: 'Stethoscope' },
     { name: 'Prescription Pad', href: '/doctor/prescribe', iconName: 'Activity' },
-  ],
-  pharmacist: [
-    { name: 'Pharmacy Queue', href: '/pharmacy', iconName: 'Pill' },
-    { name: 'Add Drug', href: '/pharmacy/inventory/add', iconName: 'Activity' },
   ],
 };
 
@@ -110,7 +105,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     admin: 'Super Admin',
     receptionist: 'Receptionist',
     doctor: 'Consultant Doctor',
-    pharmacist: 'Pharmacist',
   };
 
   const navItems = ROLE_NAV[user.role] || [];

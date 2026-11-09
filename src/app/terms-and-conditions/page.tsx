@@ -53,11 +53,11 @@ export default function TermsAndConditionsPage() {
               1. Authorized User Eligibility & Credential Security
             </h2>
             <p>
-              Access to this platform is restricted exclusively to authenticated medical practitioners, registered nurses, licensed pharmacists, reception coordinators, and designated hospital administrators affiliated with Radhakrishna Hospital.
+              Access to this platform is restricted exclusively to authenticated medical practitioners, registered nurses, reception coordinators, and designated hospital administrators affiliated with Radhakrishna Hospital.
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-[var(--text-body)]">
               <li>
-                <strong>Individual Accountability:</strong> Every user is solely responsible for all clinical entries, prescriptions, dispensing validations, and status changes executed under their credentials.
+                <strong>Individual Accountability:</strong> Every user is solely responsible for all clinical entries, prescriptions, and status changes executed under their credentials.
               </li>
               <li>
                 <strong>Credential Confidentiality:</strong> Account passwords and access tokens must never be shared, posted, or transferred to unauthorized personnel.
@@ -75,7 +75,7 @@ export default function TermsAndConditionsPage() {
               2. Clinical Disclaimers & Professional Medical Judgment
             </h2>
             <p>
-              The System functions as an assistive administrative, diagnostic recording, and dispensing coordination platform.
+              The System functions as an assistive administrative, diagnostic recording, and consultation coordination platform.
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-[var(--text-body)]">
               <li>
@@ -85,7 +85,7 @@ export default function TermsAndConditionsPage() {
                 <strong>Prescription Accuracy:</strong> Doctors must carefully review all prescribed items, routes, frequencies, and durations prior to signing and completing consultations.
               </li>
               <li>
-                <strong>Patient Verification:</strong> Pharmacists and nursing staff must physically verify patient identity, allergy flags, and prescription labels prior to medicine administration.
+                <strong>Patient Verification:</strong> Nursing and clinical staff must physically verify patient identity, allergy flags, and prescription labels prior to medicine administration.
               </li>
             </ul>
           </section>
@@ -94,17 +94,17 @@ export default function TermsAndConditionsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-[var(--text-strong)] flex items-center gap-2 border-b border-[var(--line-soft)] pb-2">
               <Shield size={16} className="text-[var(--green-700)]" />
-              3. Pharmacy, Formulary & Scheduled Drug Regulations
+              3. Clinical Formulary & Prescription Standards
             </h2>
             <p>
-              Dispensing of pharmaceuticals through the pharmacy module must strictly adhere to the Drugs and Cosmetics Act and statutory pharmacy board rules:
+              Issuance of prescriptions through the clinical module must strictly adhere to statutory medical council ethics and clinical documentation rules:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-[var(--text-body)]">
               <li>
-                <strong>Schedule H &amp; H1 Compliance:</strong> Prescription-only antibiotics and restricted pharmaceuticals must only be dispensed against verified doctor orders, logging patient UHID, doctor registration number, and batch details.
+                <strong>Prescription Standards:</strong> Medications must specify chemical/generic name, dosage, frequency, and instructions to ensure clear patient communication.
               </li>
               <li>
-                <strong>Inventory Integrity:</strong> Stock additions, sheet/unit conversions, batch expirations, and price revisions must reflect genuine physical manufacturer supplies received.
+                <strong>Clinical Documentation:</strong> Prescription records are timestamped, linked to patient UHID, and digitally attributable to the prescribing doctor.
               </li>
             </ul>
           </section>
@@ -121,7 +121,7 @@ export default function TermsAndConditionsPage() {
             <ul className="list-disc pl-5 space-y-1 text-xs sm:text-sm text-[var(--text-body)]">
               <li>Bed occupancy is billed based on institutional rules (18-hour daily cutoff standard).</li>
               <li>Discharge summaries must be reviewed and authorized by the primary consultant before bed release.</li>
-              <li>All billing totals, including consultations, bed charges, and pharmacy supplies, must accurately reflect documented services.</li>
+              <li>All billing totals, including consultations and bed charges, must accurately reflect documented services.</li>
             </ul>
           </section>
 

@@ -143,30 +143,6 @@ export default function SettingsPage() {
                 onChange={(e) => setForm({ ...form, ip_hours_per_day: Number(e.target.value) })}
                 hint="Default: 18 hours per billing day cycle."
               />
-              <Input
-                label="Low-Stock Drug Warning Limit (Days)"
-                type="number"
-                value={form.low_stock_days_warning}
-                onChange={(e) => setForm({ ...form, low_stock_days_warning: Number(e.target.value) })}
-              />
-
-              {/* Schedule H Walk-in Rule (PRD 3.5 & 3.10) */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-strong)] mb-1">
-                  Schedule H / H1 Walk-in Policy
-                </label>
-                <select
-                  value={form.schedule_h_action}
-                  onChange={(e) => setForm({ ...form, schedule_h_action: e.target.value as 'warn' | 'block' })}
-                  className="h-10 w-full rounded-[var(--r-control)] bg-white border border-[var(--line-soft)] px-3 text-xs"
-                >
-                  <option value="warn">Warn Pharmacist (Requires override reason)</option>
-                  <option value="block">Hard Block (Strictly forbid sale without prescription)</option>
-                </select>
-                <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
-                  Enforces drug compliance during OTC walk-in sales
-                </span>
-              </div>
             </div>
           </Card>
 
@@ -192,7 +168,7 @@ export default function SettingsPage() {
                   label="Default Hospital Printer (Phone Print Relay) *"
                   value={form.default_printer || ''}
                   onChange={(e) => setForm({ ...form, default_printer: e.target.value })}
-                  placeholder="e.g. Reception LaserJet 1020 / Pharmacy Desk HP"
+                  placeholder="e.g. Reception LaserJet 1020 / Doctor Desk HP"
                   hint="Where prescriptions print when doctor taps 'Send to printer' on phone"
                 />
               </div>
@@ -255,7 +231,7 @@ export default function SettingsPage() {
               <div className="text-xs text-[var(--text-body)]">
                 <p className="font-semibold mb-1">Compliance & Integrity</p>
                 <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
-                  Parameters comply with India Digital Personal Data Protection Act, ABDM standards, and Pharmacy Schedule H safety policies.
+                  Parameters comply with India Digital Personal Data Protection Act and ABDM clinical standards.
                 </p>
               </div>
             </div>

@@ -5,9 +5,6 @@ import type {
   Visit,
   Prescription,
   PrescriptionItem,
-  Drug,
-  Dispensing,
-  DispensingItem,
   Admission,
   HospitalSettings,
   UserRole,
@@ -174,7 +171,6 @@ export async function deletePatientFromSupabase(patientId: string) {
   if (!isSupabaseConfigured() || !isValidUUID(patientId)) return;
   try {
     const supabase = createClient();
-    await supabase.from('dispensings').delete().eq('patient_id', patientId);
     await supabase.from('prescriptions').delete().eq('patient_id', patientId);
     await supabase.from('visits').delete().eq('patient_id', patientId);
     await supabase.from('patients').delete().eq('id', patientId);
@@ -187,7 +183,6 @@ export async function deleteVisitFromSupabase(visitId: string) {
   if (!isSupabaseConfigured() || !isValidUUID(visitId)) return;
   try {
     const supabase = createClient();
-    await supabase.from('dispensings').delete().eq('prescription_id', visitId);
     await supabase.from('prescription_items').delete().eq('prescription_id', visitId);
     await supabase.from('prescriptions').delete().eq('visit_id', visitId);
     await supabase.from('visits').delete().eq('id', visitId);
@@ -203,13 +198,12 @@ export async function deleteVisitsFromSupabase(visitIds: string[]) {
     const validIds = visitIds.filter(isValidUUID);
     if (!validIds.length) return;
 
-    // Look up associated prescription IDs first to cleanly delete all prescription_items & dispensings
+    // Look up associated prescription IDs first to cleanly delete all prescription_items
     const { data: rxList } = await supabase.from('prescriptions').select('id').in('visit_id', validIds);
     const rxIds = (rxList || []).map((r: any) => r.id).filter(isValidUUID);
     const allRxIds = Array.from(new Set([...validIds, ...rxIds]));
 
     if (allRxIds.length > 0) {
-      await supabase.from('dispensings').delete().in('prescription_id', allRxIds);
       await supabase.from('prescription_items').delete().in('prescription_id', allRxIds);
     }
     await supabase.from('prescriptions').delete().in('visit_id', validIds);
@@ -230,22 +224,10 @@ export async function deletePrescriptionFromSupabase(rxId: string) {
   }
 }
 
-export async function deleteDrugFromSupabase(drugId: string) {
-  if (!isSupabaseConfigured() || !isValidUUID(drugId)) return;
-  try {
-    const supabase = createClient();
-    await supabase.from('drugs').delete().eq('id', drugId);
-  } catch (err) {
-    console.warn('Failed to delete drug from Supabase:', err);
-  }
-}
-
 export async function purgeAllRecordsFromSupabase() {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = createClient();
-    await supabase.from('dispensing_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('dispensings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('prescription_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('prescriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('visits').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -387,44 +369,6 @@ export async function pushVisitToSupabase(visit: Visit) {
   }
 }
 
-export async function pushDrugToSupabase(drug: Drug) {
-  if (!isSupabaseConfigured()) return;
-  try {
-    const supabase = createClient();
-    const drugId = isValidUUID(drug.id) ? drug.id : generateUUID();
-    const normalizedType = ['tablet', 'capsule', 'syrup', 'injection'].includes(drug.drug_type)
-      ? drug.drug_type
-      : 'other';
-
-    const { error } = await supabase.from('drugs').upsert({
-      id: drugId,
-      name: drug.name.trim(),
-      drug_type: normalizedType,
-      custom_type_name: drug.custom_type_name || null,
-      unit_price: Number(drug.selling_price) || 0,
-      selling_price: Number(drug.selling_price) || 0,
-      purchase_price: Number(drug.purchase_price) || 0,
-      stock_quantity: Math.max(0, Number(drug.stock_quantity) || 0),
-      low_stock_limit: Math.max(0, Number(drug.low_stock_limit) || 10),
-      reorder_level: Math.max(0, Number(drug.low_stock_limit) || 20),
-      boxes: drug.boxes ? Number(drug.boxes) : null,
-      tablets_per_sheet: drug.tablets_per_sheet ? Number(drug.tablets_per_sheet) : null,
-      price_per_sheet: drug.selling_price_per_sheet ? Number(drug.selling_price_per_sheet) : (drug.price_per_sheet ? Number(drug.price_per_sheet) : null),
-      supplier: drug.supplier || null,
-      unit: drug.unit || 'unit',
-      batch_number: drug.batch_number?.trim() || null,
-      expiry_date: drug.expiry_date || null,
-      schedule_h: Boolean(drug.schedule_h),
-      schedule_h1: Boolean(drug.schedule_h1),
-      is_active: drug.is_active ?? true,
-      updated_at: new Date().toISOString(),
-    });
-    if (error) console.error('Error pushing drug to Supabase:', error);
-  } catch (e) {
-    console.warn('Failed to push drug to Supabase:', e);
-  }
-}
-
 const doctorResolutionCache = new Map<string, string>();
 
 const inFlightPrescriptions = new Set<string>();
@@ -516,8 +460,6 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
         is_custom: Boolean(it.is_custom),
         item_type: it.item_type || null,
         custom_unit: it.custom_unit || null,
-        added_by_pharmacist: Boolean(it.added_by_pharmacist),
-        pharmacist_notes: it.pharmacist_notes || null,
       }));
       const itemsRes = await withTimeout(
         supabase.from('prescription_items').upsert(itemsPayload),
@@ -577,7 +519,7 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       await withTimeout(
         supabase
           .from('visits')
-          .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
           .eq('id', rx.visit_id),
         3000
       );
@@ -585,9 +527,8 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
       await withTimeout(
         supabase
           .from('visits')
-          .update({ status: 'prescribed', updated_at: new Date().toISOString() })
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
           .eq('patient_id', rx.patient_id)
-          .neq('status', 'dispensed')
           .neq('status', 'completed'),
         3000
       );
@@ -612,52 +553,6 @@ export async function pushPrescriptionToSupabase(rx: Prescription) {
     console.warn('Failed to push prescription to Supabase:', e);
   } finally {
     inFlightPrescriptions.delete(rxId);
-  }
-}
-
-export async function pushDispensingToSupabase(disp: Dispensing) {
-  if (!isSupabaseConfigured()) return;
-  try {
-    const supabase = createClient();
-    const dispId = isValidUUID(disp.id) ? disp.id : generateUUID();
-
-    // Resolve pharmacist_id
-    let pharmacistIdToUse = disp.pharmacist_id;
-    if (!isValidUUID(disp.pharmacist_id)) {
-      const { data: activeUser } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-      if (activeUser) pharmacistIdToUse = activeUser.id;
-    }
-
-    const { error: dErr } = await supabase.from('dispensings').upsert({
-      id: dispId,
-      prescription_id: isValidUUID(disp.prescription_id) ? disp.prescription_id : null,
-      patient_id: isValidUUID(disp.patient_id) ? disp.patient_id : null,
-      pharmacist_id: pharmacistIdToUse,
-      is_walk_in: Boolean(disp.is_walk_in),
-      total_amount: disp.total_amount,
-      updated_at: new Date().toISOString(),
-    });
-    if (dErr) console.error('Error pushing dispensing to Supabase:', dErr);
-
-    if (disp.items && disp.items.length > 0) {
-      const itemsPayload = disp.items.map((it) => ({
-        id: isValidUUID(it.id) ? it.id : generateUUID(),
-        dispensing_id: dispId,
-        drug_id: isValidUUID(it.drug_id) ? it.drug_id : null,
-        drug_name: it.drug_name,
-        quantity: it.quantity,
-        unit_price: it.unit_price,
-        total_price: it.total_price,
-      }));
-      const { error: itemsErr } = await supabase.from('dispensing_items').upsert(itemsPayload);
-      if (itemsErr) console.error('Error pushing dispensing_items to Supabase:', itemsErr);
-    }
-  } catch (e) {
-    console.warn('Failed to push dispensing to Supabase:', e);
   }
 }
 

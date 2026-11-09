@@ -23,7 +23,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: 'Radha Krishna HMS - Hospital Management System',
-  description: 'Radha Krishna Hospital Management System (OPD, IP, Pharmacy) · Made by opti-x.in',
+  description: 'Radha Krishna Hospital Management System (OPD, IP) · Made by opti-x.in',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

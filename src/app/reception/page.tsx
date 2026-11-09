@@ -56,7 +56,7 @@ import { useAuth } from '@/lib/auth/context';
 import type { VisitStatus, Visit } from '@/lib/types/database';
 import { clsx } from 'clsx';
 
-type StageFilter = 'all' | 'with_doctor' | 'waiting' | 'in_consultation' | 'prescribed' | 'dispensed';
+type StageFilter = 'all' | 'with_doctor' | 'waiting' | 'in_consultation' | 'completed';
 type ReceptionTab = 'queue' | 'follow_ups';
 type FollowUpTimeframe = 'tomorrow' | 'today' | 'upcoming' | 'overdue' | 'all';
 type ReminderStatusFilter = 'all' | 'pending' | 'sent' | 'confirmed';
@@ -70,9 +70,9 @@ interface ReminderRecord {
 const statusMap: Record<VisitStatus, { variant: 'info' | 'success' | 'danger' | 'warning'; label: string }> = {
   waiting: { variant: 'warning', label: 'In Doctor Queue' },
   in_consultation: { variant: 'info', label: 'In Consultation' },
-  prescribed: { variant: 'warning', label: 'At Pharmacy' },
-  dispensed: { variant: 'success', label: 'Dispensed' },
   completed: { variant: 'success', label: 'Completed' },
+  prescribed: { variant: 'success', label: 'Completed' },
+  dispensed: { variant: 'success', label: 'Completed' },
 };
 
 export default function ReceptionPage() {
@@ -147,7 +147,7 @@ export default function ReceptionPage() {
   // -------------------------------------------------------------
   // OPD Queue Memoized Calculations
   // -------------------------------------------------------------
-  const { todayVisits, waitingOnly, consultingOnly, pharmacyOnly, dispensedOnly, countWaitingTotal } = useMemo(() => {
+  const { todayVisits, waitingOnly, consultingOnly, completedOnly, countWaitingTotal } = useMemo(() => {
     const patientMap = new Map<string, (typeof patients)[0]>();
     patients.forEach((p) => patientMap.set(p.id, p));
 
@@ -177,20 +177,18 @@ export default function ReceptionPage() {
       })
       .sort((a, b) => a.token_number - b.token_number);
 
-    let w = 0, c = 0, p = 0, d = 0;
+    let w = 0, c = 0, done = 0;
     tv.forEach((v) => {
       if (v.status === 'waiting') w++;
       else if (v.status === 'in_consultation') c++;
-      else if (v.status === 'prescribed') p++;
-      else if (v.status === 'dispensed' || v.status === 'completed') d++;
+      else done++;
     });
 
     return {
       todayVisits: tv,
       waitingOnly: w,
       consultingOnly: c,
-      pharmacyOnly: p,
-      dispensedOnly: d,
+      completedOnly: done,
       countWaitingTotal: w + c,
     };
   }, [visits, patients, doctors]);
@@ -214,8 +212,7 @@ export default function ReceptionPage() {
         if (stageFilter === 'with_doctor') matchesStage = v.status === 'waiting' || v.status === 'in_consultation';
         else if (stageFilter === 'waiting') matchesStage = v.status === 'waiting';
         else if (stageFilter === 'in_consultation') matchesStage = v.status === 'in_consultation';
-        else if (stageFilter === 'prescribed') matchesStage = v.status === 'prescribed';
-        else if (stageFilter === 'dispensed') matchesStage = v.status === 'dispensed' || v.status === 'completed';
+        else if (stageFilter === 'completed') matchesStage = v.status === 'completed' || (v.status as any) === 'dispensed' || (v.status as any) === 'prescribed';
 
         return matchesSearch && matchesDoc && matchesStage;
       })
@@ -314,7 +311,7 @@ export default function ReceptionPage() {
           category: 'tomorrow' as const,
           instructions: 'Check fasting BP & pulse rate. Review morning medications.',
           created_at: new Date(Date.now() - 6 * 86400000).toISOString(),
-          status: 'dispensed' as const,
+          status: 'completed' as const,
         },
         {
           id: 'demo-followup-2',
@@ -336,7 +333,7 @@ export default function ReceptionPage() {
           category: 'today' as const,
           instructions: 'Repeat post-prandial blood sugar & HbA1c test report.',
           created_at: new Date(Date.now() - 7 * 86400000).toISOString(),
-          status: 'dispensed' as const,
+          status: 'completed' as const,
         },
         {
           id: 'demo-followup-3',
@@ -358,7 +355,7 @@ export default function ReceptionPage() {
           category: 'upcoming' as const,
           instructions: 'Evaluate knee pain response to physiotherapy and painkillers.',
           created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
-          status: 'dispensed' as const,
+          status: 'completed' as const,
         },
       ];
     }
@@ -586,7 +583,7 @@ export default function ReceptionPage() {
       patient_id: newSchedulePatientId,
       doctor_id: newScheduleDoctorId,
       token_number: 99,
-      status: 'dispensed',
+      status: 'completed',
       follow_up_date: newScheduleDate,
       instructions: newScheduleInstructions || undefined,
       created_at: new Date().toISOString(),
@@ -720,45 +717,24 @@ export default function ReceptionPage() {
     }
   }
 
-  async function handleSendToPharmacy(visitId: string, token: number) {
+  async function handleCompleteConsultation(visitId: string, token: number) {
     if (updatingVisitId === visitId) return;
     setUpdatingVisitId(visitId);
     const supabase = createClient();
     const updated_at = new Date().toISOString();
     queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
-      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'prescribed', updated_at } : v)) : []
+      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'completed', updated_at } : v)) : []
     );
-    broadcastChange('visit_updated', { visit: { id: visitId, status: 'prescribed' } });
-    triggerToast(`Prescription saved. Token #${String(token).padStart(2, '0')} moved to Pharmacy Dispensing Queue.`);
+    broadcastChange('visit_updated', { visit: { id: visitId, status: 'completed' } });
+    triggerToast(`Token #${String(token).padStart(2, '0')} consultation completed.`);
     setUpdatingVisitId(null);
 
     try {
-      const { error } = await supabase.from('visits').update({ status: 'prescribed', updated_at }).eq('id', visitId);
+      const { error } = await supabase.from('visits').update({ status: 'completed', updated_at }).eq('id', visitId);
       if (error) console.warn('Supabase update error:', error.message);
       queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
     } catch (err) {
-      console.warn('handleSendToPharmacy error:', err);
-    }
-  }
-
-  async function handleQuickDeliver(visitId: string, token: number) {
-    if (updatingVisitId === visitId) return;
-    setUpdatingVisitId(visitId);
-    const supabase = createClient();
-    const updated_at = new Date().toISOString();
-    queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) =>
-      old ? old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed', updated_at } : v)) : []
-    );
-    broadcastChange('visit_updated', { visit: { id: visitId, status: 'dispensed' } });
-    triggerToast(`Token #${String(token).padStart(2, '0')} marked as Delivered!`);
-    setUpdatingVisitId(null);
-
-    try {
-      const { error } = await supabase.from('visits').update({ status: 'dispensed', updated_at }).eq('id', visitId);
-      if (error) console.warn('Supabase update error:', error.message);
-      queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
-    } catch (err) {
-      console.warn('handleQuickDeliver error:', err);
+      console.warn('handleCompleteConsultation error:', err);
     }
   }
 
@@ -768,7 +744,7 @@ export default function ReceptionPage() {
         title={activeTab === 'queue' ? 'OPD Reception Desk' : 'Follow-up Consultation Desk'}
         subtitle={
           activeTab === 'queue'
-            ? `Welcome, ${user?.fullName || 'Receptionist'} · Seamless Reception → Doctor → Pharmacy Patient Flow`
+            ? `Welcome, ${user?.fullName || 'Receptionist'} · Seamless Reception → Doctor Consultation Flow`
             : `Follow-up appointments set by doctors · 1-click personalized WhatsApp reminders sent day before appointment`
         }
         action={
@@ -919,28 +895,28 @@ export default function ReceptionPage() {
                 subtext: 'All visits registered today',
               },
               {
-                stage: 'with_doctor' as StageFilter,
-                label: 'With Doctor (Queue/Cabin)',
-                value: countWaitingTotal,
+                stage: 'waiting' as StageFilter,
+                label: 'In Doctor Queue (Lobby)',
+                value: waitingOnly,
                 icon: <Clock size={18} />,
                 color: 'text-amber-800',
-                subtext: `${waitingOnly} in lobby · ${consultingOnly} in cabin`,
+                subtext: 'Waiting for consultation',
               },
               {
-                stage: 'prescribed' as StageFilter,
-                label: 'Pending at Pharmacy',
-                value: pharmacyOnly,
-                icon: <Pill size={18} />,
+                stage: 'in_consultation' as StageFilter,
+                label: 'In Doctor Cabin',
+                value: consultingOnly,
+                icon: <Stethoscope size={18} />,
                 color: 'text-blue-800',
-                subtext: 'Prescriptions ready to dispense',
+                subtext: 'Currently consulting doctor',
               },
               {
-                stage: 'dispensed' as StageFilter,
-                label: 'Completed / Dispensed',
-                value: dispensedOnly,
+                stage: 'completed' as StageFilter,
+                label: 'Completed Consultations',
+                value: completedOnly,
                 icon: <CheckCircle size={18} />,
                 color: 'text-[var(--green-800)]',
-                subtext: 'Medicines handed over & done',
+                subtext: 'Doctor consultation finished',
               },
             ].map((t) => {
               const isSelected = stageFilter === t.stage;
@@ -1008,7 +984,7 @@ export default function ReceptionPage() {
                   const docWaiting = todayVisits.filter((v) => v.doctor_id === doc.id && v.status === 'waiting').length;
                   const docInConsult = todayVisits.filter((v) => v.doctor_id === doc.id && v.status === 'in_consultation').length;
                   const docDone = todayVisits.filter(
-                    (v) => v.doctor_id === doc.id && (v.status === 'prescribed' || v.status === 'dispensed')
+                    (v) => v.doctor_id === doc.id && (v.status === 'completed' || (v.status as any) === 'prescribed' || (v.status as any) === 'dispensed')
                   ).length;
 
                   return (
@@ -1069,8 +1045,9 @@ export default function ReceptionPage() {
                       {[
                         { id: 'all' as StageFilter, label: 'All' },
                         { id: 'with_doctor' as StageFilter, label: 'Doctor Queue' },
-                        { id: 'prescribed' as StageFilter, label: 'Pharmacy' },
-                        { id: 'dispensed' as StageFilter, label: 'Dispensed' },
+                        { id: 'waiting' as StageFilter, label: 'Waiting' },
+                        { id: 'in_consultation' as StageFilter, label: 'In Cabin' },
+                        { id: 'completed' as StageFilter, label: 'Completed' },
                       ].map((s) => (
                         <button
                           key={s.id}
@@ -1247,7 +1224,7 @@ export default function ReceptionPage() {
 
                       {/* Right: Pipeline Stepper & Interactive Action Buttons */}
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full lg:w-auto pt-2.5 lg:pt-0 border-t lg:border-t-0 border-[var(--line-soft)]/60 justify-between lg:justify-end">
-                        {/* 3-Step Journey Pipeline Stepper */}
+                        {/* 2-Step Journey Pipeline Stepper */}
                         <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-[var(--r-control)] border border-[var(--line-soft)] text-[11px] overflow-x-auto no-scrollbar max-w-full shrink-0">
                           {/* Step 1: Reception */}
                           <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
@@ -1267,27 +1244,21 @@ export default function ReceptionPage() {
                               <Stethoscope size={11} /> In Cabin
                             </span>
                           )}
-                          {(item.status === 'prescribed' || item.status === 'dispensed' || item.status === 'completed') && (
+                          {item.status === 'completed' && (
                             <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
-                              <CheckCircle size={12} /> Doctor Done
+                              <CheckCircle size={12} /> Consulted
                             </span>
                           )}
 
                           <span className="text-[var(--text-faint)] shrink-0">→</span>
 
-                          {/* Step 3: Pharmacy */}
-                          {item.status === 'prescribed' && (
-                            <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded animate-pulse shrink-0">
-                              <Pill size={11} /> Pharmacy Queue
-                            </span>
-                          )}
-                          {(item.status === 'dispensed' || item.status === 'completed') && (
+                          {/* Step 3: Done */}
+                          {item.status === 'completed' ? (
                             <span className="flex items-center gap-1 text-[var(--green-700)] font-semibold shrink-0">
-                              <CheckCircle size={12} /> Dispensed
+                              <CheckCircle size={12} /> Completed
                             </span>
-                          )}
-                          {(item.status === 'waiting' || item.status === 'in_consultation') && (
-                            <span className="text-[var(--text-faint)] shrink-0">Pharmacy</span>
+                          ) : (
+                            <span className="text-[var(--text-faint)] shrink-0">Completed</span>
                           )}
                         </div>
 
@@ -1321,12 +1292,12 @@ export default function ReceptionPage() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleSendToPharmacy(item.id, item.token_number)}
-                                className="text-xs font-semibold px-2.5 py-2 sm:py-1.5 min-h-[44px] sm:min-h-[36px] bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-[var(--r-control)] border border-purple-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
-                                title="Complete doctor visit and send patient to pharmacy queue"
+                                onClick={() => handleCompleteConsultation(item.id, item.token_number)}
+                                className="text-xs font-semibold px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-[36px] bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] rounded-[var(--r-control)] shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
+                                title="Mark consultation as completed"
                               >
-                                <Pill size={14} />
-                                To Pharmacy
+                                <Check size={14} />
+                                Mark Done
                               </button>
                               <Link
                                 href={`/doctor/prescribe?visitId=${item.id}&patientId=${item.patient_id}&token=${item.token_number}&name=${encodeURIComponent(
@@ -1334,36 +1305,14 @@ export default function ReceptionPage() {
                                 )}`}
                                 className="w-full sm:w-auto"
                               >
-                                <Button size="sm" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
+                                <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
                                   Write Rx
                                 </Button>
                               </Link>
                             </>
                           )}
 
-                          {item.status === 'prescribed' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleQuickDeliver(item.id, item.token_number)}
-                                className="text-xs font-semibold px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-[36px] bg-[var(--green-900)] text-white hover:bg-[var(--green-800)] rounded-[var(--r-control)] shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
-                                title="Confirm delivery of prescribed medicines & deduct inventory"
-                              >
-                                <Check size={14} />
-                                Mark Delivered
-                              </button>
-                              <Link
-                                href={`/pharmacy/dispense?visitId=${item.id}&token=${item.token_number}`}
-                                className="w-full sm:w-auto"
-                              >
-                                <Button size="sm" variant="secondary" className="w-full sm:w-auto justify-center min-h-[44px] sm:min-h-[36px]" icon={<ChevronRight size={14} />} iconPosition="right">
-                                  Dispense Desk
-                                </Button>
-                              </Link>
-                            </>
-                          )}
-
-                          {(item.status === 'dispensed' || item.status === 'completed') && (
+                          {item.status === 'completed' && (
                             <span className="col-span-2 sm:col-span-1 w-full sm:w-auto text-xs font-semibold text-[var(--green-800)] bg-[var(--success-bg)] px-2.5 py-2 sm:py-1.5 min-h-[44px] sm:min-h-[36px] rounded-[var(--r-control)] border border-[var(--success)] flex items-center justify-center gap-1">
                               <CheckCircle size={14} /> Completed
                             </span>
@@ -2281,7 +2230,7 @@ export default function ReceptionPage() {
                   )}
                   <br />
                   <span className="text-rose-600 font-medium block mt-1">
-                    This will remove the record from the OPD Reception Queue, Doctor Queue, and Pharmacy Queue.
+                    This will remove the record from the OPD Reception Queue and Doctor Queue.
                   </span>
                 </p>
               </div>

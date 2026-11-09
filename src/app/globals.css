@@ -333,7 +333,7 @@ body {
     color: #000000 !important;
   }
 
-  /* ── Format 3: 80mm (3-inch) Thermal POS Receipt Printer (Pharmacy & Token Slips) ── */
+  /* ── Format 3: 80mm (3-inch) Thermal POS Receipt Printer (OPD Prescription & Token Slips) ── */
   .paper-thermal,
   .paper-thermal-80 {
     width: 100% !important;

@@ -6,7 +6,7 @@
 /**
  * Checks if a timestamp is from today (calendar date in local time)
  * OR occurred within the last 24 hours (86,400,000 ms).
- * After 24 hours, consulted/dispensed visits disappear from doctor & pharmacy daily queues.
+ * After 24 hours, consulted/completed visits disappear from doctor & reception daily queues.
  */
 export function isTodayOrWithin24Hours(dateString?: string | null): boolean {
   if (!dateString) return false;

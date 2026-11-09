@@ -5,8 +5,6 @@ import type {
   Visit,
   Prescription,
   PrescriptionItem,
-  Drug,
-  Dispensing,
   Doctor,
   User,
   Ward,
@@ -269,8 +267,6 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
           is_custom: Boolean(it.is_custom),
           item_type: it.item_type || undefined,
           custom_unit: it.custom_unit || undefined,
-          added_by_pharmacist: Boolean(it.added_by_pharmacist),
-          pharmacist_notes: it.pharmacist_notes || undefined,
           created_at: it.created_at,
         })),
       lab_tests: allLabs
@@ -285,94 +281,6 @@ export async function fetchPrescriptions(visitId?: string): Promise<Prescription
     }));
   } catch (err) {
     console.error('fetchPrescriptions error:', err);
-    return [];
-  }
-}
-
-export async function fetchDrugs(): Promise<Drug[]> {
-  try {
-    const supabase = createClient();
-    const res = await withTimeout(
-      supabase.from('drugs').select('*').is('deleted_at', null).order('name', { ascending: true })
-    );
-    if (!res || res.error || !res.data) return [];
-
-    return res.data.map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      drug_type: d.drug_type,
-      custom_type_name: d.custom_type_name || undefined,
-      expiry_date: d.expiry_date,
-      purchase_price: Number(d.purchase_price) || 0,
-      selling_price: Number(d.selling_price) || 0,
-      stock_quantity: Number(d.stock_quantity) || 0,
-      low_stock_limit: Number(d.low_stock_limit) || 30,
-      boxes: d.boxes ? Number(d.boxes) : undefined,
-      tablets_per_sheet: d.tablets_per_sheet ? Number(d.tablets_per_sheet) : undefined,
-      selling_price_per_sheet: d.price_per_sheet ? Number(d.price_per_sheet) : undefined,
-      batch_number: d.batch_number || undefined,
-      supplier: d.supplier || undefined,
-      unit: d.unit || undefined,
-      schedule_h: Boolean(d.schedule_h),
-      schedule_h1: Boolean(d.schedule_h1),
-      is_active: d.is_active ?? true,
-      created_at: d.created_at,
-      updated_at: d.updated_at || d.created_at,
-    }));
-  } catch (err) {
-    console.error('fetchDrugs error:', err);
-    return [];
-  }
-}
-
-export async function fetchDispensings(): Promise<Dispensing[]> {
-  try {
-    const supabase = createClient();
-    const res = await withTimeout(
-      Promise.allSettled([
-        supabase.from('dispensings').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
-        supabase.from('dispensing_items').select('*'),
-      ])
-    );
-
-    const dispSettled = res?.[0]?.status === 'fulfilled' ? res[0].value : null;
-    const itemsSettled = res?.[1]?.status === 'fulfilled' ? res[1].value : null;
-
-    if (!dispSettled || dispSettled.error || !dispSettled.data) {
-      return [];
-    }
-
-    const allItems = itemsSettled?.data || [];
-    return dispSettled.data.map((d: any) => ({
-      id: d.id,
-      prescription_id: d.prescription_id || undefined,
-      patient_id: d.patient_id || undefined,
-      pharmacist_id: d.pharmacist_id,
-      pharmacist_name: d.pharmacist_name || undefined,
-      patient_name: d.patient_name || undefined,
-      patient_phone: d.patient_phone || undefined,
-      patient_uhid: d.patient_uhid || undefined,
-      is_walk_in: Boolean(d.is_walk_in),
-      total_amount: Number(d.total_amount) || 0,
-      delivered_at: d.created_at,
-      created_at: d.created_at,
-      updated_at: d.updated_at || d.created_at,
-      items: allItems
-        .filter((it: any) => it.dispensing_id === d.id)
-        .map((it: any) => ({
-          id: it.id,
-          dispensing_id: it.dispensing_id,
-          drug_id: it.drug_id || '',
-          drug_name: it.drug_name,
-          quantity: Number(it.quantity) || 1,
-          unit_price: Number(it.unit_price) || 0,
-          total_price: Number(it.total_price) || 0,
-          is_custom: Boolean(it.is_custom),
-          created_at: it.created_at,
-        })),
-    }));
-  } catch (err) {
-    console.error('fetchDispensings error:', err);
     return [];
   }
 }
@@ -436,7 +344,7 @@ export async function fetchSettings(): Promise<HospitalSettings | null> {
       prescription_paper_size: data.prescription_paper_size || 'A4',
       prescription_header: data.prescription_header || 'MULTISPECIALITY CARE',
       prescription_footer: data.prescription_footer || "Please follow the doctor's advice.",
-      default_printer: data.default_printer || 'Pharmacy LaserJet Pro (Network)',
+      default_printer: data.default_printer || 'OPD Reception LaserJet Pro (Network)',
       schedule_h_action: data.schedule_h_action || 'warn',
       whatsapp_enabled: data.whatsapp_enabled ?? true,
       whatsapp_template: data.whatsapp_template || 'Namaste {patient_name}, your token at {hospital_name} is #{token}.',

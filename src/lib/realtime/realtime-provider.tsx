@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/query/keys';
-import type { Visit, Patient, Drug, Dispensing, Prescription, PrescriptionItem } from '@/lib/types/database';
+import type { Visit, Patient, Prescription, PrescriptionItem } from '@/lib/types/database';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
 
@@ -152,7 +152,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 3. Prescription Created (Doctor Finalize -> Instant Pharmacy Dispensing Queue)
+    // 3. Prescription Created (Doctor Finalize -> Instant Consultation Complete & OPD Rx)
     channel.on('broadcast', { event: 'prescription_created' }, ({ payload }) => {
       setLastSyncedAt(new Date());
       const { prescription, visit } = payload || {};
@@ -171,51 +171,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (visit?.id) {
         queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
           if (!old) return [];
-          return old.map((v) => (v.id === visit.id ? { ...v, ...visit, status: 'prescribed' } : v));
+          return old.map((v) => (v.id === visit.id ? { ...v, ...visit, status: 'completed' } : v));
         });
       }
-    });
-
-    // 4. Prescription Dispensed (Pharmacy Delivered -> Completed Visit & Stock Deduction)
-    channel.on('broadcast', { event: 'prescription_dispensed' }, ({ payload }) => {
-      setLastSyncedAt(new Date());
-      const { dispensing, visitId, drugUpdates } = payload || {};
-      if (dispensing?.id) {
-        queryClient.setQueriesData<Dispensing[]>({ queryKey: ['dispensings'] }, (old) => {
-          if (!old) return [dispensing];
-          if (old.some((d) => d.id === dispensing.id)) return old;
-          return [dispensing, ...old];
-        });
-      }
-      if (visitId) {
-        queryClient.setQueriesData<Visit[]>({ queryKey: ['visits'] }, (old) => {
-          if (!old) return [];
-          return old.map((v) => (v.id === visitId ? { ...v, status: 'dispensed' } : v));
-        });
-      }
-      if (Array.isArray(drugUpdates) && drugUpdates.length > 0) {
-        queryClient.setQueriesData<Drug[]>({ queryKey: ['drugs'] }, (old) => {
-          if (!old) return old;
-          return old.map((d) => {
-            const up = drugUpdates.find((u) => u.drugId === d.id);
-            if (up) {
-              return { ...d, stock_quantity: Math.max(0, (d.stock_quantity || 0) - up.quantity) };
-            }
-            return d;
-          });
-        });
-      }
-    });
-
-    // 5. Inventory Updated
-    channel.on('broadcast', { event: 'inventory_updated' }, ({ payload }) => {
-      setLastSyncedAt(new Date());
-      const drug = payload?.drug as Drug;
-      if (!drug?.id) return;
-      queryClient.setQueriesData<Drug[]>({ queryKey: ['drugs'] }, (old) => {
-        if (!old) return [drug];
-        return old.some((d) => d.id === drug.id) ? old.map((d) => (d.id === drug.id ? { ...d, ...drug } : d)) : [drug, ...old];
-      });
     });
 
     // Debounced query invalidation helpers
@@ -234,26 +192,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       patientDebounceTimer = setTimeout(() => {
         setLastSyncedAt(new Date());
         queryClient.invalidateQueries({ queryKey: queryKeys.patients.all });
-      }, 300);
-    };
-
-    let drugDebounceTimer: any = null;
-    const triggerDrugInvalidation = () => {
-      if (drugDebounceTimer) clearTimeout(drugDebounceTimer);
-      drugDebounceTimer = setTimeout(() => {
-        setLastSyncedAt(new Date());
-        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-      }, 300);
-    };
-
-    let dispDebounceTimer: any = null;
-    const triggerDispInvalidation = () => {
-      if (dispDebounceTimer) clearTimeout(dispDebounceTimer);
-      dispDebounceTimer = setTimeout(() => {
-        setLastSyncedAt(new Date());
-        queryClient.invalidateQueries({ queryKey: queryKeys.dispensings.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.drugs.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.visits.all });
       }, 300);
     };
 
@@ -333,44 +271,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // ── 3. DRUGS (Live Pharmacy Inventory & Stock decrements) ──
-    channel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'drugs' },
-      (payload) => {
-        setLastSyncedAt(new Date());
-
-        queryClient.setQueriesData<Drug[]>(
-          { queryKey: ['drugs'] },
-          (oldDrugs) => {
-            if (!oldDrugs) return oldDrugs;
-
-            if (payload.eventType === 'INSERT') {
-              const newDrug = payload.new as Drug;
-              if (oldDrugs.some((d) => d.id === newDrug.id)) return oldDrugs;
-              return [newDrug, ...oldDrugs];
-            }
-
-            if (payload.eventType === 'UPDATE') {
-              const updated = payload.new as Drug;
-              return oldDrugs.map((d) => (d.id === updated.id ? { ...d, ...updated } : d));
-            }
-
-            if (payload.eventType === 'DELETE') {
-              const deletedId = (payload.old as any)?.id;
-              if (!deletedId) return oldDrugs;
-              return oldDrugs.filter((d) => d.id !== deletedId);
-            }
-
-            return oldDrugs;
-          }
-        );
-
-        triggerDrugInvalidation();
-      }
-    );
-
-    // Debounce prescription invalidation by 150ms so multi-item batches settle before pharmacy refetches
+    // Debounce prescription invalidation by 150ms so multi-item batches settle before refetches
     let rxDebounceTimer: any = null;
     const triggerRxInvalidation = () => {
       if (rxDebounceTimer) clearTimeout(rxDebounceTimer);
@@ -381,7 +282,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }, 150);
     };
 
-    // ── 4. PRESCRIPTIONS (Doctor finalize -> Instant Pharmacy queue) ──
+    // ── 3. PRESCRIPTIONS (Doctor Finalize -> Instant Prescription Sync) ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prescriptions' },
@@ -458,44 +359,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // ── 5. DISPENSINGS (Pharmacy dispense -> Complete visit & update stock) ──
-    channel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'dispensings' },
-      (payload) => {
-        setLastSyncedAt(new Date());
-
-        queryClient.setQueriesData<Dispensing[]>(
-          { queryKey: ['dispensings'] },
-          (oldDisp) => {
-            if (!oldDisp) return oldDisp;
-
-            if (payload.eventType === 'INSERT') {
-              const newDisp = payload.new as Dispensing;
-              if (oldDisp.some((d) => d.id === newDisp.id)) return oldDisp;
-              return [newDisp, ...oldDisp];
-            }
-
-            if (payload.eventType === 'UPDATE') {
-              const updated = payload.new as Dispensing;
-              return oldDisp.map((d) => (d.id === updated.id ? { ...d, ...updated } : d));
-            }
-
-            if (payload.eventType === 'DELETE') {
-              const deletedId = (payload.old as any)?.id;
-              if (!deletedId) return oldDisp;
-              return oldDisp.filter((d) => d.id !== deletedId);
-            }
-
-            return oldDisp;
-          }
-        );
-
-        triggerDispInvalidation();
-      }
-    );
-
-    // ── 6. STAFF PROFILES & DOCTORS ──
+    // ── 5. STAFF PROFILES & DOCTORS ──
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'user_profiles' },
